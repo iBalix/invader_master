@@ -1,0 +1,53 @@
+---
+description: Démarre le backend et frontend Invader en arrière-plan
+globs:
+alwaysApply: false
+---
+
+# Commande /invader-start
+
+Cette commande démarre les serveurs Invader Master (backend et frontend) en arrière-plan.
+
+## Instructions
+
+Quand l'utilisateur utilise la commande `/invader-start`, exécute les étapes suivantes :
+
+1. **Vérifier les terminaux existants** :
+   - Vérifie si des serveurs Invader sont déjà en cours d'exécution (ports 3001 et 5173)
+   - Si oui, informe l'utilisateur et ne relance pas les serveurs
+
+2. **Démarrer le Backend** :
+   - Exécute `npm run dev` dans le dossier `backend/` du projet Invader Master
+   - Lance en arrière-plan (block_until_ms: 0 ou équivalent)
+   - Le backend écoute sur http://localhost:3001
+
+3. **Démarrer le Frontend** :
+   - Exécute `npm run dev` dans le dossier `frontend/` du projet Invader Master
+   - Lance en arrière-plan
+   - Le frontend écoute sur http://localhost:5173
+
+4. **Vérifier le démarrage** :
+   - Attendre quelques secondes puis vérifier les logs des terminaux
+   - Confirmer que les deux serveurs sont démarrés
+
+## Commandes Shell
+
+Depuis la racine du projet (invader_master) :
+
+```bash
+# Option 1 : script unique (recommandé)
+npm run dev
+
+# Option 2 : deux terminaux
+npm run dev:back
+npm run dev:front
+```
+
+Sous Windows PowerShell, les commandes ci-dessus fonctionnent. Le script `scripts/invader-start.js` lance les deux serveurs en parallèle de manière cross-platform.
+
+## URLs
+
+- **Backend API** : http://localhost:3001
+- **Frontend** : http://localhost:5173
+- **Health** : http://localhost:3001/health
+- **Auth** : http://localhost:3001/auth
