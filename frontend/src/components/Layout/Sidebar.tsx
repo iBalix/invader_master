@@ -6,16 +6,17 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  FileText,
   Gamepad2,
   HelpCircle,
   Swords,
   Music,
   Skull,
   Beer,
+  UtensilsCrossed,
   Users,
   ChevronDown,
   ChevronRight,
+  BookOpen,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -42,6 +43,7 @@ interface SidebarAccordionItem {
     icon: LucideIcon;
     disabled: boolean;
     badgeText?: string;
+    path?: string;
   }>;
 }
 
@@ -57,14 +59,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
   },
   {
     kind: 'link',
-    title: 'Contenus',
-    icon: FileText,
-    path: '/contenus',
-    roles: ['admin', 'salarie', 'externe'],
-  },
-  {
-    kind: 'link',
-    title: 'Gestion du bar',
+    title: 'Gestion bar',
     icon: Beer,
     path: '#',
     roles: ['admin', 'salarie'],
@@ -73,12 +68,22 @@ const SIDEBAR_MENU: SidebarItem[] = [
   },
   {
     kind: 'accordion',
+    title: 'Contenus',
+    defaultOpen: true,
+    roles: ['admin', 'salarie', 'externe'],
+    items: [
+      { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz' },
+      { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte' },
+    ],
+  },
+  {
+    kind: 'accordion',
     title: 'Evenement',
     defaultOpen: false,
     roles: ['admin', 'salarie'],
     items: [
       { title: 'Mario Kart', icon: Gamepad2, disabled: true, badgeText: 'Bientot' },
-      { title: 'Quizz', icon: HelpCircle, disabled: true, badgeText: 'Bientot' },
+      { title: 'Quiz', icon: HelpCircle, disabled: true, badgeText: 'Bientot' },
       { title: 'Battle Royal', icon: Swords, disabled: true, badgeText: 'Bientot' },
       { title: 'Blindtest', icon: Music, disabled: true, badgeText: 'Bientot' },
       { title: 'Manoir du crime', icon: Skull, disabled: true, badgeText: 'Bientot' },
@@ -169,6 +174,22 @@ function AccordionSection({
         <div className="mt-1 space-y-1 pl-2">
           {item.items.map((sub, subIndex) => {
             const SubIcon = sub.icon;
+            if (!sub.disabled && sub.path) {
+              return (
+                <NavLink
+                  key={subIndex}
+                  to={sub.path}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2 rounded-lg transition text-sm ${
+                      isActive ? 'bg-primary-500 text-white' : 'hover:bg-gray-800 text-gray-300'
+                    }`
+                  }
+                >
+                  <SubIcon className="w-4 h-4 flex-shrink-0" />
+                  <span>{sub.title}</span>
+                </NavLink>
+              );
+            }
             return (
               <div
                 key={subIndex}

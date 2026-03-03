@@ -8,7 +8,10 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import MainLayout from './components/Layout/MainLayout';
 import LoginPage from './components/Auth/LoginPage';
 import Dashboard from './pages/Dashboard';
-import ContenusPage from './pages/ContenusPage';
+import QuizListPage from './pages/QuizListPage';
+import QuizFormPage from './pages/QuizFormPage';
+import CarteListPage from './pages/CarteListPage';
+import CategoryFormPage from './pages/CategoryFormPage';
 import UserManagementPage from './pages/UserManagementPage';
 import ComingSoon from './pages/ComingSoon';
 
@@ -28,7 +31,12 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="contenus" element={<ContenusPage />} />
+            <Route path="contenus/quiz" element={<QuizListPage />} />
+            <Route path="contenus/quiz/new" element={<QuizFormPage />} />
+            <Route path="contenus/quiz/:id" element={<QuizFormPage />} />
+            <Route path="contenus/carte" element={<CarteListPage />} />
+            <Route path="contenus/carte/category/new" element={<CategoryFormPage />} />
+            <Route path="contenus/carte/category/:id" element={<CategoryFormPage />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="bientot" element={<ComingSoon />} />
           </Route>
