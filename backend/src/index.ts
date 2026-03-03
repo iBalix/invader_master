@@ -22,12 +22,15 @@ const corsOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
   : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
-app.use(cors({ origin: corsOrigins, credentials: true }));
 app.use(express.json());
 
-app.get('/health', (_req, res) => {
+app.use('/public', cors(), publicRoutes);
+
+app.get('/health', cors(), (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.use(cors({ origin: corsOrigins, credentials: true }));
 
 app.use('/auth', authRoutes);
 app.use('/api', userRoutes);
@@ -37,7 +40,6 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/menu-categories', menuCategoryRoutes);
 app.use('/api/menu-products', menuProductRoutes);
-app.use('/public', publicRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not found' });
