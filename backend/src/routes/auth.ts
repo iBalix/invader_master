@@ -16,7 +16,7 @@ authRoutes.post('/login', async (req, res) => {
       return;
     }
 
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
+    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
       email: String(email).toLowerCase().trim(),
       password: String(password),
     });
@@ -34,13 +34,14 @@ authRoutes.post('/login', async (req, res) => {
       return;
     }
 
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('id, email, role')
       .eq('id', data.user.id)
       .single();
 
     if (!profile) {
+      console.error('Profile lookup failed for user', data.user.id, data.user.email, profileError);
       res.status(403).json({ status: 'error', message: 'Profil utilisateur introuvable' });
       return;
     }
