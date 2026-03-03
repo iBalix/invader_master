@@ -4,6 +4,7 @@ import { X, Loader2 } from 'lucide-react';
 export interface GameCategoryData {
   id?: string;
   name: string;
+  name_en: string;
   display_order: number;
 }
 
@@ -15,12 +16,14 @@ interface Props {
 
 export default function GameCategoryModal({ initial, onSave, onClose }: Props) {
   const [name, setName] = useState('');
+  const [nameEn, setNameEn] = useState('');
   const [displayOrder, setDisplayOrder] = useState(100);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (initial) {
       setName(initial.name ?? '');
+      setNameEn(initial.name_en ?? '');
       setDisplayOrder(initial.display_order ?? 100);
     }
   }, [initial]);
@@ -30,7 +33,7 @@ export default function GameCategoryModal({ initial, onSave, onClose }: Props) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await onSave({ id: initial?.id, name: name.trim(), display_order: displayOrder });
+      await onSave({ id: initial?.id, name: name.trim(), name_en: nameEn.trim(), display_order: displayOrder });
     } finally {
       setSaving(false);
     }
@@ -49,16 +52,18 @@ export default function GameCategoryModal({ initial, onSave, onClose }: Props) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              required
-              autoFocus
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (FR) *</label>
+              <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                required autoFocus />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (EN)</label>
+              <input type="text" value={nameEn} onChange={(e) => setNameEn(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
           </div>
 
           <div>

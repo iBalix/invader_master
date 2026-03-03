@@ -7,8 +7,11 @@ import FileUpload from '../components/Quiz/FileUpload';
 
 interface GameForm {
   name: string;
+  name_en: string;
   subtitle: string;
+  subtitle_en: string;
   description: string;
+  description_en: string;
   file_name: string;
   console_id: string;
   platform: string[];
@@ -22,8 +25,11 @@ interface CategoryOption { id: string; name: string; }
 
 const EMPTY: GameForm = {
   name: '',
+  name_en: '',
   subtitle: '',
+  subtitle_en: '',
   description: '',
+  description_en: '',
   file_name: '',
   console_id: '',
   platform: [],
@@ -73,8 +79,11 @@ export default function GameFormPage() {
       const g = data.game;
       setForm({
         name: g.name ?? '',
+        name_en: g.name_en ?? '',
         subtitle: g.subtitle ?? '',
+        subtitle_en: g.subtitle_en ?? '',
         description: g.description ?? '',
+        description_en: g.description_en ?? '',
         file_name: g.file_name ?? '',
         console_id: g.console_id ?? '',
         platform: g.platform ?? [],
@@ -174,21 +183,41 @@ export default function GameFormPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (FR) *</label>
               <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" required />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Sous-titre</label>
-              <input type="text" value={form.subtitle} onChange={(e) => set('subtitle', e.target.value)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (EN)</label>
+              <input type="text" value={form.name_en} onChange={(e) => set('name_en', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sous-titre (FR)</label>
+              <input type="text" value={form.subtitle} onChange={(e) => set('subtitle', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sous-titre (EN)</label>
+              <input type="text" value={form.subtitle_en} onChange={(e) => set('subtitle_en', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description (FR)</label>
+              <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description (EN)</label>
+              <textarea value={form.description_en} onChange={(e) => set('description_en', e.target.value)} rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

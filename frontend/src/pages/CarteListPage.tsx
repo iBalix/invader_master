@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import ProductModal, { type ProductData } from '../components/Carte/ProductModal';
 import ImportCarteModal from '../components/Carte/ImportCarteModal';
+import ImportI18nModal from '../components/ImportI18nModal';
 
 interface CategoryRow {
   id: string;
@@ -39,6 +40,7 @@ export default function CarteListPage() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [i18nOpen, setI18nOpen] = useState(false);
   const [productModal, setProductModal] = useState<{ open: boolean; editing: ProductData | null }>({
     open: false,
     editing: null,
@@ -159,6 +161,12 @@ export default function CarteListPage() {
           >
             <Download className="w-4 h-4" />
             Importer depuis Contentful
+          </button>
+          <button
+            onClick={() => setI18nOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm"
+          >
+            Importer trad. EN
           </button>
           {tab === 'categories' ? (
             <Link
@@ -423,6 +431,13 @@ export default function CarteListPage() {
           initial={productModal.editing}
           onSave={handleProductSave}
           onClose={() => setProductModal({ open: false, editing: null })}
+        />
+      )}
+
+      {i18nOpen && (
+        <ImportI18nModal
+          onClose={() => setI18nOpen(false)}
+          onImported={() => { loadCategories(); loadProducts(); }}
         />
       )}
     </div>

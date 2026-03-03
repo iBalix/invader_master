@@ -1353,3 +1353,131 @@ importRoutes.post('/contentful-translations', async (req: Request, res: Response
     res.end();
   }
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/import/contentful-i18n   (SSE — imports EN values for carte & games)
+// ---------------------------------------------------------------------------
+
+async function fetchContentfulCollectionLocale(
+  contentType: string,
+  locale: string,
+  extra = '',
+): Promise<ContentfulCollectionResponse> {
+  const url = `${CDN_BASE}/entries?access_token=${TOKEN}&content_type=${contentType}&limit=500&locale=${locale}${extra}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Contentful API ${res.status}`);
+  return res.json() as Promise<ContentfulCollectionResponse>;
+}
+
+importRoutes.post('/contentful-i18n', async (req: Request, res: Response) => {
+  if (!SPACE_ID || !TOKEN) {
+    res.status(500).json({ status: 'error', message: 'Credentials Contentful non configurés' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  try {
+    let updatedCount = 0;
+
+    // 1. Menu categories EN
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération catégories carte EN...' });
+    const catEn = await fetchContentfulCollectionLocale('carteCatgorie', 'en');
+    for (let i = 0; i < catEn.items.length; i++) {
+      const item = catEn.items[i];
+      const nameEn = (item.fields.name as string) || '';
+      if (!nameEn) continue;
+      const { error } = await supabaseAdmin
+        .from('menu_categories')
+        .update({ name_en: nameEn })
+        .eq('contentful_id', item.sys.id);
+      if (!error) updatedCount++;
+      sendSSE(res, 'progress', {
+        step: 'category_done',
+        message: `Cat. carte ${i + 1}/${catEn.items.length} — "${nameEn}" ✓`,
+        current: i + 1,
+        total: catEn.items.length,
+      });
+    }
+
+    // 2. Menu products EN
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération produits carte EN...' });
+    const prodEn = await fetchContentfulCollectionLocale('carteProduit', 'en');
+    for (let i = 0; i < prodEn.items.length; i++) {
+      const item = prodEn.items[i];
+      const f = item.fields;
+      const update: Record<string, string> = {};
+      if (f.name) update.name_en = f.name as string;
+      if (f.subtitle) update.subtitle_en = f.subtitle as string;
+      if (f.description) update.description_en = f.description as string;
+      if (Object.keys(update).length === 0) continue;
+      const { error } = await supabaseAdmin
+        .from('menu_products')
+        .update(update)
+        .eq('contentful_id', item.sys.id);
+      if (!error) updatedCount++;
+      sendSSE(res, 'progress', {
+        step: 'product_done',
+        message: `Produit ${i + 1}/${prodEn.items.length} — "${f.name ?? item.sys.id}" ✓`,
+        current: i + 1,
+        total: prodEn.items.length,
+      });
+    }
+
+    // 3. Game categories EN
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération catégories jeux EN...' });
+    const gameCatEn = await fetchContentfulCollectionLocale('gameCategory', 'en');
+    for (let i = 0; i < gameCatEn.items.length; i++) {
+      const item = gameCatEn.items[i];
+      const nameEn = (item.fields.name as string) || '';
+      if (!nameEn) continue;
+      const { error } = await supabaseAdmin
+        .from('game_categories')
+        .update({ name_en: nameEn })
+        .eq('contentful_id', item.sys.id);
+      if (!error) updatedCount++;
+      sendSSE(res, 'progress', {
+        step: 'game_cat_done',
+        message: `Cat. jeux ${i + 1}/${gameCatEn.items.length} — "${nameEn}" ✓`,
+        current: i + 1,
+        total: gameCatEn.items.length,
+      });
+    }
+
+    // 4. Games EN
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération jeux EN...' });
+    const gameEn = await fetchContentfulCollectionLocale('game', 'en');
+    for (let i = 0; i < gameEn.items.length; i++) {
+      const item = gameEn.items[i];
+      const f = item.fields;
+      const update: Record<string, string> = {};
+      if (f.name) update.name_en = f.name as string;
+      if (f.subtitle) update.subtitle_en = f.subtitle as string;
+      if (f.description) update.description_en = f.description as string;
+      if (Object.keys(update).length === 0) continue;
+      const { error } = await supabaseAdmin
+        .from('games')
+        .update(update)
+        .eq('contentful_id', item.sys.id);
+      if (!error) updatedCount++;
+      sendSSE(res, 'progress', {
+        step: 'game_done',
+        message: `Jeu ${i + 1}/${gameEn.items.length} — "${f.name ?? item.sys.id}" ✓`,
+        current: i + 1,
+        total: gameEn.items.length,
+      });
+    }
+
+    sendSSE(res, 'done', { updated: updatedCount });
+    res.end();
+  } catch (err) {
+    console.error('Import contentful i18n error:', err);
+    const message = err instanceof Error ? err.message : 'Erreur serveur';
+    sendSSE(res, 'error', { message });
+    res.end();
+  }
+});

@@ -5,8 +5,11 @@ import FileUpload from '../Quiz/FileUpload';
 export interface ProductData {
   id?: string;
   name: string;
+  name_en: string;
   description: string;
+  description_en: string;
   subtitle: string;
+  subtitle_en: string;
   price: number;
   price_hh: number | null;
   price_second: number | null;
@@ -17,8 +20,11 @@ export interface ProductData {
 
 const EMPTY: ProductData = {
   name: '',
+  name_en: '',
   description: '',
+  description_en: '',
   subtitle: '',
+  subtitle_en: '',
   price: 0,
   price_hh: null,
   price_second: null,
@@ -42,8 +48,11 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
       setForm({
         id: initial.id,
         name: initial.name ?? '',
+        name_en: initial.name_en ?? '',
         description: initial.description ?? '',
+        description_en: initial.description_en ?? '',
         subtitle: initial.subtitle ?? '',
+        subtitle_en: initial.subtitle_en ?? '',
         price: initial.price ?? 0,
         price_hh: initial.price_hh ?? null,
         price_second: initial.price_second ?? null,
@@ -81,35 +90,43 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              required
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (FR) *</label>
+              <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (EN)</label>
+              <input type="text" value={form.name_en} onChange={(e) => set('name_en', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sous-titre</label>
-            <input
-              type="text"
-              value={form.subtitle}
-              onChange={(e) => set('subtitle', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sous-titre (FR)</label>
+              <input type="text" value={form.subtitle} onChange={(e) => set('subtitle', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sous-titre (EN)</label>
+              <input type="text" value={form.subtitle_en} onChange={(e) => set('subtitle_en', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => set('description', e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description (FR)</label>
+              <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description (EN)</label>
+              <textarea value={form.description_en} onChange={(e) => set('description_en', e.target.value)} rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">

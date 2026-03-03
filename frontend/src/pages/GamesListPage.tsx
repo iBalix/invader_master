@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import GameCategoryModal, { type GameCategoryData } from '../components/Games/GameCategoryModal';
 import GameConsoleModal, { type GameConsoleData } from '../components/Games/GameConsoleModal';
 import ImportGamesModal from '../components/Games/ImportGamesModal';
+import ImportI18nModal from '../components/ImportI18nModal';
 
 interface GameRow {
   id: string;
@@ -21,6 +22,7 @@ interface GameRow {
 interface CategoryRow {
   id: string;
   name: string;
+  name_en: string;
   display_order: number;
   gameCount: number;
 }
@@ -44,6 +46,7 @@ export default function GamesListPage() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [i18nOpen, setI18nOpen] = useState(false);
   const [catModal, setCatModal] = useState<{ open: boolean; editing: GameCategoryData | null }>({ open: false, editing: null });
   const [consoleModal, setConsoleModal] = useState<{ open: boolean; editing: GameConsoleData | null }>({ open: false, editing: null });
 
@@ -187,6 +190,12 @@ export default function GamesListPage() {
           >
             <Download className="w-4 h-4" />
             Importer depuis Contentful
+          </button>
+          <button
+            onClick={() => setI18nOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm"
+          >
+            Importer trad. EN
           </button>
           {createButton()}
         </div>
@@ -431,6 +440,13 @@ export default function GamesListPage() {
           initial={consoleModal.editing}
           onSave={handleConsoleSave}
           onClose={() => setConsoleModal({ open: false, editing: null })}
+        />
+      )}
+
+      {i18nOpen && (
+        <ImportI18nModal
+          onClose={() => setI18nOpen(false)}
+          onImported={() => { loadGames(); loadCategories(); }}
         />
       )}
     </div>

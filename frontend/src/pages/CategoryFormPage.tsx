@@ -17,6 +17,7 @@ import ProductModal, { type ProductData } from '../components/Carte/ProductModal
 
 interface CategoryForm {
   name: string;
+  name_en: string;
   parent_id: string | null;
   is_main_category: boolean;
   weight: number;
@@ -31,6 +32,7 @@ interface CategoryOption {
 
 const EMPTY: CategoryForm = {
   name: '',
+  name_en: '',
   parent_id: null,
   is_main_category: false,
   weight: 0,
@@ -73,6 +75,7 @@ export default function CategoryFormPage() {
       const c = data.category;
       setForm({
         name: c.name ?? '',
+        name_en: c.name_en ?? '',
         parent_id: c.parent_id ?? null,
         is_main_category: c.is_main_category ?? false,
         weight: c.weight ?? 0,
@@ -217,7 +220,7 @@ export default function CategoryFormPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (FR) *</label>
               <input
                 type="text"
                 value={form.name}
@@ -226,6 +229,18 @@ export default function CategoryFormPage() {
                 required
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom (EN)</label>
+              <input
+                type="text"
+                value={form.name_en}
+                onChange={(e) => set('name_en', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie parente</label>
               <select

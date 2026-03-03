@@ -16,6 +16,21 @@ function toCamel(row: Record<string, unknown>): Record<string, unknown> {
   return result;
 }
 
+function localize(
+  row: Record<string, unknown>,
+  fields: string[],
+  locale: string,
+): Record<string, unknown> {
+  if (locale === 'fr') return row;
+  const result = { ...row };
+  for (const f of fields) {
+    const enKey = `${f}_en`;
+    const enVal = result[enKey] as string | undefined;
+    if (enVal) result[f] = enVal;
+  }
+  return result;
+}
+
 // List all quizzes (basic info)
 publicRoutes.get('/quizzes', async (_req, res) => {
   try {
@@ -95,8 +110,10 @@ publicRoutes.get('/quizzes/:id', async (req, res) => {
 });
 
 // Full carte: categories with products and sub-categories
-publicRoutes.get('/carte', async (_req, res) => {
+publicRoutes.get('/carte', async (req, res) => {
   try {
+    const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
+
     const { data: categories, error: catErr } = await supabaseAdmin
       .from('menu_categories')
       .select('*')
@@ -127,19 +144,19 @@ publicRoutes.get('/carte', async (_req, res) => {
         .sort((a, b) => a.position - b.position)
         .map((l) => productMap.get(l.product_id))
         .filter(Boolean)
-        .map((p) => toCamel(p as Record<string, unknown>));
+        .map((p) => toCamel(localize(p as Record<string, unknown>, ['name', 'subtitle', 'description'], locale)));
     }
 
     const allCats = categories ?? [];
     const childIds = new Set(allCats.filter((c) => c.parent_id).map((c) => c.id));
 
     const result = allCats.map((cat) => ({
-      ...toCamel(cat),
+      ...toCamel(localize(cat, ['name'], locale)),
       products: buildProducts(cat.id),
       subCategories: allCats
         .filter((sc) => sc.parent_id === cat.id)
         .map((sc) => ({
-          ...toCamel(sc),
+          ...toCamel(localize(sc, ['name'], locale)),
           products: buildProducts(sc.id),
         })),
     }));
@@ -152,8 +169,10 @@ publicRoutes.get('/carte', async (_req, res) => {
 });
 
 // Full games: categories, consoles, games with relations
-publicRoutes.get('/games', async (_req, res) => {
+publicRoutes.get('/games', async (req, res) => {
   try {
+    const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
+
     const { data: categories } = await supabaseAdmin
       .from('game_categories')
       .select('*')
@@ -179,7 +198,9 @@ publicRoutes.get('/games', async (_req, res) => {
       .select('game_id, category_id');
 
     const consoleMap = new Map((consoles ?? []).map((c) => [c.id, c]));
-    const catMap = new Map((categories ?? []).map((c) => [c.id, c.name]));
+
+    const localizedCats = (categories ?? []).map((c) => localize(c, ['name'], locale));
+    const catMap = new Map(localizedCats.map((c) => [c.id as string, c.name as string]));
 
     const imagesByGame: Record<string, string[]> = {};
     for (const img of images ?? []) {
@@ -197,7 +218,7 @@ publicRoutes.get('/games', async (_req, res) => {
     const gameItems = (games ?? []).map((g) => {
       const c = consoleMap.get(g.console_id);
       return {
-        ...toCamel(g),
+        ...toCamel(localize(g, ['name', 'subtitle', 'description'], locale)),
         consoleName: c?.name ?? null,
         consoleLibrary: c?.library ?? null,
         consoleLogoUrl: c?.logo_url ?? null,
@@ -207,7 +228,7 @@ publicRoutes.get('/games', async (_req, res) => {
     });
 
     res.json({
-      categories: (categories ?? []).map((c) => toCamel(c)),
+      categories: localizedCats.map((c) => toCamel(c as Record<string, unknown>)),
       consoles: (consoles ?? []).map((c) => toCamel(c)),
       games: gameItems,
     });
