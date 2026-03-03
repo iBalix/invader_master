@@ -13,6 +13,9 @@ import { uploadRoutes } from './routes/upload.js';
 import { importRoutes } from './routes/import.js';
 import { menuCategoryRoutes } from './routes/menuCategories.js';
 import { menuProductRoutes } from './routes/menuProducts.js';
+import { gameCategoryRoutes } from './routes/gameCategories.js';
+import { gameConsoleRoutes } from './routes/gameConsoles.js';
+import { gameRoutes } from './routes/gameRoutes.js';
 import { publicRoutes } from './routes/public.js';
 
 const app = express();
@@ -40,6 +43,9 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/menu-categories', menuCategoryRoutes);
 app.use('/api/menu-products', menuProductRoutes);
+app.use('/api/game-categories', gameCategoryRoutes);
+app.use('/api/game-consoles', gameConsoleRoutes);
+app.use('/api/games', gameRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not found' });

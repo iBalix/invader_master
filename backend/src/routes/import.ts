@@ -714,3 +714,315 @@ importRoutes.post('/contentful-carte', async (req: Request, res: Response) => {
     res.end();
   }
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/import/contentful-games   (SSE streaming — imports categories, consoles, games)
+// ---------------------------------------------------------------------------
+
+importRoutes.post('/contentful-games', async (req: Request, res: Response) => {
+  if (!SPACE_ID || !TOKEN) {
+    res.status(500).json({ status: 'error', message: 'Credentials Contentful non configurés' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  try {
+    // Step 1: Fetch all content types
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération des catégories de jeux...' });
+    const catCollection = await fetchContentfulCollection('gameCategory', '&order=fields.order');
+    const catItems = catCollection.items;
+    sendSSE(res, 'progress', { step: 'fetch', message: `${catItems.length} catégories trouvées` });
+
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération des consoles...' });
+    const consoleCollection = await fetchContentfulCollection('console');
+    const consoleItems = consoleCollection.items;
+    sendSSE(res, 'progress', { step: 'fetch', message: `${consoleItems.length} consoles trouvées` });
+
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération des jeux...' });
+    const gameCollection = await fetchContentfulCollection('game', '&order=fields.order');
+    const gameItems = gameCollection.items;
+    const allAssets: ContentfulAsset[] = [
+      ...(catCollection.includes?.Asset ?? []),
+      ...(consoleCollection.includes?.Asset ?? []),
+      ...(gameCollection.includes?.Asset ?? []),
+    ];
+    const assetMap = new Map(allAssets.map((a) => [a.sys.id, a]));
+
+    sendSSE(res, 'progress', {
+      step: 'fetched',
+      message: `${gameItems.length} jeux, ${allAssets.length} assets`,
+    });
+
+    // Step 2: Import categories
+    sendSSE(res, 'progress', { step: 'categories', message: 'Import des catégories...' });
+    const cfToCatId = new Map<string, string>();
+    let categoryCount = 0;
+
+    for (let i = 0; i < catItems.length; i++) {
+      const c = catItems[i];
+      const cfId = c.sys.id;
+      const cf = c.fields;
+
+      const { data: existing } = await supabaseAdmin
+        .from('game_categories')
+        .select('id')
+        .eq('contentful_id', cfId)
+        .single();
+
+      if (existing) {
+        cfToCatId.set(cfId, existing.id);
+        categoryCount++;
+        sendSSE(res, 'progress', {
+          step: 'category_done',
+          message: `Catégorie ${i + 1}/${catItems.length} — déjà importée ✓`,
+          current: i + 1,
+          total: catItems.length,
+        });
+        continue;
+      }
+
+      const { data: newCat, error: cErr } = await supabaseAdmin
+        .from('game_categories')
+        .insert({
+          name: (cf.name as string) || '',
+          display_order: (cf.order as number) ?? 100,
+          contentful_id: cfId,
+        })
+        .select()
+        .single();
+
+      if (cErr) {
+        sendSSE(res, 'progress', { step: 'category_error', message: `Catégorie erreur : ${cErr.message}` });
+        continue;
+      }
+
+      cfToCatId.set(cfId, newCat.id);
+      categoryCount++;
+      sendSSE(res, 'progress', {
+        step: 'category_done',
+        message: `Catégorie ${i + 1}/${catItems.length} — "${cf.name}" ✓`,
+        current: i + 1,
+        total: catItems.length,
+      });
+    }
+
+    // Step 3: Import consoles
+    sendSSE(res, 'progress', { step: 'consoles', message: 'Import des consoles...' });
+    const cfToConsoleId = new Map<string, string>();
+    let consoleCount = 0;
+    let assetCount = 0;
+
+    for (let i = 0; i < consoleItems.length; i++) {
+      const c = consoleItems[i];
+      const cfId = c.sys.id;
+      const cf = c.fields;
+
+      const { data: existing } = await supabaseAdmin
+        .from('game_consoles')
+        .select('id')
+        .eq('contentful_id', cfId)
+        .single();
+
+      if (existing) {
+        cfToConsoleId.set(cfId, existing.id);
+        consoleCount++;
+        sendSSE(res, 'progress', {
+          step: 'console_done',
+          message: `Console ${i + 1}/${consoleItems.length} — déjà importée ✓`,
+          current: i + 1,
+          total: consoleItems.length,
+        });
+        continue;
+      }
+
+      let logoUrl: string | null = null;
+      const logoAssetId = getLinkedAssetId(cf.logo);
+      if (logoAssetId) {
+        const asset = assetMap.get(logoAssetId);
+        if (asset) {
+          sendSSE(res, 'progress', { step: 'console_asset', message: `↳ Logo : ${asset.fields?.file?.fileName ?? 'image'}` });
+          logoUrl = await downloadAndUploadAsset(asset);
+          if (logoUrl) assetCount++;
+        }
+      }
+
+      const { data: newConsole, error: consErr } = await supabaseAdmin
+        .from('game_consoles')
+        .insert({
+          name: (cf.name as string) || '',
+          library: (cf.library as string) || '',
+          logo_url: logoUrl,
+          contentful_id: cfId,
+        })
+        .select()
+        .single();
+
+      if (consErr) {
+        sendSSE(res, 'progress', { step: 'console_error', message: `Console erreur : ${consErr.message}` });
+        continue;
+      }
+
+      cfToConsoleId.set(cfId, newConsole.id);
+      consoleCount++;
+      sendSSE(res, 'progress', {
+        step: 'console_done',
+        message: `Console ${i + 1}/${consoleItems.length} — "${cf.name}" ✓`,
+        current: i + 1,
+        total: consoleItems.length,
+      });
+    }
+
+    // Step 4: Import games
+    sendSSE(res, 'progress', { step: 'games', message: 'Import des jeux...' });
+    let gameCount = 0;
+
+    for (let i = 0; i < gameItems.length; i++) {
+      const g = gameItems[i];
+      const cfId = g.sys.id;
+      const gf = g.fields;
+
+      sendSSE(res, 'progress', {
+        step: 'game',
+        message: `Jeu ${i + 1}/${gameItems.length} : ${(gf.name as string) || cfId}`,
+        current: i + 1,
+        total: gameItems.length,
+      });
+
+      const { data: existing } = await supabaseAdmin
+        .from('games')
+        .select('id')
+        .eq('contentful_id', cfId)
+        .single();
+
+      if (existing) {
+        gameCount++;
+        sendSSE(res, 'progress', {
+          step: 'game_done',
+          message: `Jeu ${i + 1}/${gameItems.length} — déjà importé ✓`,
+          current: i + 1,
+          total: gameItems.length,
+        });
+        continue;
+      }
+
+      // Resolve console
+      const consoleRef = gf.console as { sys: { id: string } } | undefined;
+      const consoleCfId = consoleRef?.sys?.id;
+      const consoleDbId = consoleCfId ? cfToConsoleId.get(consoleCfId) : undefined;
+
+      if (!consoleDbId) {
+        sendSSE(res, 'progress', {
+          step: 'game_error',
+          message: `Jeu ${i + 1}/${gameItems.length} — console introuvable, ignoré`,
+          current: i + 1,
+          total: gameItems.length,
+        });
+        continue;
+      }
+
+      // Download cover
+      let coverUrl: string | null = null;
+      const coverAssetId = getLinkedAssetId(gf.cover);
+      if (coverAssetId) {
+        const asset = assetMap.get(coverAssetId);
+        if (asset) {
+          sendSSE(res, 'progress', { step: 'game_asset', message: `↳ Cover : ${asset.fields?.file?.fileName ?? 'image'}` });
+          coverUrl = await downloadAndUploadAsset(asset);
+          if (coverUrl) assetCount++;
+        }
+      }
+
+      // Platform
+      const platform = Array.isArray(gf.platform) ? (gf.platform as string[]) : [];
+
+      const { data: newGame, error: gErr } = await supabaseAdmin
+        .from('games')
+        .insert({
+          name: (gf.name as string) || '',
+          subtitle: (gf.subtitle as string) || null,
+          description: (gf.description as string) || null,
+          cover_url: coverUrl,
+          file_name: (gf.fileName as string) || `game_${cfId}`,
+          console_id: consoleDbId,
+          platform,
+          competition: (gf.competition as boolean) ?? false,
+          competition_link: (gf.competitionLink as string) || null,
+          display_order: (gf.order as number) ?? 100,
+          contentful_id: cfId,
+        })
+        .select()
+        .single();
+
+      if (gErr) {
+        sendSSE(res, 'progress', {
+          step: 'game_error',
+          message: `Jeu ${i + 1}/${gameItems.length} — erreur : ${gErr.message}`,
+          current: i + 1,
+          total: gameItems.length,
+        });
+        continue;
+      }
+
+      // Download additional images
+      const imageRefs = gf.images as Array<{ sys: { id: string } }> | undefined;
+      if (Array.isArray(imageRefs)) {
+        const imgRows: Array<{ game_id: string; image_url: string; position: number }> = [];
+        for (let j = 0; j < imageRefs.length; j++) {
+          const asset = assetMap.get(imageRefs[j].sys.id);
+          if (asset) {
+            const url = await downloadAndUploadAsset(asset);
+            if (url) {
+              imgRows.push({ game_id: newGame.id, image_url: url, position: j });
+              assetCount++;
+            }
+          }
+        }
+        if (imgRows.length > 0) {
+          await supabaseAdmin.from('game_images').insert(imgRows);
+        }
+      }
+
+      // Link categories
+      const catRefs = gf.categories as Array<{ sys: { id: string } }> | undefined;
+      if (Array.isArray(catRefs)) {
+        const links = catRefs
+          .map((ref) => {
+            const catDbId = cfToCatId.get(ref.sys.id);
+            if (!catDbId) return null;
+            return { category_id: catDbId, game_id: newGame.id };
+          })
+          .filter(Boolean);
+        if (links.length > 0) {
+          await supabaseAdmin.from('game_category_games').insert(links as Array<{ category_id: string; game_id: string }>);
+        }
+      }
+
+      gameCount++;
+      sendSSE(res, 'progress', {
+        step: 'game_done',
+        message: `Jeu ${i + 1}/${gameItems.length} — "${(gf.name as string).substring(0, 40)}" ✓`,
+        current: i + 1,
+        total: gameItems.length,
+      });
+    }
+
+    sendSSE(res, 'done', {
+      categories: categoryCount,
+      consoles: consoleCount,
+      games: gameCount,
+      assets: assetCount,
+    });
+
+    res.end();
+  } catch (err) {
+    console.error('Import contentful games error:', err);
+    const message = err instanceof Error ? err.message : 'Erreur serveur';
+    sendSSE(res, 'error', { message });
+    res.end();
+  }
+});

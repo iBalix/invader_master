@@ -74,6 +74,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
     items: [
       { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz' },
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte' },
+      { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux' },
     ],
   },
   {

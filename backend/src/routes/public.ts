@@ -151,6 +151,72 @@ publicRoutes.get('/carte', async (_req, res) => {
   }
 });
 
+// Full games: categories, consoles, games with relations
+publicRoutes.get('/games', async (_req, res) => {
+  try {
+    const { data: categories } = await supabaseAdmin
+      .from('game_categories')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    const { data: consoles } = await supabaseAdmin
+      .from('game_consoles')
+      .select('*')
+      .order('name', { ascending: true });
+
+    const { data: games } = await supabaseAdmin
+      .from('games')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    const { data: images } = await supabaseAdmin
+      .from('game_images')
+      .select('game_id, image_url, position')
+      .order('position', { ascending: true });
+
+    const { data: catLinks } = await supabaseAdmin
+      .from('game_category_games')
+      .select('game_id, category_id');
+
+    const consoleMap = new Map((consoles ?? []).map((c) => [c.id, c]));
+    const catMap = new Map((categories ?? []).map((c) => [c.id, c.name]));
+
+    const imagesByGame: Record<string, string[]> = {};
+    for (const img of images ?? []) {
+      if (!imagesByGame[img.game_id]) imagesByGame[img.game_id] = [];
+      imagesByGame[img.game_id].push(img.image_url);
+    }
+
+    const catsByGame: Record<string, string[]> = {};
+    for (const l of catLinks ?? []) {
+      if (!catsByGame[l.game_id]) catsByGame[l.game_id] = [];
+      const name = catMap.get(l.category_id);
+      if (name) catsByGame[l.game_id].push(name);
+    }
+
+    const gameItems = (games ?? []).map((g) => {
+      const c = consoleMap.get(g.console_id);
+      return {
+        ...toCamel(g),
+        consoleName: c?.name ?? null,
+        consoleLibrary: c?.library ?? null,
+        consoleLogoUrl: c?.logo_url ?? null,
+        categories: catsByGame[g.id] ?? [],
+        images: imagesByGame[g.id] ?? [],
+      };
+    });
+
+    res.json({
+      categories: (categories ?? []).map((c) => toCamel(c)),
+      consoles: (consoles ?? []).map((c) => toCamel(c)),
+      games: gameItems,
+    });
+  } catch (err) {
+    console.error('Public games error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Get single question
 publicRoutes.get('/questions/:id', async (req, res) => {
   try {

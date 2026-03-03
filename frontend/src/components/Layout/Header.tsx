@@ -13,6 +13,8 @@ const PATH_LABELS: Record<string, string> = {
   '/contenus/quiz/new': 'Nouveau quiz',
   '/contenus/carte': 'Carte',
   '/contenus/carte/category/new': 'Nouvelle catégorie',
+  '/contenus/jeux': 'Jeux',
+  '/contenus/jeux/game/new': 'Nouveau jeu',
 };
 
 interface Crumb {
