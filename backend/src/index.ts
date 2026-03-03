@@ -16,6 +16,8 @@ import { menuProductRoutes } from './routes/menuProducts.js';
 import { gameCategoryRoutes } from './routes/gameCategories.js';
 import { gameConsoleRoutes } from './routes/gameConsoles.js';
 import { gameRoutes } from './routes/gameRoutes.js';
+import { projectorConfigRoutes } from './routes/projectorConfig.js';
+import { tvConfigRoutes } from './routes/tvConfigs.js';
 import { publicRoutes } from './routes/public.js';
 
 const app = express();
@@ -46,6 +48,8 @@ app.use('/api/menu-products', menuProductRoutes);
 app.use('/api/game-categories', gameCategoryRoutes);
 app.use('/api/game-consoles', gameConsoleRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/projector-config', projectorConfigRoutes);
+app.use('/api/tv-configs', tvConfigRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not found' });

@@ -217,6 +217,47 @@ publicRoutes.get('/games', async (_req, res) => {
   }
 });
 
+// Projector config + events
+publicRoutes.get('/projector', async (_req, res) => {
+  try {
+    const { data: config } = await supabaseAdmin
+      .from('projector_config')
+      .select('*')
+      .limit(1)
+      .single();
+
+    const { data: events } = await supabaseAdmin
+      .from('projector_events')
+      .select('*')
+      .order('date', { ascending: true });
+
+    res.json({
+      config: config ? toCamel(config) : null,
+      events: (events ?? []).map((e) => toCamel(e)),
+    });
+  } catch (err) {
+    console.error('Public projector error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// TV configs
+publicRoutes.get('/tv-configs', async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('tv_configs')
+      .select('*')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    res.json({ items: (data ?? []).map((c) => toCamel(c)) });
+  } catch (err) {
+    console.error('Public tv configs error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Get single question
 publicRoutes.get('/questions/:id', async (req, res) => {
   try {

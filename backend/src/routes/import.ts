@@ -1026,3 +1026,224 @@ importRoutes.post('/contentful-games', async (req: Request, res: Response) => {
     res.end();
   }
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/import/contentful-media-support   (SSE — projector config, events, TV configs)
+// ---------------------------------------------------------------------------
+
+importRoutes.post('/contentful-media-support', async (req: Request, res: Response) => {
+  if (!SPACE_ID || !TOKEN) {
+    res.status(500).json({ status: 'error', message: 'Credentials Contentful non configurés' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  try {
+    let assetCount = 0;
+
+    // Step 1: Import projector config
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération de la config projecteur...' });
+    const projoCollection = await fetchContentfulCollection('configurationProjo');
+    const projoItems = projoCollection.items;
+    const projoAssets = projoCollection.includes;
+    const projoAssetMap = new Map((projoAssets?.Asset ?? []).map((a) => [a.sys.id, a]));
+
+    let projoCount = 0;
+    for (const item of projoItems) {
+      const cf = item.fields;
+      const cfId = item.sys.id;
+
+      const { data: existing } = await supabaseAdmin
+        .from('projector_config')
+        .select('id')
+        .eq('contentful_id', cfId)
+        .single();
+
+      if (existing) {
+        sendSSE(res, 'progress', { step: 'projo_done', message: 'Config projecteur déjà importée ✓' });
+        projoCount++;
+        continue;
+      }
+
+      let imageUrl: string | null = null;
+      const imgAssetId = getLinkedAssetId(cf.nextEventImage);
+      if (imgAssetId) {
+        const asset = projoAssetMap.get(imgAssetId);
+        if (asset) {
+          imageUrl = await downloadAndUploadAsset(asset);
+          if (imageUrl) assetCount++;
+        }
+      }
+
+      await supabaseAdmin.from('projector_config').insert({
+        name: (cf.name as string) || 'Config Projo',
+        next_event_title: (cf.nextEventTitle as string) || null,
+        next_event_subtitle: (cf.nextEventSubtitle as string) || null,
+        next_event_description: (cf.nextEventDescription as string) || null,
+        next_event_image_url: imageUrl,
+        background_video_youtube: (cf.backgroundVideoYoutube as string) || null,
+        contentful_id: cfId,
+      });
+
+      projoCount++;
+      sendSSE(res, 'progress', { step: 'projo_done', message: `Config projecteur "${cf.name}" importée ✓` });
+    }
+
+    // Step 2: Import events
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération des events...' });
+    const eventCollection = await fetchContentfulCollection('event');
+    const eventItems = eventCollection.items;
+    sendSSE(res, 'progress', { step: 'fetch', message: `${eventItems.length} events trouvés` });
+
+    let eventCount = 0;
+    for (let i = 0; i < eventItems.length; i++) {
+      const item = eventItems[i];
+      const cf = item.fields;
+      const cfId = item.sys.id;
+
+      const { data: existing } = await supabaseAdmin
+        .from('projector_events')
+        .select('id')
+        .eq('contentful_id', cfId)
+        .single();
+
+      if (existing) {
+        eventCount++;
+        sendSSE(res, 'progress', {
+          step: 'event_done',
+          message: `Event ${i + 1}/${eventItems.length} — déjà importé ✓`,
+          current: i + 1,
+          total: eventItems.length,
+        });
+        continue;
+      }
+
+      const iconArr = cf.icon as string[] | undefined;
+
+      await supabaseAdmin.from('projector_events').insert({
+        name: (cf.name as string) || '',
+        description: (cf.description as string) || null,
+        date: (cf.date as string) || new Date().toISOString(),
+        icon: Array.isArray(iconArr) && iconArr.length > 0 ? iconArr[0] : null,
+        contentful_id: cfId,
+      });
+
+      eventCount++;
+      sendSSE(res, 'progress', {
+        step: 'event_done',
+        message: `Event ${i + 1}/${eventItems.length} — "${cf.name}" ✓`,
+        current: i + 1,
+        total: eventItems.length,
+      });
+    }
+
+    // Step 3: Import TV configs
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération des configs TV...' });
+    const tvCollection = await fetchContentfulCollection('configurationTV');
+    const tvItems = tvCollection.items;
+    const tvAssets = tvCollection.includes;
+    const tvAssetMap = new Map((tvAssets?.Asset ?? []).map((a) => [a.sys.id, a]));
+
+    sendSSE(res, 'progress', { step: 'fetch', message: `${tvItems.length} configs TV trouvées` });
+
+    let tvCount = 0;
+    for (let i = 0; i < tvItems.length; i++) {
+      const item = tvItems[i];
+      const cf = item.fields;
+      const cfId = item.sys.id;
+
+      sendSSE(res, 'progress', {
+        step: 'tv',
+        message: `Config TV ${i + 1}/${tvItems.length} : ${(cf.name as string) || cfId}`,
+        current: i + 1,
+        total: tvItems.length,
+      });
+
+      const { data: existing } = await supabaseAdmin
+        .from('tv_configs')
+        .select('id')
+        .eq('contentful_id', cfId)
+        .single();
+
+      if (existing) {
+        tvCount++;
+        sendSSE(res, 'progress', {
+          step: 'tv_done',
+          message: `Config TV ${i + 1}/${tvItems.length} — déjà importée ✓`,
+          current: i + 1,
+          total: tvItems.length,
+        });
+        continue;
+      }
+
+      const youtubeVideos = Array.isArray(cf.youtubeVideos) ? (cf.youtubeVideos as string[]) : [];
+      const target = Array.isArray(cf.target) ? (cf.target as string[]) : [];
+
+      const mediaVideoUrls: string[] = [];
+      const videoRefs = cf.mediaVideos as Array<{ sys: { id: string } }> | undefined;
+      if (Array.isArray(videoRefs)) {
+        for (const ref of videoRefs) {
+          const asset = tvAssetMap.get(ref.sys.id);
+          if (asset) {
+            const url = await downloadAndUploadAsset(asset);
+            if (url) {
+              mediaVideoUrls.push(url);
+              assetCount++;
+            }
+          }
+        }
+      }
+
+      const mediaImageUrls: string[] = [];
+      const imageRefs = cf.mediaImages as Array<{ sys: { id: string } }> | undefined;
+      if (Array.isArray(imageRefs)) {
+        for (const ref of imageRefs) {
+          const asset = tvAssetMap.get(ref.sys.id);
+          if (asset) {
+            const url = await downloadAndUploadAsset(asset);
+            if (url) {
+              mediaImageUrls.push(url);
+              assetCount++;
+            }
+          }
+        }
+      }
+
+      await supabaseAdmin.from('tv_configs').insert({
+        name: (cf.name as string) || '',
+        youtube_videos: youtubeVideos,
+        media_video_urls: mediaVideoUrls,
+        media_image_urls: mediaImageUrls,
+        target,
+        contentful_id: cfId,
+      });
+
+      tvCount++;
+      sendSSE(res, 'progress', {
+        step: 'tv_done',
+        message: `Config TV ${i + 1}/${tvItems.length} — "${cf.name}" ✓`,
+        current: i + 1,
+        total: tvItems.length,
+      });
+    }
+
+    sendSSE(res, 'done', {
+      projectorConfigs: projoCount,
+      events: eventCount,
+      tvConfigs: tvCount,
+      assets: assetCount,
+    });
+
+    res.end();
+  } catch (err) {
+    console.error('Import contentful media-support error:', err);
+    const message = err instanceof Error ? err.message : 'Erreur serveur';
+    sendSSE(res, 'error', { message });
+    res.end();
+  }
+});

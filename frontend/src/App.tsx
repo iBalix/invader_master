@@ -14,6 +14,7 @@ import CarteListPage from './pages/CarteListPage';
 import CategoryFormPage from './pages/CategoryFormPage';
 import GamesListPage from './pages/GamesListPage';
 import GameFormPage from './pages/GameFormPage';
+import MediaSupportPage from './pages/MediaSupportPage';
 import UserManagementPage from './pages/UserManagementPage';
 import ComingSoon from './pages/ComingSoon';
 
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="contenus/jeux" element={<GamesListPage />} />
             <Route path="contenus/jeux/game/new" element={<GameFormPage />} />
             <Route path="contenus/jeux/game/:id" element={<GameFormPage />} />
+            <Route path="contenus/medias" element={<MediaSupportPage />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="bientot" element={<ComingSoon />} />
           </Route>

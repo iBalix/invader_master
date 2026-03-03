@@ -15,6 +15,7 @@ const PATH_LABELS: Record<string, string> = {
   '/contenus/carte/category/new': 'Nouvelle catégorie',
   '/contenus/jeux': 'Jeux',
   '/contenus/jeux/game/new': 'Nouveau jeu',
+  '/contenus/medias': 'Support médias',
 };
 
 interface Crumb {

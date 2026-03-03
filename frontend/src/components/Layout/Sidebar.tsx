@@ -13,6 +13,7 @@ import {
   Skull,
   Beer,
   UtensilsCrossed,
+  Monitor,
   Users,
   ChevronDown,
   ChevronRight,
@@ -75,6 +76,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
       { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz' },
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte' },
       { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux' },
+      { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias' },
     ],
   },
   {
