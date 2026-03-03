@@ -1247,3 +1247,109 @@ importRoutes.post('/contentful-media-support', async (req: Request, res: Respons
     res.end();
   }
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/import/contentful-translations   (SSE — imports translation keys)
+// ---------------------------------------------------------------------------
+
+importRoutes.post('/contentful-translations', async (req: Request, res: Response) => {
+  if (!SPACE_ID || !TOKEN) {
+    res.status(500).json({ status: 'error', message: 'Credentials Contentful non configurés' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  try {
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération des traductions FR...' });
+    const frUrl = `${CDN_BASE}/entries?access_token=${TOKEN}&content_type=traductions&locale=fr&limit=1`;
+    const frRes = await fetch(frUrl);
+    if (!frRes.ok) throw new Error(`Contentful FR ${frRes.status}`);
+    const frJson = await frRes.json() as { items: Array<{ fields: Record<string, unknown> }> };
+
+    sendSSE(res, 'progress', { step: 'fetch', message: 'Récupération des traductions EN...' });
+    const enUrl = `${CDN_BASE}/entries?access_token=${TOKEN}&content_type=traductions&locale=en&limit=1`;
+    const enRes = await fetch(enUrl);
+    if (!enRes.ok) throw new Error(`Contentful EN ${enRes.status}`);
+    const enJson = await enRes.json() as { items: Array<{ fields: Record<string, unknown> }> };
+
+    if (!frJson.items.length) {
+      sendSSE(res, 'error', { message: 'Aucune entrée traductions trouvée sur Contentful' });
+      res.end();
+      return;
+    }
+
+    const frFields = frJson.items[0].fields;
+    const enFields = enJson.items.length > 0 ? enJson.items[0].fields : {};
+
+    const keys = Object.keys(frFields).filter((k) => k !== 'name');
+    sendSSE(res, 'progress', { step: 'fetched', message: `${keys.length} clés de traduction trouvées` });
+
+    let count = 0;
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const valueFr = (frFields[key] as string) ?? '';
+      const valueEn = (enFields[key] as string) ?? '';
+
+      sendSSE(res, 'progress', {
+        step: 'translation',
+        message: `Clé ${i + 1}/${keys.length} : ${key}`,
+        current: i + 1,
+        total: keys.length,
+      });
+
+      const { data: existing } = await supabaseAdmin
+        .from('translations')
+        .select('id')
+        .eq('key', key)
+        .single();
+
+      if (existing) {
+        sendSSE(res, 'progress', {
+          step: 'translation_done',
+          message: `Clé ${i + 1}/${keys.length} — "${key}" déjà importée ✓`,
+          current: i + 1,
+          total: keys.length,
+        });
+        count++;
+        continue;
+      }
+
+      const { error } = await supabaseAdmin.from('translations').insert({
+        key,
+        value_fr: valueFr,
+        value_en: valueEn,
+      });
+
+      if (error) {
+        sendSSE(res, 'progress', {
+          step: 'translation_error',
+          message: `Clé "${key}" — erreur : ${error.message}`,
+          current: i + 1,
+          total: keys.length,
+        });
+        continue;
+      }
+
+      count++;
+      sendSSE(res, 'progress', {
+        step: 'translation_done',
+        message: `Clé ${i + 1}/${keys.length} — "${key}" ✓`,
+        current: i + 1,
+        total: keys.length,
+      });
+    }
+
+    sendSSE(res, 'done', { translations: count });
+    res.end();
+  } catch (err) {
+    console.error('Import contentful translations error:', err);
+    const message = err instanceof Error ? err.message : 'Erreur serveur';
+    sendSSE(res, 'error', { message });
+    res.end();
+  }
+});

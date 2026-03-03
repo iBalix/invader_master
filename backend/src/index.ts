@@ -18,6 +18,7 @@ import { gameConsoleRoutes } from './routes/gameConsoles.js';
 import { gameRoutes } from './routes/gameRoutes.js';
 import { projectorConfigRoutes } from './routes/projectorConfig.js';
 import { tvConfigRoutes } from './routes/tvConfigs.js';
+import { translationRoutes } from './routes/translations.js';
 import { publicRoutes } from './routes/public.js';
 
 const app = express();
@@ -50,6 +51,7 @@ app.use('/api/game-consoles', gameConsoleRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/projector-config', projectorConfigRoutes);
 app.use('/api/tv-configs', tvConfigRoutes);
+app.use('/api/translations', translationRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not found' });

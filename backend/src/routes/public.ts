@@ -258,6 +258,29 @@ publicRoutes.get('/tv-configs', async (_req, res) => {
   }
 });
 
+// Translations as flat key-value object
+publicRoutes.get('/translations', async (req, res) => {
+  try {
+    const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
+
+    const { data, error } = await supabaseAdmin
+      .from('translations')
+      .select('key, value_fr, value_en');
+
+    if (error) throw error;
+
+    const result: Record<string, string> = {};
+    for (const row of data ?? []) {
+      result[row.key] = locale === 'en' ? row.value_en : row.value_fr;
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Public translations error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Get single question
 publicRoutes.get('/questions/:id', async (req, res) => {
   try {

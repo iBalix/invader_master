@@ -14,6 +14,7 @@ import {
   Beer,
   UtensilsCrossed,
   Monitor,
+  Languages,
   Users,
   ChevronDown,
   ChevronRight,
@@ -77,6 +78,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte' },
       { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux' },
       { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias' },
+      { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions' },
     ],
   },
   {
