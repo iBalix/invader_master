@@ -1,11 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Download, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import FileUpload from '../components/Quiz/FileUpload';
 import ProjectorEventModal, { type ProjectorEventData } from '../components/MediaSupport/ProjectorEventModal';
 import TvConfigModal, { type TvConfigData } from '../components/MediaSupport/TvConfigModal';
-import ImportMediaSupportModal from '../components/MediaSupport/ImportMediaSupportModal';
 
 interface ProjectorConfig {
   id?: string;
@@ -53,7 +52,6 @@ export default function MediaSupportPage() {
   const [tvConfigs, setTvConfigs] = useState<TvConfigRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [eventModal, setEventModal] = useState<{ open: boolean; editing: ProjectorEventData | null }>({ open: false, editing: null });
   const [tvModal, setTvModal] = useState<{ open: boolean; editing: TvConfigData | null }>({ open: false, editing: null });
 
@@ -187,9 +185,6 @@ export default function MediaSupportPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Support médias</h1>
         <div className="flex items-center gap-2">
-          <button onClick={() => setImportOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
-            <Download className="w-4 h-4" />Importer depuis Contentful
-          </button>
           {tab === 'tv' && (
             <button onClick={() => setTvModal({ open: true, editing: null })} className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition">
               <Plus className="w-4 h-4" />Créer une config TV
@@ -374,7 +369,6 @@ export default function MediaSupportPage() {
         )
       )}
 
-      {importOpen && <ImportMediaSupportModal onClose={() => setImportOpen(false)} onImported={() => { loadProjector(); loadTvConfigs(); }} />}
       {eventModal.open && <ProjectorEventModal initial={eventModal.editing} onSave={handleEventSave} onClose={() => setEventModal({ open: false, editing: null })} />}
       {tvModal.open && <TvConfigModal initial={tvModal.editing} onSave={handleTvSave} onClose={() => setTvModal({ open: false, editing: null })} />}
     </div>

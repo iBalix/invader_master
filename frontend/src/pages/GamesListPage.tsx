@@ -1,12 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Download, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import GameCategoryModal, { type GameCategoryData } from '../components/Games/GameCategoryModal';
 import GameConsoleModal, { type GameConsoleData } from '../components/Games/GameConsoleModal';
-import ImportGamesModal from '../components/Games/ImportGamesModal';
-import ImportI18nModal from '../components/ImportI18nModal';
 
 interface GameRow {
   id: string;
@@ -45,8 +43,6 @@ export default function GamesListPage() {
   const [search, setSearch] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [importOpen, setImportOpen] = useState(false);
-  const [i18nOpen, setI18nOpen] = useState(false);
   const [catModal, setCatModal] = useState<{ open: boolean; editing: GameCategoryData | null }>({ open: false, editing: null });
   const [consoleModal, setConsoleModal] = useState<{ open: boolean; editing: GameConsoleData | null }>({ open: false, editing: null });
 
@@ -184,19 +180,6 @@ export default function GamesListPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Jeux</h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-          >
-            <Download className="w-4 h-4" />
-            Importer depuis Contentful
-          </button>
-          <button
-            onClick={() => setI18nOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm"
-          >
-            Importer trad. EN
-          </button>
           {createButton()}
         </div>
       </div>
@@ -420,13 +403,6 @@ export default function GamesListPage() {
         )
       )}
 
-      {importOpen && (
-        <ImportGamesModal
-          onClose={() => setImportOpen(false)}
-          onImported={() => { loadGames(); loadCategories(); loadConsoles(); }}
-        />
-      )}
-
       {catModal.open && (
         <GameCategoryModal
           initial={catModal.editing}
@@ -443,12 +419,6 @@ export default function GamesListPage() {
         />
       )}
 
-      {i18nOpen && (
-        <ImportI18nModal
-          onClose={() => setI18nOpen(false)}
-          onImported={() => { loadGames(); loadCategories(); }}
-        />
-      )}
     </div>
   );
 }

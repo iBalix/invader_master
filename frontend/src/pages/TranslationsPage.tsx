@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, Trash2, Download, Check } from 'lucide-react';
+import { Plus, Trash2, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import TranslationModal from '../components/Translations/TranslationModal';
-import ImportTranslationsModal from '../components/Translations/ImportTranslationsModal';
 
 interface TranslationRow {
   id: string;
@@ -15,7 +14,6 @@ interface TranslationRow {
 export default function TranslationsPage() {
   const [translations, setTranslations] = useState<TranslationRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [importOpen, setImportOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [edited, setEdited] = useState<Record<string, { value_fr: string; value_en: string }>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
@@ -106,13 +104,6 @@ export default function TranslationsPage() {
         <h1 className="text-2xl font-bold">Traductions</h1>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setImportOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-          >
-            <Download className="w-4 h-4" />
-            Importer depuis Contentful
-          </button>
-          <button
             onClick={() => setCreateOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
           >
@@ -191,13 +182,6 @@ export default function TranslationsPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {importOpen && (
-        <ImportTranslationsModal
-          onClose={() => setImportOpen(false)}
-          onImported={load}
-        />
       )}
 
       {createOpen && (
