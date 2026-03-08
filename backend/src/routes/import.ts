@@ -112,6 +112,227 @@ function sendSSE(res: Response, event: string, data: Record<string, unknown>) {
 }
 
 // ---------------------------------------------------------------------------
+// GET /api/import/diff-contentful-quizzes   (compare Contentful vs DB)
+// ---------------------------------------------------------------------------
+
+importRoutes.get('/diff-contentful-quizzes', async (_req: Request, res: Response) => {
+  if (!SPACE_ID || !TOKEN) {
+    res.status(500).json({ status: 'error', message: 'Credentials Contentful non configurés' });
+    return;
+  }
+
+  try {
+    const cfQuizzes = await fetchContentfulCollection('quizz');
+    const cfQuestions = await fetchContentfulCollection('question');
+
+    const { data: dbQuizzes } = await supabaseAdmin.from('quizzes').select('contentful_id');
+    const { data: dbQuestions } = await supabaseAdmin.from('questions').select('contentful_id');
+
+    const dbQuizIds = new Set((dbQuizzes ?? []).map((q) => q.contentful_id).filter(Boolean));
+    const dbQuestionIds = new Set((dbQuestions ?? []).map((q) => q.contentful_id).filter(Boolean));
+
+    const missingQuizzes = cfQuizzes.items
+      .filter((q) => !dbQuizIds.has(q.sys.id))
+      .map((q) => ({ contentfulId: q.sys.id, name: (q.fields.name as string) || q.sys.id }));
+
+    const missingQuestions = cfQuestions.items
+      .filter((q) => !dbQuestionIds.has(q.sys.id))
+      .map((q) => ({ contentfulId: q.sys.id, question: (q.fields.question as string) || q.sys.id }));
+
+    res.json({
+      status: 'success',
+      missingQuizzes,
+      missingQuestions,
+      totalContentfulQuizzes: cfQuizzes.items.length,
+      totalContentfulQuestions: cfQuestions.items.length,
+      totalDbQuizzes: dbQuizIds.size,
+      totalDbQuestions: dbQuestionIds.size,
+    });
+  } catch (err) {
+    console.error('Diff contentful quizzes error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/import/sync-contentful-quizzes   (SSE — selective import)
+// ---------------------------------------------------------------------------
+
+importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response) => {
+  const { quizIds } = req.body as { quizIds?: string[] };
+  if (!Array.isArray(quizIds) || quizIds.length === 0) {
+    res.status(400).json({ status: 'error', message: 'quizIds requis (tableau d\'IDs Contentful)' });
+    return;
+  }
+
+  if (!SPACE_ID || !TOKEN) {
+    res.status(500).json({ status: 'error', message: 'Credentials Contentful non configurés' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  try {
+    let importedQuizzes = 0;
+    let importedQuestions = 0;
+
+    for (let qi = 0; qi < quizIds.length; qi++) {
+      const entryId = quizIds[qi];
+
+      sendSSE(res, 'progress', { step: 'quiz', message: `Quiz ${qi + 1}/${quizIds.length} — récupération...`, current: qi + 1, total: quizIds.length });
+
+      const { data: existingQuiz } = await supabaseAdmin
+        .from('quizzes')
+        .select('id')
+        .eq('contentful_id', entryId)
+        .single();
+
+      if (existingQuiz) {
+        sendSSE(res, 'progress', { step: 'quiz_done', message: `Quiz ${qi + 1}/${quizIds.length} — déjà importé ✓`, current: qi + 1, total: quizIds.length });
+        importedQuizzes++;
+        continue;
+      }
+
+      const collection = await fetchContentfulEntryWithIncludes(entryId);
+      if (!collection.items || collection.items.length === 0) {
+        sendSSE(res, 'progress', { step: 'quiz_error', message: `Quiz ${qi + 1}/${quizIds.length} — introuvable sur Contentful`, current: qi + 1, total: quizIds.length });
+        continue;
+      }
+
+      const entry = collection.items[0];
+      const fields = entry.fields;
+      const includes = collection.includes;
+
+      let bgMusicUrl: string | null = null;
+      let bgImageUrl: string | null = null;
+
+      const bgMusicAssetId = getLinkedAssetId(fields.backgroundMusic);
+      if (bgMusicAssetId) {
+        const asset = resolveAsset(bgMusicAssetId, includes);
+        if (asset) bgMusicUrl = await downloadAndUploadAsset(asset);
+      }
+      const bgImageAssetId = getLinkedAssetId(fields.backgroundImage);
+      if (bgImageAssetId) {
+        const asset = resolveAsset(bgImageAssetId, includes);
+        if (asset) bgImageUrl = await downloadAndUploadAsset(asset);
+      }
+
+      const quizPayload = {
+        name: (fields.name as string) || `Import ${entryId}`,
+        theme: (fields.theme as string) || '',
+        background_media_youtube: (fields.backgroundMediaYoutube as string) || null,
+        background_music_url: bgMusicUrl,
+        background_image_url: bgImageUrl,
+        pause_promotional_text: (fields.pausePromotionalText as string) || null,
+        end_winner_text: (fields.endWinnerText as string) || null,
+        end_text_final: (fields.endTextFinal as string) || null,
+        do_not_delete: (fields.doNotDelete as boolean) ?? false,
+        published: true,
+        contentful_id: entryId,
+        last_edited_by: req.user!.id,
+        last_edited_by_email: req.user!.email,
+      };
+
+      const { data: quiz, error: quizError } = await supabaseAdmin
+        .from('quizzes')
+        .insert(quizPayload)
+        .select()
+        .single();
+
+      if (quizError) {
+        sendSSE(res, 'progress', { step: 'quiz_error', message: `Quiz erreur : ${quizError.message}`, current: qi + 1, total: quizIds.length });
+        continue;
+      }
+
+      const questionRefs = fields.questions as Array<{ sys: { id: string } }> | undefined;
+      if (Array.isArray(questionRefs)) {
+        for (let i = 0; i < questionRefs.length; i++) {
+          const qRef = questionRefs[i];
+          const qEntryId = qRef.sys.id;
+
+          const { data: existingQ } = await supabaseAdmin.from('questions').select('id').eq('contentful_id', qEntryId).single();
+          if (existingQ) {
+            await supabaseAdmin.from('quiz_questions').insert({ quiz_id: quiz.id, question_id: existingQ.id, position: i });
+            importedQuestions++;
+            continue;
+          }
+
+          const qEntry = resolveEntry(qEntryId, includes);
+          if (!qEntry) continue;
+
+          const qFields = qEntry.fields;
+          const rawAnswers = (qFields.answers as string[]) || [];
+          let correctIndex = 0;
+          const cleanAnswers = rawAnswers.map((a, idx) => {
+            if (a.endsWith(' (OK)')) { correctIndex = idx; return a.slice(0, -5); }
+            return a;
+          });
+          while (cleanAnswers.length < 4) cleanAnswers.push('');
+
+          let musicUrl: string | null = null;
+          let imgQuestionUrl: string | null = null;
+          let imgAnswerUrl: string | null = null;
+
+          const musicId = getLinkedAssetId(qFields.music);
+          if (musicId) { const a = resolveAsset(musicId, includes); if (a) musicUrl = await downloadAndUploadAsset(a); }
+          const imgQId = getLinkedAssetId(qFields.imageQuestion);
+          if (imgQId) { const a = resolveAsset(imgQId, includes); if (a) imgQuestionUrl = await downloadAndUploadAsset(a); }
+          const imgAId = getLinkedAssetId(qFields.imageAnswer);
+          if (imgAId) { const a = resolveAsset(imgAId, includes); if (a) imgAnswerUrl = await downloadAndUploadAsset(a); }
+
+          const rawDiff = qFields.difficulty;
+          let difficulty: string[] = [];
+          if (Array.isArray(rawDiff)) difficulty = rawDiff as string[];
+          else if (typeof rawDiff === 'string' && rawDiff) difficulty = [rawDiff];
+
+          const { data: newQ, error: qError } = await supabaseAdmin
+            .from('questions')
+            .insert({
+              question: (qFields.question as string) || '',
+              difficulty,
+              answers: cleanAnswers,
+              correct_answer_index: correctIndex,
+              help_animator: (qFields.helpAnimator as string) || null,
+              music_url: musicUrl,
+              video_youtube: (qFields.videoYoutube as string) || null,
+              image_question_url: imgQuestionUrl,
+              image_answer_url: imgAnswerUrl,
+              contentful_id: qEntryId,
+            })
+            .select()
+            .single();
+
+          if (qError) continue;
+
+          await supabaseAdmin.from('quiz_questions').insert({ quiz_id: quiz.id, question_id: newQ.id, position: i });
+          importedQuestions++;
+        }
+      }
+
+      importedQuizzes++;
+      sendSSE(res, 'progress', {
+        step: 'quiz_done',
+        message: `Quiz ${qi + 1}/${quizIds.length} — "${(fields.name as string)}" ✓`,
+        current: qi + 1,
+        total: quizIds.length,
+      });
+    }
+
+    sendSSE(res, 'done', { quizzes: importedQuizzes, questions: importedQuestions });
+    res.end();
+  } catch (err) {
+    console.error('Sync contentful quizzes error:', err);
+    const message = err instanceof Error ? err.message : 'Erreur serveur';
+    sendSSE(res, 'error', { message });
+    res.end();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/import/contentful-quiz   (SSE streaming response)
 // ---------------------------------------------------------------------------
 

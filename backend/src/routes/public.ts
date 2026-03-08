@@ -31,15 +31,26 @@ function localize(
   return result;
 }
 
+function formatQuestionAnswers(q: Record<string, unknown>): Record<string, unknown> {
+  const answers = (q.answers as string[]) ?? [];
+  const correctIdx = (q.correct_answer_index as number) ?? 0;
+  const formatted = answers.map((a, i) => i === correctIdx ? `${a} (OK)` : a);
+  return { ...q, answers: formatted };
+}
+
 // List all quizzes (basic info)
-publicRoutes.get('/quizzes', async (_req, res) => {
+publicRoutes.get('/quizzes', async (req, res) => {
   try {
-    const { data: quizzes, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('quizzes')
-      .select('id, name, theme, created_at, updated_at')
-      .eq('published', true)
+      .select('*')
       .order('name');
 
+    if (req.query.all !== 'true') {
+      query = query.eq('published', true);
+    }
+
+    const { data: quizzes, error } = await query;
     if (error) throw error;
 
     const { data: counts } = await supabaseAdmin
@@ -68,12 +79,16 @@ publicRoutes.get('/quizzes', async (_req, res) => {
 // Get full quiz with questions
 publicRoutes.get('/quizzes/:id', async (req, res) => {
   try {
-    const { data: quiz, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('quizzes')
       .select('*')
-      .eq('id', req.params.id)
-      .eq('published', true)
-      .single();
+      .eq('id', req.params.id);
+
+    if (req.query.all !== 'true') {
+      query = query.eq('published', true);
+    }
+
+    const { data: quiz, error } = await query.single();
 
     if (error || !quiz) {
       res.status(404).json({ error: 'Quiz introuvable' });
@@ -98,7 +113,7 @@ publicRoutes.get('/quizzes/:id', async (req, res) => {
         const posMap = new Map(links.map((l) => [l.question_id, l.position]));
         questions = qData
           .sort((a, b) => (posMap.get(a.id) ?? 0) - (posMap.get(b.id) ?? 0))
-          .map((q) => toCamel(q) as Record<string, unknown>);
+          .map((q) => toCamel(formatQuestionAnswers(q)) as Record<string, unknown>);
       }
     }
 

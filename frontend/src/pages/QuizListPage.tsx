@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
-import ImportQuizModal from '../components/Quiz/ImportQuizModal';
+import SyncQuizModal from '../components/Quiz/SyncQuizModal';
 
 interface QuizRow {
   id: string;
@@ -63,8 +63,8 @@ export default function QuizListPage() {
               onClick={() => setImportOpen(true)}
               className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
             >
-              <Download className="w-4 h-4" />
-              Importer un quiz
+              <RefreshCw className="w-4 h-4" />
+              Synchroniser Contentful
             </button>
             <Link
               to="/contenus/quiz/new"
@@ -166,7 +166,7 @@ export default function QuizListPage() {
       )}
 
       {importOpen && (
-        <ImportQuizModal
+        <SyncQuizModal
           onClose={() => setImportOpen(false)}
           onImported={load}
         />
