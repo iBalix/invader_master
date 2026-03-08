@@ -28,6 +28,7 @@ interface EventRow {
 interface TvConfigRow {
   id: string;
   name: string;
+  active: boolean;
   youtube_videos: string[];
   media_video_urls: string[];
   media_image_urls: string[];
@@ -155,6 +156,16 @@ export default function MediaSupportPage() {
       loadTvConfigs();
     } catch {
       toast.error('Erreur lors de la sauvegarde');
+    }
+  };
+
+  const handleToggleTvActive = async (id: string, active: boolean) => {
+    try {
+      await api.put(`/api/tv-configs/${id}`, { active: !active });
+      toast.success(!active ? 'Config activée' : 'Config désactivée');
+      loadTvConfigs();
+    } catch {
+      toast.error('Erreur lors du changement de statut');
     }
   };
 
@@ -308,6 +319,7 @@ export default function MediaSupportPage() {
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <th className="px-6 py-3">Nom</th>
+                  <th className="px-6 py-3 text-center">Actif</th>
                   <th className="px-6 py-3">Cible(s)</th>
                   <th className="px-6 py-3 text-center">YouTube</th>
                   <th className="px-6 py-3 text-center">Vidéos</th>
@@ -317,8 +329,17 @@ export default function MediaSupportPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {tvConfigs.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50 transition">
+                  <tr key={c.id} className={`hover:bg-gray-50 transition ${!c.active ? 'opacity-50' : ''}`}>
                     <td className="px-6 py-4 font-medium">{c.name}</td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleTvActive(c.id, c.active)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${c.active ? 'bg-green-500' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${c.active ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1">
                         {c.target.length > 0

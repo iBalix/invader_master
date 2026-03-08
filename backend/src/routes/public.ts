@@ -262,12 +262,13 @@ publicRoutes.get('/projector', async (_req, res) => {
   }
 });
 
-// TV configs
+// TV configs (only active ones)
 publicRoutes.get('/tv-configs', async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('tv_configs')
       .select('*')
+      .eq('active', true)
       .order('name', { ascending: true });
 
     if (error) throw error;
