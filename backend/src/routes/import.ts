@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import path from 'path';
+import path from 'node:path';
 import { randomUUID } from 'crypto';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
@@ -35,13 +35,19 @@ interface ContentfulCollectionResponse {
 async function fetchContentfulEntryWithIncludes(
   entryId: string,
 ): Promise<ContentfulCollectionResponse> {
-  const url = `${CDN_BASE}/entries?access_token=${TOKEN}&include=10&locale=fr&sys.id=${entryId}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Contentful API ${res.status}: ${text}`);
+  const url = `${CDN_BASE}/entries?access_token=${TOKEN}&include=2&locale=fr&sys.id=${entryId}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Contentful API ${res.status}: ${text}`);
+    }
+    return res.json() as Promise<ContentfulCollectionResponse>;
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json() as Promise<ContentfulCollectionResponse>;
 }
 
 function resolveEntry(
@@ -72,19 +78,35 @@ function getLinkedAssetId(field: unknown): string | null {
 
 async function downloadAndUploadAsset(
   asset: ContentfulAsset,
+  retries = 3,
 ): Promise<string | null> {
   const fileInfo = asset.fields?.file;
   if (!fileInfo?.url) return null;
 
   const assetUrl = fileInfo.url.startsWith('//') ? `https:${fileInfo.url}` : fileInfo.url;
 
-  const res = await fetch(assetUrl);
-  if (!res.ok) {
-    console.error(`Failed to download asset ${asset.sys.id}: ${res.status}`);
-    return null;
+  let buffer: Buffer | null = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(assetUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        console.error(`Failed to download asset ${asset.sys.id}: ${res.status}`);
+        return null;
+      }
+      buffer = Buffer.from(await res.arrayBuffer());
+      break;
+    } catch (err) {
+      console.error(`Download asset ${asset.sys.id} attempt ${attempt}/${retries} failed:`, (err as Error).message);
+      if (attempt === retries) return null;
+      await new Promise((r) => setTimeout(r, 1000 * attempt));
+    }
   }
 
-  const buffer = Buffer.from(await res.arrayBuffer());
+  if (!buffer) return null;
+
   const ext = path.extname(fileInfo.fileName || '').toLowerCase() || '.bin';
   const contentType = fileInfo.contentType || 'application/octet-stream';
   const folder = contentType.startsWith('image/') ? 'images' : 'audio';
@@ -122,8 +144,22 @@ importRoutes.get('/diff-contentful-quizzes', async (_req: Request, res: Response
   }
 
   try {
-    const cfQuizzes = await fetchContentfulCollection('quizz');
-    const cfQuestions = await fetchContentfulCollection('question');
+    let cfQuizzes: ContentfulCollectionResponse;
+    let cfQuestions: ContentfulCollectionResponse;
+    try {
+      cfQuizzes = await fetchContentfulCollection('quizz');
+    } catch (fetchErr) {
+      console.error('Fetch Contentful quizzes failed:', fetchErr);
+      res.status(502).json({ status: 'error', message: `Impossible de contacter Contentful (quizz): ${fetchErr instanceof Error ? fetchErr.message : 'fetch failed'}` });
+      return;
+    }
+    try {
+      cfQuestions = await fetchContentfulCollection('question');
+    } catch (fetchErr) {
+      console.error('Fetch Contentful questions failed:', fetchErr);
+      res.status(502).json({ status: 'error', message: `Impossible de contacter Contentful (question): ${fetchErr instanceof Error ? fetchErr.message : 'fetch failed'}` });
+      return;
+    }
 
     const { data: dbQuizzes } = await supabaseAdmin.from('quizzes').select('contentful_id');
     const { data: dbQuestions } = await supabaseAdmin.from('questions').select('contentful_id');
@@ -197,7 +233,13 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
         continue;
       }
 
-      const collection = await fetchContentfulEntryWithIncludes(entryId);
+      let collection: Awaited<ReturnType<typeof fetchContentfulEntryWithIncludes>>;
+      try {
+        collection = await fetchContentfulEntryWithIncludes(entryId);
+      } catch (fetchErr) {
+        sendSSE(res, 'progress', { step: 'quiz_error', message: `Quiz ${qi + 1}/${quizIds.length} — erreur Contentful : ${fetchErr instanceof Error ? fetchErr.message : 'fetch failed'}`, current: qi + 1, total: quizIds.length });
+        continue;
+      }
       if (!collection.items || collection.items.length === 0) {
         sendSSE(res, 'progress', { step: 'quiz_error', message: `Quiz ${qi + 1}/${quizIds.length} — introuvable sur Contentful`, current: qi + 1, total: quizIds.length });
         continue;
@@ -210,15 +252,25 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
       let bgMusicUrl: string | null = null;
       let bgImageUrl: string | null = null;
 
-      const bgMusicAssetId = getLinkedAssetId(fields.backgroundMusic);
-      if (bgMusicAssetId) {
-        const asset = resolveAsset(bgMusicAssetId, includes);
-        if (asset) bgMusicUrl = await downloadAndUploadAsset(asset);
-      }
-      const bgImageAssetId = getLinkedAssetId(fields.backgroundImage);
-      if (bgImageAssetId) {
-        const asset = resolveAsset(bgImageAssetId, includes);
-        if (asset) bgImageUrl = await downloadAndUploadAsset(asset);
+      try {
+        const bgMusicAssetId = getLinkedAssetId(fields.backgroundMusic);
+        if (bgMusicAssetId) {
+          const asset = resolveAsset(bgMusicAssetId, includes);
+          if (asset) {
+            sendSSE(res, 'progress', { step: 'asset', message: `  ↳ Musique de fond...` });
+            bgMusicUrl = await downloadAndUploadAsset(asset);
+          }
+        }
+        const bgImageAssetId = getLinkedAssetId(fields.backgroundImage);
+        if (bgImageAssetId) {
+          const asset = resolveAsset(bgImageAssetId, includes);
+          if (asset) {
+            sendSSE(res, 'progress', { step: 'asset', message: `  ↳ Image de fond...` });
+            bgImageUrl = await downloadAndUploadAsset(asset);
+          }
+        }
+      } catch (assetErr) {
+        sendSSE(res, 'progress', { step: 'asset_error', message: `  ↳ Erreur asset quiz : ${(assetErr as Error).message}` });
       }
 
       const quizPayload = {
@@ -230,9 +282,9 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
         pause_promotional_text: (fields.pausePromotionalText as string) || null,
         end_winner_text: (fields.endWinnerText as string) || null,
         end_text_final: (fields.endTextFinal as string) || null,
-        do_not_delete: (fields.doNotDelete as boolean) ?? false,
-        published: true,
-        contentful_id: entryId,
+      do_not_delete: (fields.doNotDelete as boolean) ?? false,
+      published: false,
+      contentful_id: entryId,
         last_edited_by: req.user!.id,
         last_edited_by_email: req.user!.email,
       };
@@ -249,20 +301,27 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
       }
 
       const questionRefs = fields.questions as Array<{ sys: { id: string } }> | undefined;
+      const totalQ = Array.isArray(questionRefs) ? questionRefs.length : 0;
       if (Array.isArray(questionRefs)) {
         for (let i = 0; i < questionRefs.length; i++) {
           const qRef = questionRefs[i];
           const qEntryId = qRef.sys.id;
 
+          sendSSE(res, 'progress', { step: 'question', message: `  Question ${i + 1}/${totalQ}...` });
+
           const { data: existingQ } = await supabaseAdmin.from('questions').select('id').eq('contentful_id', qEntryId).single();
           if (existingQ) {
             await supabaseAdmin.from('quiz_questions').insert({ quiz_id: quiz.id, question_id: existingQ.id, position: i });
             importedQuestions++;
+            sendSSE(res, 'progress', { step: 'question_done', message: `  Question ${i + 1}/${totalQ} — réutilisée ✓` });
             continue;
           }
 
           const qEntry = resolveEntry(qEntryId, includes);
-          if (!qEntry) continue;
+          if (!qEntry) {
+            sendSSE(res, 'progress', { step: 'question_error', message: `  Question ${i + 1}/${totalQ} — introuvable` });
+            continue;
+          }
 
           const qFields = qEntry.fields;
           const rawAnswers = (qFields.answers as string[]) || [];
@@ -278,11 +337,11 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
           let imgAnswerUrl: string | null = null;
 
           const musicId = getLinkedAssetId(qFields.music);
-          if (musicId) { const a = resolveAsset(musicId, includes); if (a) musicUrl = await downloadAndUploadAsset(a); }
+          if (musicId) { const a = resolveAsset(musicId, includes); if (a) { sendSSE(res, 'progress', { step: 'asset', message: `  ↳ Audio...` }); musicUrl = await downloadAndUploadAsset(a); } }
           const imgQId = getLinkedAssetId(qFields.imageQuestion);
-          if (imgQId) { const a = resolveAsset(imgQId, includes); if (a) imgQuestionUrl = await downloadAndUploadAsset(a); }
+          if (imgQId) { const a = resolveAsset(imgQId, includes); if (a) { sendSSE(res, 'progress', { step: 'asset', message: `  ↳ Image question...` }); imgQuestionUrl = await downloadAndUploadAsset(a); } }
           const imgAId = getLinkedAssetId(qFields.imageAnswer);
-          if (imgAId) { const a = resolveAsset(imgAId, includes); if (a) imgAnswerUrl = await downloadAndUploadAsset(a); }
+          if (imgAId) { const a = resolveAsset(imgAId, includes); if (a) { sendSSE(res, 'progress', { step: 'asset', message: `  ↳ Image réponse...` }); imgAnswerUrl = await downloadAndUploadAsset(a); } }
 
           const rawDiff = qFields.difficulty;
           let difficulty: string[] = [];
@@ -446,29 +505,29 @@ importRoutes.post('/contentful-quiz', async (req: Request, res: Response) => {
       pause_promotional_text: (fields.pausePromotionalText as string) || null,
       end_winner_text: (fields.endWinnerText as string) || null,
       end_text_final: (fields.endTextFinal as string) || null,
-      do_not_delete: (fields.doNotDelete as boolean) ?? false,
-      published: true,
-      contentful_id: entryId,
-      last_edited_by: req.user!.id,
-      last_edited_by_email: req.user!.email,
-    };
+        do_not_delete: (fields.doNotDelete as boolean) ?? false,
+        published: false,
+        contentful_id: entryId,
+        last_edited_by: req.user!.id,
+        last_edited_by_email: req.user!.email,
+      };
 
-    const { data: quiz, error: quizError } = await supabaseAdmin
-      .from('quizzes')
-      .insert(quizPayload)
-      .select()
-      .single();
+      const { data: quiz, error: quizError } = await supabaseAdmin
+        .from('quizzes')
+        .insert(quizPayload)
+        .select()
+        .single();
 
-    if (quizError) {
-      sendSSE(res, 'error', { message: quizError.message });
-      res.end();
-      return;
-    }
+      if (quizError) {
+        sendSSE(res, 'error', { message: quizError.message });
+        res.end();
+        return;
+      }
 
-    sendSSE(res, 'progress', {
-      step: 'quiz_created',
-      message: `Quiz "${quiz.name}" créé ✓`,
-    });
+      sendSSE(res, 'progress', {
+        step: 'quiz_created',
+        message: `Quiz "${quiz.name}" créé (draft) ✓`,
+      });
 
     // Step 4: Process questions
     let importedCount = 0;

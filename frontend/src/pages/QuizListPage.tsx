@@ -36,6 +36,16 @@ export default function QuizListPage() {
 
   useEffect(() => { load(); }, []);
 
+  const handleTogglePublished = async (id: string, published: boolean) => {
+    try {
+      await api.put(`/api/quizzes/${id}`, { published: !published });
+      toast.success(!published ? 'Quiz publié' : 'Quiz passé en draft');
+      load();
+    } catch {
+      toast.error('Erreur lors du changement de statut');
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Supprimer le quiz "${name}" ?`)) return;
     try {
@@ -127,13 +137,22 @@ export default function QuizListPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      q.published
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {q.published ? 'Publié' : 'Draft'}
-                    </span>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => handleTogglePublished(q.id, q.published)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${q.published ? 'bg-green-500' : 'bg-gray-300'}`}
+                        title={q.published ? 'Publié — cliquer pour passer en draft' : 'Draft — cliquer pour publier'}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${q.published ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
+                    ) : (
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        q.published ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {q.published ? 'Publié' : 'Draft'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-center text-gray-500 text-sm">
                     {new Date(q.created_at).toLocaleDateString('fr-FR')}
