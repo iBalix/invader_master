@@ -53,7 +53,7 @@ questionRoutes.get('/:id', async (req, res) => {
 });
 
 // Create question (+ optionally link to a quiz)
-questionRoutes.post('/', requireRole('admin', 'salarie'), async (req, res) => {
+questionRoutes.post('/', requireRole('admin', 'salarie', 'externe'), async (req, res) => {
   try {
     const { quiz_id, ...fields } = req.body;
 
@@ -102,7 +102,7 @@ questionRoutes.post('/', requireRole('admin', 'salarie'), async (req, res) => {
 });
 
 // Update question + propagate last editor to parent quizzes
-questionRoutes.put('/:id', requireRole('admin', 'salarie'), async (req, res) => {
+questionRoutes.put('/:id', requireRole('admin', 'salarie', 'externe'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('questions')
@@ -140,7 +140,7 @@ questionRoutes.put('/:id', requireRole('admin', 'salarie'), async (req, res) => 
 });
 
 // Delete question (only if not linked to any quiz, or force)
-questionRoutes.delete('/:id', requireRole('admin', 'salarie'), async (req, res) => {
+questionRoutes.delete('/:id', requireRole('admin', 'salarie', 'externe'), async (req, res) => {
   try {
     const force = req.query.force === 'true';
 

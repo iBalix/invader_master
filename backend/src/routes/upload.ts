@@ -23,7 +23,7 @@ const upload = multer({
 
 export const uploadRoutes = Router();
 
-uploadRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
+uploadRoutes.use(authMiddleware, requireRole('admin', 'salarie', 'externe'));
 
 uploadRoutes.post('/', upload.single('file'), async (req, res) => {
   try {

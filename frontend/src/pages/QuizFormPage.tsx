@@ -297,9 +297,12 @@ export default function QuizFormPage() {
               type="text"
               value={form.background_media_youtube}
               onChange={(e) => set('background_media_youtube', e.target.value)}
-              placeholder="https://youtube.com/watch?v=..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              placeholder="Ex : dQw4w9WgXcQ ou dQw4w9WgXcQ?start=30"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
             />
+            <p className="mt-1 text-xs text-gray-400">
+              ID YouTube (partie après v= dans l'URL). Optionnel : ajouter ?start=X pour demarrer a X secondes
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

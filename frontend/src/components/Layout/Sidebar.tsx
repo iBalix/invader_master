@@ -46,6 +46,7 @@ interface SidebarAccordionItem {
     disabled: boolean;
     badgeText?: string;
     path?: string;
+    roles?: Role[];
   }>;
 }
 
@@ -74,11 +75,11 @@ const SIDEBAR_MENU: SidebarItem[] = [
     defaultOpen: true,
     roles: ['admin', 'salarie', 'externe'],
     items: [
-      { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz' },
-      { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte' },
-      { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux' },
-      { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias' },
-      { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions' },
+      { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', roles: ['admin', 'salarie', 'externe'] },
+      { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', roles: ['admin', 'salarie'] },
+      { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', roles: ['admin', 'salarie'] },
+      { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias', roles: ['admin', 'salarie'] },
+      { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions', roles: ['admin', 'salarie'] },
     ],
   },
   {
@@ -145,6 +146,7 @@ export default function Sidebar() {
                 item={item}
                 open={!!openAccordions[index]}
                 onToggle={() => toggleAccordion(index)}
+                role={role}
               />
             ) : (
               <LinkItem item={item} />
@@ -160,11 +162,17 @@ function AccordionSection({
   item,
   open,
   onToggle,
+  role,
 }: {
   item: SidebarAccordionItem;
   open: boolean;
   onToggle: () => void;
+  role: Role;
 }) {
+  const visibleItems = item.items.filter((sub) => !sub.roles || sub.roles.includes(role));
+
+  if (visibleItems.length === 0) return null;
+
   return (
     <div className="mb-2">
       <button
@@ -177,7 +185,7 @@ function AccordionSection({
       </button>
       {open && (
         <div className="mt-1 space-y-1 pl-2">
-          {item.items.map((sub, subIndex) => {
+          {visibleItems.map((sub, subIndex) => {
             const SubIcon = sub.icon;
             if (!sub.disabled && sub.path) {
               return (

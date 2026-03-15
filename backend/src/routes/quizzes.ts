@@ -84,7 +84,7 @@ quizRoutes.get('/:id', async (req, res) => {
 });
 
 // Create quiz (with optional inline questions)
-quizRoutes.post('/', requireRole('admin', 'salarie'), async (req, res) => {
+quizRoutes.post('/', requireRole('admin', 'salarie', 'externe'), async (req, res) => {
   try {
     const { questions: questionIds, ...fields } = req.body;
 
@@ -120,7 +120,7 @@ quizRoutes.post('/', requireRole('admin', 'salarie'), async (req, res) => {
 });
 
 // Update quiz fields + question order
-quizRoutes.put('/:id', requireRole('admin', 'salarie'), async (req, res) => {
+quizRoutes.put('/:id', requireRole('admin', 'salarie', 'externe'), async (req, res) => {
   try {
     const { questions: questionIds, ...fields } = req.body;
 
@@ -168,7 +168,7 @@ quizRoutes.put('/:id', requireRole('admin', 'salarie'), async (req, res) => {
 });
 
 // Delete quiz (+ optionally orphan questions)
-quizRoutes.delete('/:id', requireRole('admin', 'salarie'), async (req, res) => {
+quizRoutes.delete('/:id', requireRole('admin', 'salarie', 'externe'), async (req, res) => {
   try {
     const deleteOrphans = req.query.deleteOrphans === 'true';
 
