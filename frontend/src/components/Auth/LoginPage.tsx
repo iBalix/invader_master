@@ -6,6 +6,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, AlertCircle, Loader } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { getDefaultRouteForRole } from '../../lib/permissions';
+import type { Role } from '../../types';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -22,7 +24,7 @@ export default function LoginPage() {
     try {
       const result = await login(email, password);
       if (result.success) {
-        navigate('/');
+        navigate(getDefaultRouteForRole((result.role ?? 'admin') as Role));
       } else {
         setError(result.message ?? 'Erreur de connexion');
       }

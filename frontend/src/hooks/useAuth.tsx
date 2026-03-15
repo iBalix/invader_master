@@ -17,7 +17,7 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message?: string; role?: string }>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = useCallback(
-    async (email: string, password: string): Promise<{ success: boolean; message?: string }> => {
+    async (email: string, password: string): Promise<{ success: boolean; message?: string; role?: string }> => {
       try {
         const { data } = await api.post<{
           status: string;
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.setItem('refresh_token', data.session.refresh_token);
           localStorage.setItem('user', JSON.stringify(data.user));
           setUser(data.user);
-          return { success: true };
+          return { success: true, role: data.user.role as string };
         }
         return { success: false, message: data.message ?? 'Erreur de connexion' };
       } catch (err: unknown) {
