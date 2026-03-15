@@ -13,7 +13,7 @@ export const userRoutes = Router();
 userRoutes.use(authMiddleware);
 userRoutes.use(requireRole('admin'));
 
-userRoutes.get('/users', async (_req, res) => {
+userRoutes.get('/', async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('profiles')
@@ -33,7 +33,7 @@ userRoutes.get('/users', async (_req, res) => {
   }
 });
 
-userRoutes.post('/users', async (req, res) => {
+userRoutes.post('/', async (req, res) => {
   try {
     const { email, password, role } = req.body as { email?: string; password?: string; role?: Role };
     if (!email || !password || !role) {
@@ -99,7 +99,7 @@ userRoutes.post('/users', async (req, res) => {
   }
 });
 
-userRoutes.put('/users/:id', async (req, res) => {
+userRoutes.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { role } = req.body as { role?: Role };
@@ -138,7 +138,7 @@ userRoutes.put('/users/:id', async (req, res) => {
   }
 });
 
-userRoutes.delete('/users/:id', async (req, res) => {
+userRoutes.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const reqUser = (req as Request).user;

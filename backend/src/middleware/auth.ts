@@ -65,6 +65,8 @@ export const authMiddleware = async (
       role: profile.role as AuthUser['role'],
     };
 
+    console.log(`[auth] ${profile.email} role="${profile.role}" -> ${req.method} ${req.path}`);
+
     next();
   } catch (err) {
     console.error('Erreur middleware auth:', err);

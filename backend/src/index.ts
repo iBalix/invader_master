@@ -39,7 +39,7 @@ app.get('/health', cors(), (_req, res) => {
 app.use(cors({ origin: corsOrigins, credentials: true }));
 
 app.use('/auth', authRoutes);
-app.use('/api', userRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/quizzes', quizRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/upload', uploadRoutes);

@@ -9,13 +9,15 @@ quizRoutes.use(authMiddleware, requireRole('admin', 'salarie', 'externe'));
 
 // List quizzes with question count
 quizRoutes.get('/', async (_req, res) => {
+  console.log('[quizzes] GET / handler entered');
   try {
     const { data: quizzes, error } = await supabaseAdmin
       .from('quizzes')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    console.log(`[quizzes] DB result: error=${!!error}, count=${(quizzes ?? []).length}`);
+    if (error) { console.error('List quizzes DB error:', error); throw error; }
 
     const { data: counts } = await supabaseAdmin
       .from('quiz_questions')
