@@ -17,7 +17,7 @@ interface QuizRow {
 
 export default function QuizListPage() {
   const { user } = useAuth();
-  const canEdit = user?.role === 'admin' || user?.role === 'salarie';
+  const canEdit = user?.role === 'admin' || user?.role === 'salarie' || user?.role === 'externe';
   const [quizzes, setQuizzes] = useState<QuizRow[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
