@@ -22,6 +22,7 @@ interface EventRow {
   description: string;
   date: string;
   icon: string | null;
+  active: boolean;
 }
 
 interface TvConfigRow {
@@ -157,6 +158,16 @@ export default function MediaSupportPage() {
     }
   };
 
+  const handleToggleEventActive = async (id: string, active: boolean) => {
+    try {
+      await api.put(`/api/projector-config/events/${id}`, { active: !active });
+      toast.success(!active ? 'Événement activé' : 'Événement désactivé');
+      loadProjector();
+    } catch {
+      toast.error('Erreur lors du changement de statut');
+    }
+  };
+
   const handleToggleTvActive = async (id: string, active: boolean) => {
     try {
       await api.put(`/api/tv-configs/${id}`, { active: !active });
@@ -273,12 +284,13 @@ export default function MediaSupportPage() {
                       <th className="px-6 py-3">Description</th>
                       <th className="px-6 py-3">Date</th>
                       <th className="px-6 py-3 text-center">Icône</th>
+                      <th className="px-6 py-3 text-center">Actif</th>
                       <th className="px-6 py-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {events.map((ev) => (
-                      <tr key={ev.id} className="hover:bg-gray-50 transition">
+                      <tr key={ev.id} className={`hover:bg-gray-50 transition ${!ev.active ? 'opacity-50' : ''}`}>
                         <td className="px-6 py-4 font-medium">{ev.name}</td>
                         <td className="px-6 py-4 text-gray-500 text-sm">{ev.description || '—'}</td>
                         <td className="px-6 py-4 text-gray-500 text-sm">
@@ -286,6 +298,15 @@ export default function MediaSupportPage() {
                         </td>
                         <td className="px-6 py-4 text-center">
                           {ev.icon ? <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">{ev.icon}</span> : '—'}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleEventActive(ev.id, ev.active)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${ev.active ? 'bg-green-500' : 'bg-gray-300'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${ev.active ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">

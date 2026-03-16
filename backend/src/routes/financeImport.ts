@@ -260,7 +260,7 @@ financeImportRoutes.post('/flux', upload.single('file'), async (req: Request, re
 
   startSSE(res);
 
-  let mysqlConn: Awaited<ReturnType<typeof getMysqlPool['getConnection']>> | null = null;
+  let mysqlConn: Awaited<ReturnType<ReturnType<typeof getMysqlPool>['getConnection']>> | null = null;
   try {
     sendSSE(res, 'progress', { step: 'parse', message: 'Lecture du fichier Excel...' });
 

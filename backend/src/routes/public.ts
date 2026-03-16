@@ -266,6 +266,7 @@ publicRoutes.get('/projector', async (_req, res) => {
     const { data: events } = await supabaseAdmin
       .from('projector_events')
       .select('*')
+      .eq('active', true)
       .order('date', { ascending: true });
 
     res.json({

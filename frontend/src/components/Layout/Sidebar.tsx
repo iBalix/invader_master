@@ -19,7 +19,6 @@ import {
   ChevronDown,
   ChevronRight,
   BookOpen,
-  Wrench,
   Upload,
   type LucideIcon,
 } from 'lucide-react';
