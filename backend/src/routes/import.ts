@@ -250,7 +250,6 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
       const includes = collection.includes;
 
       let bgMusicUrl: string | null = null;
-      let bgImageUrl: string | null = null;
 
       try {
         const bgMusicAssetId = getLinkedAssetId(fields.backgroundMusic);
@@ -261,14 +260,6 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
             bgMusicUrl = await downloadAndUploadAsset(asset);
           }
         }
-        const bgImageAssetId = getLinkedAssetId(fields.backgroundImage);
-        if (bgImageAssetId) {
-          const asset = resolveAsset(bgImageAssetId, includes);
-          if (asset) {
-            sendSSE(res, 'progress', { step: 'asset', message: `  ↳ Image de fond...` });
-            bgImageUrl = await downloadAndUploadAsset(asset);
-          }
-        }
       } catch (assetErr) {
         sendSSE(res, 'progress', { step: 'asset_error', message: `  ↳ Erreur asset quiz : ${(assetErr as Error).message}` });
       }
@@ -276,9 +267,7 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
       const quizPayload = {
         name: (fields.name as string) || `Import ${entryId}`,
         theme: (fields.theme as string) || '',
-        background_media_youtube: (fields.backgroundMediaYoutube as string) || null,
         background_music_url: bgMusicUrl,
-        background_image_url: bgImageUrl,
         pause_promotional_text: (fields.pausePromotionalText as string) || null,
         end_winner_text: (fields.endWinnerText as string) || null,
         end_text_final: (fields.endTextFinal as string) || null,
@@ -464,10 +453,8 @@ importRoutes.post('/contentful-quiz', async (req: Request, res: Response) => {
     });
 
     const bgMusicAssetId = getLinkedAssetId(fields.backgroundMusic);
-    const bgImageAssetId = getLinkedAssetId(fields.backgroundImage);
 
     let bgMusicUrl: string | null = null;
-    let bgImageUrl: string | null = null;
 
     if (bgMusicAssetId) {
       const asset = resolveAsset(bgMusicAssetId, includes);
@@ -477,16 +464,6 @@ importRoutes.post('/contentful-quiz', async (req: Request, res: Response) => {
           message: `↳ Musique de fond : ${asset.fields?.file?.fileName ?? 'asset'}`,
         });
         bgMusicUrl = await downloadAndUploadAsset(asset);
-      }
-    }
-    if (bgImageAssetId) {
-      const asset = resolveAsset(bgImageAssetId, includes);
-      if (asset) {
-        sendSSE(res, 'progress', {
-          step: 'quiz_asset',
-          message: `↳ Image de fond : ${asset.fields?.file?.fileName ?? 'asset'}`,
-        });
-        bgImageUrl = await downloadAndUploadAsset(asset);
       }
     }
 
@@ -499,9 +476,7 @@ importRoutes.post('/contentful-quiz', async (req: Request, res: Response) => {
     const quizPayload = {
       name: (fields.name as string) || `Import ${entryId}`,
       theme: (fields.theme as string) || '',
-      background_media_youtube: (fields.backgroundMediaYoutube as string) || null,
       background_music_url: bgMusicUrl,
-      background_image_url: bgImageUrl,
       pause_promotional_text: (fields.pausePromotionalText as string) || null,
       end_winner_text: (fields.endWinnerText as string) || null,
       end_text_final: (fields.endTextFinal as string) || null,

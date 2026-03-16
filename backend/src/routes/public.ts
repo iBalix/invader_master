@@ -64,10 +64,10 @@ publicRoutes.get('/quizzes', async (req, res) => {
       }
     }
 
-    const items = (quizzes ?? []).map((q) => ({
-      ...toCamel(q),
-      questionCount: countMap[q.id] ?? 0,
-    }));
+    const items = (quizzes ?? []).map((q) => {
+      const { background_image_url, background_media_youtube, ...rest } = q;
+      return { ...toCamel(rest), questionCount: countMap[q.id] ?? 0 };
+    });
 
     res.json({ items });
   } catch (err) {
@@ -117,7 +117,8 @@ publicRoutes.get('/quizzes/:id', async (req, res) => {
       }
     }
 
-    res.json({ ...toCamel(quiz), questions });
+    const { background_image_url, background_media_youtube, ...quizRest } = quiz;
+    res.json({ ...toCamel(quizRest), questions });
   } catch (err) {
     console.error('Public get quiz error:', err);
     res.status(500).json({ error: 'Erreur serveur' });

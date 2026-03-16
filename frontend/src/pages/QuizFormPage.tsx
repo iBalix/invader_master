@@ -10,9 +10,7 @@ import QuestionModal, { type QuestionData } from '../components/Quiz/QuestionMod
 interface QuizForm {
   name: string;
   theme: string;
-  background_media_youtube: string;
   background_music_url: string | null;
-  background_image_url: string | null;
   pause_promotional_text: string;
   end_winner_text: string;
   end_text_final: string;
@@ -23,9 +21,7 @@ interface QuizForm {
 const EMPTY_QUIZ: QuizForm = {
   name: '',
   theme: '',
-  background_media_youtube: '',
   background_music_url: null,
-  background_image_url: null,
   pause_promotional_text: '',
   end_winner_text: '',
   end_text_final: '',
@@ -64,9 +60,7 @@ export default function QuizFormPage() {
       setForm({
         name: q.name ?? '',
         theme: q.theme ?? '',
-        background_media_youtube: q.background_media_youtube ?? '',
         background_music_url: q.background_music_url ?? null,
-        background_image_url: q.background_image_url ?? null,
         pause_promotional_text: q.pause_promotional_text ?? '',
         end_winner_text: q.end_winner_text ?? '',
         end_text_final: q.end_text_final ?? '',
@@ -125,7 +119,6 @@ export default function QuizFormPage() {
     try {
       const payload = {
         ...form,
-        background_media_youtube: form.background_media_youtube || null,
         pause_promotional_text: form.pause_promotional_text || null,
         end_winner_text: form.end_winner_text || null,
         end_text_final: form.end_text_final || null,
@@ -291,34 +284,12 @@ export default function QuizFormPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Vidéo de fond (YouTube)</label>
-            <input
-              type="text"
-              value={form.background_media_youtube}
-              onChange={(e) => set('background_media_youtube', e.target.value)}
-              placeholder="Ex : dQw4w9WgXcQ ou dQw4w9WgXcQ?start=30"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              ID YouTube (partie après v= dans l'URL). Optionnel : ajouter ?start=X pour demarrer a X secondes
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FileUpload
-              label="Image de fond *"
-              accept="image/*"
-              value={form.background_image_url}
-              onChange={(v) => set('background_image_url', v)}
-            />
-            <FileUpload
-              label="Musique de fond"
-              accept="audio/*"
-              value={form.background_music_url}
-              onChange={(v) => set('background_music_url', v)}
-            />
-          </div>
+          <FileUpload
+            label="Musique de fond"
+            accept="audio/*"
+            value={form.background_music_url}
+            onChange={(v) => set('background_music_url', v)}
+          />
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Texte promo pause</label>
