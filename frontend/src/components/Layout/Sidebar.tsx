@@ -19,6 +19,8 @@ import {
   ChevronDown,
   ChevronRight,
   BookOpen,
+  Wrench,
+  Upload,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -93,6 +95,15 @@ const SIDEBAR_MENU: SidebarItem[] = [
       { title: 'Battle Royal', icon: Swords, disabled: true, badgeText: 'Bientot' },
       { title: 'Blindtest', icon: Music, disabled: true, badgeText: 'Bientot' },
       { title: 'Manoir du crime', icon: Skull, disabled: true, badgeText: 'Bientot' },
+    ],
+  },
+  {
+    kind: 'accordion',
+    title: 'Utilitaires',
+    defaultOpen: false,
+    roles: ['admin'],
+    items: [
+      { title: 'Import finances', icon: Upload, disabled: false, path: '/utilitaires/import-finances', roles: ['admin'] },
     ],
   },
   {

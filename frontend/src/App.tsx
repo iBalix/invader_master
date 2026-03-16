@@ -17,6 +17,7 @@ import GameFormPage from './pages/GameFormPage';
 import MediaSupportPage from './pages/MediaSupportPage';
 import TranslationsPage from './pages/TranslationsPage';
 import UserManagementPage from './pages/UserManagementPage';
+import ImportFinancesPage from './pages/ImportFinancesPage';
 import ComingSoon from './pages/ComingSoon';
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="contenus/jeux/game/:id" element={<GameFormPage />} />
             <Route path="contenus/medias" element={<MediaSupportPage />} />
             <Route path="contenus/traductions" element={<TranslationsPage />} />
+            <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="bientot" element={<ComingSoon />} />
           </Route>
