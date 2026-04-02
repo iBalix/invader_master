@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Plus, Trash2, Pencil, Sparkles, Download, AlertTriangle,
+  Plus, Trash2, Pencil, Sparkles, AlertTriangle,
   Search, X, Info, Loader2, Filter,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -47,7 +47,7 @@ export default function BattleQuestionsPage() {
   const [genHint, setGenHint] = useState('');
   const [genCount, setGenCount] = useState(1);
   const [generating, setGenerating] = useState(false);
-  const [importing, setImporting] = useState(false);
+
 
   const loadStats = useCallback(async () => {
     try {
@@ -142,22 +142,6 @@ export default function BattleQuestionsPage() {
       toast.error('Erreur lors de la génération');
     } finally {
       setGenerating(false);
-    }
-  };
-
-  const handleImport = async () => {
-    if (!confirm('Importer les questions depuis le serveur distant ? Les doublons seront ignorés.')) return;
-    setImporting(true);
-    try {
-      const { data } = await api.post('/api/battle-questions/import');
-      toast.success(data.message);
-      loadQuestions(difficulty);
-      loadStats();
-      loadCategories();
-    } catch {
-      toast.error("Erreur lors de l'import");
-    } finally {
-      setImporting(false);
     }
   };
 
@@ -278,27 +262,6 @@ export default function BattleQuestionsPage() {
                 {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 {generating ? 'Génération...' : 'Générer'}
               </button>
-            </div>
-          </div>
-
-          {/* Import */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-cyan-500 px-4 py-3">
-              <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Download className="w-4 h-4" />
-                Importer
-              </h3>
-            </div>
-            <div className="p-4">
-              <button
-                onClick={handleImport}
-                disabled={importing}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition disabled:opacity-50"
-              >
-                {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                {importing ? 'Import...' : 'Importer depuis le serveur'}
-              </button>
-              <p className="mt-2 text-xs text-gray-400">Les doublons seront ignorés automatiquement</p>
             </div>
           </div>
 
