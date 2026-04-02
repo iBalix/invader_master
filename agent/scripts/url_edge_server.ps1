@@ -8,7 +8,7 @@ $clients = @("SALON01", "TABLE01-1", "TABLE01-2", "TABLE02-1", "TABLE02-2", "TAB
 $filteredClients = $clients | Where-Object { $_ -like "*$TargetName*" }
 
 if (!$filteredClients) {
-    Write-Host "Aucun client ne correspond à la table spécifiée: $TargetName"
+    Write-Host "Aucun client ne correspond a la table specifiee: $TargetName"
     exit
 }
 
@@ -32,11 +32,11 @@ foreach ($client in $filteredClients) {
             Set-Content -Path $forceURLFile -Value $GameName
         } -ArgumentList $GameName, $forceURLFile
 
-        Write-Host "L'URL a été écrite dans $client : $GameName"
+        Write-Host "L URL a ete ecrite dans $client : $GameName"
     }
     catch {
         Write-Host "Une erreur est survenue lors du traitement de $client : $_"
     }
 }
 
-Write-Host "`nTous les clients ont été traités."
+Write-Host "`nTous les clients ont ete traites."

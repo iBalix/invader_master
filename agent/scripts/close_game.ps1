@@ -9,5 +9,5 @@ $filteredClients = $clients | Where-Object { $_ -like "*$TargetName*" }
 if ($filteredClients) {
     Invoke-Command -ScriptBlock { Stop-Process -Name *retroarch* -Force } -ComputerName $filteredClients
 } else {
-    Write-Host "Aucun client ne correspond à la table spécifiée: $TableName"
+    Write-Host "Aucun client ne correspond a la table specifiee: $TableName"
 }

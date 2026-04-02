@@ -36,7 +36,7 @@ if ($filteredClients) {
         Set-Content -Path $filePath -Value $fileContent
 
     } else {
-        Write-Host "Le fichier $filePath n'existe pas."
+        Write-Host "Le fichier $filePath n existe pas."
     }
 
     foreach ($client in $filteredClients) {
@@ -49,5 +49,5 @@ if ($filteredClients) {
         }
     }
 } else {
-    Write-Host "Aucun client ne correspond à la table spécifiée: $TargetName"
+    Write-Host "Aucun client ne correspond a la table specifiee: $TargetName"
 }

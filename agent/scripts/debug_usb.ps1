@@ -7,7 +7,7 @@ $clients = @("SALON01", "TABLE01-1", "TABLE01-2", "TABLE02-1", "TABLE02-2", "TAB
 $filteredClients = $clients | Where-Object { $_ -like "*$TargetName*" -and $_ -notlike "*-2" }
 
 if (-not $filteredClients) {
-    Write-Host "Aucun client -1 ne correspond à : $TargetName" -ForegroundColor Red
+    Write-Host "Aucun client -1 ne correspond a : $TargetName" -ForegroundColor Red
     exit
 }
 
@@ -26,7 +26,7 @@ foreach ($client in $filteredClients) {
             Write-Host "    InstanceId : $($d.InstanceId)"
         }
 
-        Write-Host "`n--- [2] USB HUBS (dont hub alimenté) ---" -ForegroundColor Cyan
+        Write-Host "`n--- [2] USB HUBS (dont hub alimente) ---" -ForegroundColor Cyan
         $hubs = Get-PnpDevice -Class "USB" -ErrorAction SilentlyContinue |
                 Where-Object { $_.FriendlyName -match "Hub|hub" }
         foreach ($d in $hubs) {
@@ -50,7 +50,7 @@ foreach ($client in $filteredClients) {
             Write-Host "    InstanceId : $($d.InstanceId)"
         }
 
-        Write-Host "`n--- [5] XINPUT / GAMEPAD detectés par Windows ---" -ForegroundColor Cyan
+        Write-Host "`n--- [5] XINPUT / GAMEPAD detectes par Windows ---" -ForegroundColor Cyan
         $xinput = Get-WmiObject Win32_PnPEntity -ErrorAction SilentlyContinue |
                   Where-Object { $_.Name -match "XINPUT|Gamepad|Joystick|Controller|Manette|xinput" }
         if ($xinput) {
@@ -59,7 +59,7 @@ foreach ($client in $filteredClients) {
                 Write-Host "    DeviceID : $($d.DeviceID)"
             }
         } else {
-            Write-Host "  Aucun gamepad/XInput détecté par WMI" -ForegroundColor Red
+            Write-Host "  Aucun gamepad/XInput detecte par WMI" -ForegroundColor Red
         }
 
         Write-Host "`n--- [6] DETAILS USB via WMI (VID/PID des devices) ---" -ForegroundColor Cyan
@@ -84,10 +84,10 @@ foreach ($client in $filteredClients) {
                 Write-Host "    Id      : $($d.InstanceId)"
             }
         } else {
-            Write-Host "  Aucun device USB en erreur détecté" -ForegroundColor Green
+            Write-Host "  Aucun device USB en erreur detecte" -ForegroundColor Green
         }
 
-        Write-Host "`n--- [8] REGISTRE - ConfigFlags USB (0x40 = install échoué) ---" -ForegroundColor Cyan
+        Write-Host "`n--- [8] REGISTRE - ConfigFlags USB (0x40 = install echoue) ---" -ForegroundColor Cyan
         $usbEnumPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\USB"
         if (Test-Path $usbEnumPath) {
             $usbKeys = Get-ChildItem -Path $usbEnumPath -Recurse -ErrorAction SilentlyContinue
@@ -106,7 +106,7 @@ foreach ($client in $filteredClients) {
                 } catch { }
             }
             if (-not $found) {
-                Write-Host "  Aucun ConfigFlags=0x40 (FAILEDINSTALL) trouvé" -ForegroundColor Green
+                Write-Host "  Aucun ConfigFlags=0x40 (FAILEDINSTALL) trouve" -ForegroundColor Green
             }
         }
 

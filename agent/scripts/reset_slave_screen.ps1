@@ -39,7 +39,7 @@ $clients = @(
 $filteredClients = $clients | Where-Object { $_ -like "*$TargetName*" }
 
 if (-not $filteredClients) {
-    Write-Host "Aucune table ne correspond à: $TargetName — aucun envoi au webhook."
+    Write-Host "Aucune table ne correspond a: $TargetName - aucun envoi au webhook."
     exit 0
 }
 
@@ -102,7 +102,7 @@ $payload = @{
 try {
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
     Invoke-RestMethod -Method Post -Uri $WebhookUrl -Body $bytes -ContentType "application/json; charset=utf-8" -TimeoutSec 20
-    Write-Host "Webhook (slave_screen_reset) envoyé à n8n."
+    Write-Host "Webhook (slave_screen_reset) envoye a n8n."
 } catch {
-    Write-Warning "Échec d'envoi au webhook n8n (slave_screen_reset): $($_.Exception.Message)"
+    Write-Warning "Echec d envoi au webhook n8n (slave_screen_reset): $($_.Exception.Message)"
 }

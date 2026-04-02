@@ -22,5 +22,5 @@ if ($filteredClients) {
         $responseGame = Invoke-RestMethod -Uri $uriGame -Method Get
     }
 } else {
-    Write-Host "Aucun client ne correspond à la table spécifiée: $TableName"
+    Write-Host "Aucun client ne correspond a la table specifiee: $TableName"
 }

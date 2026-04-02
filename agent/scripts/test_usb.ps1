@@ -12,7 +12,7 @@ if ($filteredClients) {
 
         Invoke-Command -ComputerName $client -ScriptBlock {
 
-            Write-Host "  [1/5] Suppression des périphériques USB fantômes..." -ForegroundColor Yellow
+            Write-Host "  [1/5] Suppression des peripheriques USB fantomes..." -ForegroundColor Yellow
 
             $env:DEVMGR_SHOW_NONPRESENT_DEVICES = 1
 
@@ -22,7 +22,7 @@ if ($filteredClients) {
             foreach ($ghost in $ghostDevices) {
                 try {
                     $result = & pnputil /remove-device "$($ghost.InstanceId)" 2>&1
-                    Write-Host "    Fantôme supprimé : $($ghost.FriendlyName) [$($ghost.InstanceId)]" -ForegroundColor DarkYellow
+                    Write-Host "    Fantome supprime : $($ghost.FriendlyName) [$($ghost.InstanceId)]" -ForegroundColor DarkYellow
                 } catch {
                     Write-Host "    Erreur suppression : $($ghost.FriendlyName) - $_" -ForegroundColor Red
                 }
@@ -38,7 +38,7 @@ if ($filteredClients) {
                         $configFlags = (Get-ItemProperty -Path $key.PSPath -Name "ConfigFlags" -ErrorAction SilentlyContinue).ConfigFlags
                         if ($configFlags -band 0x40) {
                             Set-ItemProperty -Path $key.PSPath -Name "ConfigFlags" -Value 0 -ErrorAction SilentlyContinue
-                            Write-Host "    Registre corrigé : $($key.PSChildName) (ConfigFlags=$configFlags -> 0)"
+                            Write-Host "    Registre corrige : $($key.PSChildName) (ConfigFlags=$configFlags -> 0)"
                         }
                     } catch { }
                 }
@@ -58,11 +58,11 @@ if ($filteredClients) {
             foreach ($svc in $usbServices) {
                 try {
                     & sc.exe start $svc 2>&1 | Out-Null
-                    Write-Host "    Service redémarré : $svc"
+                    Write-Host "    Service redemarre : $svc"
                 } catch { }
             }
 
-            Write-Host "  [4/5] Re-énumération complète du bus USB..." -ForegroundColor Yellow
+            Write-Host "  [4/5] Re-enumeration complete du bus USB..." -ForegroundColor Yellow
 
             $hubs = Get-PnpDevice -Class "USB" -ErrorAction SilentlyContinue | 
                     Where-Object { $_.FriendlyName -match "Hub|hub" -and $_.Status -ne "Unknown" }
@@ -87,7 +87,7 @@ if ($filteredClients) {
             foreach ($ctrl in $controllers) {
                 try {
                     Enable-PnpDevice -InstanceId $ctrl.InstanceId -Confirm:$false -ErrorAction Stop
-                    Write-Host "    Controller réactivé : $($ctrl.FriendlyName)"
+                    Write-Host "    Controller reactive : $($ctrl.FriendlyName)"
                 } catch { }
             }
 
@@ -96,18 +96,18 @@ if ($filteredClients) {
             foreach ($hub in $hubs) {
                 try {
                     Enable-PnpDevice -InstanceId $hub.InstanceId -Confirm:$false -ErrorAction Stop
-                    Write-Host "    Hub réactivé : $($hub.FriendlyName)"
+                    Write-Host "    Hub reactive : $($hub.FriendlyName)"
                 } catch { }
             }
 
-            Write-Host "  [5/5] Scan nouveau matériel (hardware rescan)..." -ForegroundColor Yellow
+            Write-Host "  [5/5] Scan nouveau materiel (hardware rescan)..." -ForegroundColor Yellow
 
             $scanResult = & pnputil /scan-devices 2>&1
             Write-Host "    $scanResult"
 
             Start-Sleep -Seconds 3
 
-            Write-Host "`n  --- Etat final des périphériques USB ---" -ForegroundColor Cyan
+            Write-Host "`n  --- Etat final des peripheriques USB ---" -ForegroundColor Cyan
             $finalState = Get-PnpDevice -Class "USB" -ErrorAction SilentlyContinue | 
                           Select-Object Status, FriendlyName, InstanceId |
                           Sort-Object Status
@@ -126,12 +126,12 @@ if ($filteredClients) {
                 Write-Host "    [$($hid.Status)] $($hid.FriendlyName)" -ForegroundColor $color
             }
 
-            Write-Host "`n  Reset USB terminé sur $env:COMPUTERNAME" -ForegroundColor Green
+            Write-Host "`n  Reset USB termine sur $env:COMPUTERNAME" -ForegroundColor Green
 
         } -ErrorAction Continue
 
         Write-Host ""
     }
 } else {
-    Write-Host "Aucun client ne correspond à : $TargetName" -ForegroundColor Red
+    Write-Host "Aucun client ne correspond a : $TargetName" -ForegroundColor Red
 }
