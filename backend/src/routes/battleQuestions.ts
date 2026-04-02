@@ -319,7 +319,7 @@ Retourne UNIQUEMENT le JSON, sans markdown ni commentaire.`;
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: 'gpt-4-turbo-preview',
+            model: 'gpt-4o',
             temperature: 0.9,
             max_tokens: 1500,
             messages: [
@@ -330,7 +330,8 @@ Retourne UNIQUEMENT le JSON, sans markdown ni commentaire.`;
         });
 
         if (!openaiRes.ok) {
-          console.error(`[battle-questions] OpenAI HTTP ${openaiRes.status}`);
+          const errBody = await openaiRes.text().catch(() => '');
+          console.error(`[battle-questions] OpenAI HTTP ${openaiRes.status}: ${errBody.slice(0, 300)}`);
           continue;
         }
 
