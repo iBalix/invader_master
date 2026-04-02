@@ -44,14 +44,14 @@ function Invoke-AgentCommand {
     Write-Host "[exec] $Command -> $TargetName" -ForegroundColor Yellow
 
     try {
-        $cmdArgs = @("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", $scriptPath, "-TargetName", $TargetName)
-        if ($GameName) { $cmdArgs += @("-GameName", $GameName) }
+        $params = @{ TargetName = $TargetName }
+        if ($GameName) { $params.GameName = $GameName }
 
-        $output = & powershell @cmdArgs 2>&1 | Out-String
+        $output = & $scriptPath @params *>&1 | Out-String
         $output = $output.Trim()
         if (-not $output) { $output = "OK" }
 
-        Write-Host "[exec] OK" -ForegroundColor Green
+        Write-Host "[exec] Termine. Sortie: $($output.Substring(0, [Math]::Min($output.Length, 200)))" -ForegroundColor Green
         return @{ type = "result"; id = $Id; success = $true; output = $output.Substring(0, [Math]::Min($output.Length, 4000)) }
     }
     catch {
