@@ -18,6 +18,7 @@ import MediaSupportPage from './pages/MediaSupportPage';
 import TranslationsPage from './pages/TranslationsPage';
 import UserManagementPage from './pages/UserManagementPage';
 import ImportFinancesPage from './pages/ImportFinancesPage';
+import BattleQuestionsPage from './pages/BattleQuestionsPage';
 import ComingSoon from './pages/ComingSoon';
 
 export default function App() {
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="contenus/medias" element={<MediaSupportPage />} />
             <Route path="contenus/traductions" element={<TranslationsPage />} />
             <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
+            <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="bientot" element={<ComingSoon />} />
           </Route>

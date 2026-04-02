@@ -4,6 +4,7 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
+import { getMysqlPool } from '../config/mysql.js';
 
 export const publicRoutes = Router();
 
@@ -316,6 +317,35 @@ publicRoutes.get('/translations', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Public translations error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Battle questions (replaces apiv2.nationsglory.fr/.../data_battle_questions.json)
+publicRoutes.get('/battle-questions', async (_req, res) => {
+  try {
+    const pool = getMysqlPool();
+    const [rows] = await pool.query(
+      'SELECT id, question, difficulty, theme, answers, help_story FROM battle_questions ORDER BY id ASC',
+    );
+
+    const questions: Record<string, unknown[]> = { Facile: [], Moyen: [], Difficile: [] };
+    for (const row of rows as any[]) {
+      const parsed = {
+        id: row.id,
+        question: row.question,
+        theme: row.theme,
+        answers: typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers,
+        help_story: row.help_story,
+      };
+      if (questions[row.difficulty]) {
+        questions[row.difficulty].push(parsed);
+      }
+    }
+
+    res.json({ questions });
+  } catch (err) {
+    console.error('Public battle-questions error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

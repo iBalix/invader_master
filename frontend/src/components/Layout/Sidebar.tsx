@@ -7,7 +7,6 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Gamepad2,
-  HelpCircle,
   Swords,
   Music,
   Skull,
@@ -74,9 +73,8 @@ const SIDEBAR_MENU: SidebarItem[] = [
     kind: 'accordion',
     title: 'Contenus',
     defaultOpen: true,
-    roles: ['admin', 'salarie', 'externe'],
+    roles: ['admin', 'salarie'],
     items: [
-      { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', roles: ['admin', 'salarie', 'externe'] },
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', roles: ['admin', 'salarie'] },
       { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', roles: ['admin', 'salarie'] },
       { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias', roles: ['admin', 'salarie'] },
@@ -87,11 +85,11 @@ const SIDEBAR_MENU: SidebarItem[] = [
     kind: 'accordion',
     title: 'Evenement',
     defaultOpen: false,
-    roles: ['admin', 'salarie'],
+    roles: ['admin', 'salarie', 'externe'],
     items: [
       { title: 'Mario Kart', icon: Gamepad2, disabled: true, badgeText: 'Bientot' },
-      { title: 'Quiz', icon: HelpCircle, disabled: true, badgeText: 'Bientot' },
-      { title: 'Battle Royal', icon: Swords, disabled: true, badgeText: 'Bientot' },
+      { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', roles: ['admin', 'salarie', 'externe'] },
+      { title: 'Battle Royal', icon: Swords, disabled: false, path: '/evenements/battle-questions', roles: ['admin', 'salarie'] },
       { title: 'Blindtest', icon: Music, disabled: true, badgeText: 'Bientot' },
       { title: 'Manoir du crime', icon: Skull, disabled: true, badgeText: 'Bientot' },
     ],

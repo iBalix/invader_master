@@ -12,6 +12,7 @@ export const PERMISSIONS: Record<string, Role[]> = {
   '/contenus/jeux': ['admin', 'salarie'],
   '/contenus/medias': ['admin', 'salarie'],
   '/contenus/traductions': ['admin', 'salarie'],
+  '/evenements/battle-questions': ['admin', 'salarie'],
   '/bientot': ['admin', 'salarie'],
 };
 

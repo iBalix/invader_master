@@ -20,6 +20,7 @@ import { projectorConfigRoutes } from './routes/projectorConfig.js';
 import { tvConfigRoutes } from './routes/tvConfigs.js';
 import { translationRoutes } from './routes/translations.js';
 import { financeImportRoutes } from './routes/financeImport.js';
+import { battleQuestionRoutes } from './routes/battleQuestions.js';
 import { publicRoutes } from './routes/public.js';
 
 const app = express();
@@ -54,6 +55,7 @@ app.use('/api/projector-config', projectorConfigRoutes);
 app.use('/api/tv-configs', tvConfigRoutes);
 app.use('/api/translations', translationRoutes);
 app.use('/api/finance-import', financeImportRoutes);
+app.use('/api/battle-questions', battleQuestionRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not found' });
