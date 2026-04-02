@@ -395,7 +395,6 @@ export default function BattleQuestionsPage() {
           ) : (
             <div className="space-y-3">
               {filtered.map((q) => {
-                const correctIdx = q.answers.findIndex((a) => a.includes('(OK)'));
                 return (
                   <div
                     key={q.id}
