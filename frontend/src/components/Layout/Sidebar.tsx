@@ -64,10 +64,8 @@ const SIDEBAR_MENU: SidebarItem[] = [
     kind: 'link',
     title: 'Gestion bar',
     icon: Beer,
-    path: '#',
+    path: '/gestion-bar',
     roles: ['admin', 'salarie'],
-    disabled: true,
-    badgeText: 'Bientot',
   },
   {
     kind: 'accordion',

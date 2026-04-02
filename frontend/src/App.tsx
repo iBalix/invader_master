@@ -20,6 +20,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import ImportFinancesPage from './pages/ImportFinancesPage';
 import BattleQuestionsPage from './pages/BattleQuestionsPage';
 import ComingSoon from './pages/ComingSoon';
+import BarManagementPage from './pages/BarManagementPage';
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
+            <Route path="gestion-bar" element={<BarManagementPage />} />
             <Route path="contenus/quiz" element={<QuizListPage />} />
             <Route path="contenus/quiz/new" element={<QuizFormPage />} />
             <Route path="contenus/quiz/:id" element={<QuizFormPage />} />

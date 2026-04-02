@@ -3,6 +3,7 @@
  */
 
 import './config/env.js';
+import { createServer } from 'http';
 import express from 'express';
 import cors from 'cors';
 import { authRoutes } from './routes/auth.js';
@@ -22,6 +23,8 @@ import { translationRoutes } from './routes/translations.js';
 import { financeImportRoutes } from './routes/financeImport.js';
 import { battleQuestionRoutes } from './routes/battleQuestions.js';
 import { publicRoutes } from './routes/public.js';
+import { barRoutes } from './routes/bar.js';
+import { initAgentBridge } from './websocket/agent-bridge.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -56,11 +59,15 @@ app.use('/api/tv-configs', tvConfigRoutes);
 app.use('/api/translations', translationRoutes);
 app.use('/api/finance-import', financeImportRoutes);
 app.use('/api/battle-questions', battleQuestionRoutes);
+app.use('/api/bar', barRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not found' });
 });
 
-app.listen(PORT, () => {
+const server = createServer(app);
+initAgentBridge(server);
+
+server.listen(PORT, () => {
   console.log(`[invader-backend] Listening on port ${PORT}`);
 });
