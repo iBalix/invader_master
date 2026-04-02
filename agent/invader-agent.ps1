@@ -60,6 +60,9 @@ function Invoke-AgentCommand {
     }
 }
 
+# ── Force TLS 1.2 (required on older Windows Server) ────────────────
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 # ── WebSocket loop with auto-reconnect ───────────────────────────────
 $minDelay = 1
 $maxDelay = 30
@@ -74,7 +77,14 @@ while ($true) {
         $cts = New-Object System.Threading.CancellationTokenSource
 
         $connectTask = $ws.ConnectAsync([Uri]$fullUrl, $cts.Token)
-        $connectTask.Wait(15000) | Out-Null
+        try {
+            $connectTask.Wait(15000) | Out-Null
+        }
+        catch {
+            $inner = $_.Exception
+            while ($inner.InnerException) { $inner = $inner.InnerException }
+            throw "Connexion echouee: $($inner.Message)"
+        }
 
         if ($ws.State -ne [System.Net.WebSockets.WebSocketState]::Open) {
             throw "Connexion echouee (state: $($ws.State))"
