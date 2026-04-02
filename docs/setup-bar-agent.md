@@ -1,21 +1,19 @@
 # Agent Bar — Installation et configuration
 
-L'agent bar est un petit service Node.js qui tourne sur le PC master du bar.
+L'agent bar est un script PowerShell qui tourne sur le PC master du bar.
 Il se connecte au serveur invader_master via WebSocket et exécute les scripts
 PowerShell locaux quand un administrateur déclenche une action depuis la page
 "Gestion bar".
 
-## Prérequis
+Aucune dépendance externe nécessaire (pas de Node.js). PowerShell 5.1+ suffit.
 
-- **Node.js 18+** installé sur le PC master
-- **Git** pour cloner/mettre à jour le repo
-- Le repo `invader_master` cloné sur le PC master
+## 1. Récupérer le code
 
-## 1. Installation
+Si le repo est déjà cloné sur le serveur :
 
 ```powershell
-cd C:\_DEV\INVADER\invader_master\agent
-npm install
+cd C:\Users\Administrateur\Desktop\invader_master
+git pull
 ```
 
 ## 2. Configuration
@@ -23,10 +21,11 @@ npm install
 Copier le fichier d'exemple et renseigner les valeurs :
 
 ```powershell
+cd agent
 copy .env.example .env
 ```
 
-Éditer `.env` :
+Éditer `agent\.env` :
 
 ```
 INVADER_MASTER_WS_URL=wss://votre-domaine.com/ws/agent
@@ -34,56 +33,36 @@ BAR_AGENT_TOKEN=votre-token-secret
 ```
 
 Le `BAR_AGENT_TOKEN` doit être le même que celui configuré dans le `.env` du
-serveur `invader_master` (variable `BAR_AGENT_TOKEN`).
+serveur `invader_master`.
 
-## 3. Scripts PowerShell
-
-Les fichiers `.ps1` dans `agent/scripts/` sont des placeholders. Vous devez
-y copier le contenu réel depuis `C:\RESSOURCES\SCRIPTS\ADMIN\` :
-
-| Fichier agent           | Source originale                                 |
-|-------------------------|--------------------------------------------------|
-| `restart_pc.ps1`        | `C:\RESSOURCES\SCRIPTS\ADMIN\restart_pc.ps1`    |
-| `restart_edge.ps1`      | `C:\RESSOURCES\SCRIPTS\ADMIN\restart_edge.ps1`  |
-| `close_game.ps1`        | `C:\RESSOURCES\SCRIPTS\ADMIN\close_game.ps1`    |
-| `clear_cache.ps1`       | `C:\RESSOURCES\SCRIPTS\ADMIN\clear_cache.ps1`   |
-| `reset_slave_screen.ps1`| `C:\RESSOURCES\SCRIPTS\ADMIN\reset_slave_screen.ps1` |
-| `restart_usb.ps1`       | `C:\RESSOURCES\SCRIPTS\ADMIN\restart_usb.ps1`   |
-| `change_game.ps1`       | `C:\RESSOURCES\SCRIPTS\ADMIN\change_game.ps1`   |
-
-Chaque script reçoit les paramètres `-TargetName` (ex: `TABLE03`, `BORNE01`)
-et `-GameName` (optionnel, pour `change_game`).
-
-## 4. Lancement en développement
+## 3. Lancer l'agent pour tester
 
 ```powershell
-cd C:\_DEV\INVADER\invader_master\agent
-npm run dev
+cd C:\Users\Administrateur\Desktop\invader_master\agent
+powershell -ExecutionPolicy Bypass -File invader-agent.ps1
 ```
 
 Vous devriez voir :
 
 ```
-[invader-agent] Starting bar agent...
-[ws] Connecting to wss://...
-[ws] Connected
+[agent] Scripts autorises: restart_pc, restart_edge, close_game, ...
+[ws] Connexion a wss://...
+[ws] Connecte!
 ```
 
-## 5. Lancement automatique au démarrage de Windows
+## 4. Lancement automatique au démarrage de Windows
 
 ### Option A — Raccourci dans le dossier Startup (simple)
 
-1. Créer un fichier `start-agent.bat` :
+Créer un fichier `start-agent.bat` sur le bureau :
 
 ```bat
 @echo off
-cd /d C:\_DEV\INVADER\invader_master\agent
-node dist/index.js
+cd /d C:\Users\Administrateur\Desktop\invader_master\agent
+powershell -ExecutionPolicy Bypass -NoProfile -File invader-agent.ps1
 ```
 
-2. Compiler l'agent au préalable : `npm run build`
-
-3. Placer un raccourci vers `start-agent.bat` dans :
+Placer un raccourci vers `start-agent.bat` dans :
 
 ```
 %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
@@ -95,9 +74,9 @@ Pour ouvrir ce dossier : `Win+R` → `shell:startup` → Entrée.
 
 ```powershell
 $action = New-ScheduledTaskAction `
-  -Execute "node" `
-  -Argument "dist/index.js" `
-  -WorkingDirectory "C:\_DEV\INVADER\invader_master\agent"
+  -Execute "powershell.exe" `
+  -Argument "-ExecutionPolicy Bypass -NoProfile -File invader-agent.ps1" `
+  -WorkingDirectory "C:\Users\Administrateur\Desktop\invader_master\agent"
 
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 
@@ -115,14 +94,11 @@ Register-ScheduledTask `
   -Description "Agent WebSocket pour la gestion du bar Invader"
 ```
 
-## 6. Mise à jour de l'agent
+## 5. Mise à jour de l'agent
 
 ```powershell
-cd C:\_DEV\INVADER\invader_master
+cd C:\Users\Administrateur\Desktop\invader_master
 git pull
-cd agent
-npm install
-npm run build
 ```
 
-Si l'agent tourne en tâche planifiée, le redémarrer après la mise à jour.
+Si l'agent tourne, le redémarrer après la mise à jour.
