@@ -11,6 +11,19 @@ interface ActionDef {
   variant?: 'danger' | 'warning' | 'default';
 }
 
+const BORNE_GAMES = [
+  { label: 'MarioKart 64', value: 'MarioKart64.n64;parallel_n64_libretro.dll' },
+  { label: 'Mario Tennis', value: 'MarioTennis.n64;mupen64plus_next_libretro.dll' },
+  { label: 'Super Smash Bros', value: 'SuperSmashBros.n64;mupen64plus_next_libretro.dll' },
+  { label: 'Street Fighter II', value: 'StreetFighterIITurbo.sfc;mesen-s_libretro.dll' },
+  { label: 'Star Wars Racer', value: 'StarWarsRacer.n64;mupen64plus_next_libretro.dll' },
+  { label: 'Streets of Rage 2', value: 'StreetsofRage.md;genesis_plus_gx_libretro.dll' },
+  { label: 'Sonic The Hedgehog 2', value: 'SonicTheHedgehog2.md;genesis_plus_gx_libretro.dll' },
+  { label: 'Windjammers', value: 'wjammers.zip;fbneo_libretro.dll' },
+  { label: 'Crash Team Racing', value: 'CrashTeamRacing/CrashTeamRacing.cue;swanstation_libretro.dll' },
+  { label: 'Muggle (Manoir)', value: 'MUGGLE_MANOIR' },
+];
+
 const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
   table: [
     { label: 'Redémarrer', command: 'restart_pc', variant: 'danger' },
@@ -71,6 +84,7 @@ export default function MachineActionModal({ machine, agentConnected, onClose, o
   const [machineIncidents, setMachineIncidents] = useState<BarIncident[]>([]);
   const [loadingIncidents, setLoadingIncidents] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [selectedGame, setSelectedGame] = useState(BORNE_GAMES[0].value);
 
   const targetName = machine.type === 'all_tables' ? 'TABLE' : machine.name;
   const actions = ACTIONS_BY_TYPE[machine.type] ?? [];
@@ -104,6 +118,29 @@ export default function MachineActionModal({ machine, agentConnected, onClose, o
         targetName,
       });
       toast.success(`${action.label} — commande envoyée`);
+    } catch (err: any) {
+      const msg = err.response?.data?.message ?? 'Erreur lors de l\'exécution';
+      toast.error(msg);
+    } finally {
+      setExecuting(null);
+    }
+  };
+
+  const handleChangeGame = async () => {
+    let gameName = selectedGame;
+    if (gameName === 'MUGGLE_MANOIR' && machine.name.startsWith('BORNE')) {
+      const borneNum = parseInt(machine.name.replace('BORNE', ''), 10);
+      gameName = `http://quizz.invader.bar/games/flappybird_manoir/index.html?version=${borneNum}`;
+    }
+
+    setExecuting('change_game');
+    try {
+      await api.post('/api/bar/execute-command', {
+        command: 'change_game',
+        targetName,
+        gameName,
+      });
+      toast.success('Changement de jeu — commande envoyée');
     } catch (err: any) {
       const msg = err.response?.data?.message ?? 'Erreur lors de l\'exécution';
       toast.error(msg);
@@ -203,6 +240,35 @@ export default function MachineActionModal({ machine, agentConnected, onClose, o
                     </button>
                   ))}
                 </div>
+
+                {machine.type === 'borne' && (
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t">
+                    <select
+                      value={selectedGame}
+                      onChange={(e) => setSelectedGame(e.target.value)}
+                      disabled={!agentConnected || executing !== null}
+                      className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white disabled:opacity-50"
+                    >
+                      {BORNE_GAMES.map((game) => (
+                        <option key={game.value} value={game.value}>
+                          {game.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      disabled={!agentConnected || executing !== null}
+                      onClick={handleChangeGame}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-100 hover:bg-green-200 text-green-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {executing === 'change_game' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Play className="w-4 h-4" />
+                      )}
+                      Changer le jeu
+                    </button>
+                  </div>
+                )}
 
                 {canReport && (
                   <button
