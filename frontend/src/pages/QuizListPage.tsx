@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, RefreshCw, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import SyncQuizModal from '../components/Quiz/SyncQuizModal';
+import QuizRecapModal from '../components/Quiz/QuizRecapModal';
 
 interface QuizRow {
   id: string;
@@ -22,6 +23,7 @@ export default function QuizListPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
+  const [recapQuiz, setRecapQuiz] = useState<{ id: string; name: string } | null>(null);
 
   const load = async () => {
     try {
@@ -160,6 +162,13 @@ export default function QuizListPage() {
                   {canEdit && (
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setRecapQuiz({ id: q.id, name: q.name })}
+                          className="p-1.5 text-gray-400 hover:text-blue-500 transition"
+                          title="Récap"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         <Link
                           to={`/contenus/quiz/${q.id}`}
                           className="p-1.5 text-gray-400 hover:text-primary-500 transition"
@@ -188,6 +197,14 @@ export default function QuizListPage() {
         <SyncQuizModal
           onClose={() => setImportOpen(false)}
           onImported={load}
+        />
+      )}
+
+      {recapQuiz && (
+        <QuizRecapModal
+          quizId={recapQuiz.id}
+          quizName={recapQuiz.name}
+          onClose={() => setRecapQuiz(null)}
         />
       )}
     </div>
