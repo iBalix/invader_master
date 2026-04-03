@@ -8,14 +8,29 @@ type MediaPreview =
   | { type: 'video'; url: string; label: string }
   | null;
 
-function extractYouTubeId(url: string): string | null {
+interface YtInfo { id: string; start?: number }
+
+function parseYouTube(url: string): YtInfo | null {
   if (!url) return null;
   const trimmed = url.trim();
-  const m = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|v\/|shorts\/))([a-zA-Z0-9_-]{11})/);
-  if (m) return m[1];
-  const bare = trimmed.match(/^([a-zA-Z0-9_-]{11})(?:\?.*)?$/);
-  if (bare) return bare[1];
-  return null;
+
+  let id: string | null = null;
+  const full = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?.*v=|embed\/|v\/|shorts\/))([a-zA-Z0-9_-]{11})/);
+  if (full) id = full[1];
+  if (!id) {
+    const bare = trimmed.match(/^([a-zA-Z0-9_-]{11})(?:\?.*)?$/);
+    if (bare) id = bare[1];
+  }
+  if (!id) return null;
+
+  const qs = trimmed.split('?')[1];
+  let start: number | undefined;
+  if (qs) {
+    const params = new URLSearchParams(qs);
+    const t = params.get('time') ?? params.get('t') ?? params.get('start');
+    if (t) start = parseInt(t, 10) || undefined;
+  }
+  return { id, start };
 }
 
 interface Question {
@@ -269,7 +284,7 @@ function MediaLightbox({ preview, onClose }: { preview: NonNullable<MediaPreview
     return () => window.removeEventListener('keydown', handleKey);
   }, [onClose]);
 
-  const ytId = preview.type === 'video' ? extractYouTubeId(preview.url) : null;
+  const yt = preview.type === 'video' ? parseYouTube(preview.url) : null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70" onClick={onClose}>
@@ -302,10 +317,10 @@ function MediaLightbox({ preview, onClose }: { preview: NonNullable<MediaPreview
             </div>
           )}
 
-          {preview.type === 'video' && ytId && (
+          {preview.type === 'video' && yt && (
             <div className="w-full aspect-video">
               <iframe
-                src={`https://www.youtube.com/embed/${ytId}?autoplay=1`}
+                src={`https://www.youtube.com/embed/${yt.id}?autoplay=1${yt.start ? `&start=${yt.start}` : ''}`}
                 allow="autoplay; encrypted-media"
                 allowFullScreen
                 className="w-full h-full rounded-lg"
@@ -313,7 +328,7 @@ function MediaLightbox({ preview, onClose }: { preview: NonNullable<MediaPreview
             </div>
           )}
 
-          {preview.type === 'video' && !ytId && (
+          {preview.type === 'video' && !yt && (
             <div className="text-center py-8 text-gray-500">
               <p className="mb-3">Impossible d'extraire l'ID YouTube</p>
               <a
