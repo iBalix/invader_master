@@ -113,7 +113,7 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
 
   const targetName = machine.type === 'all_tables' ? 'TABLE' : machine.name;
   const actions = ACTIONS_BY_TYPE[machine.type] ?? [];
-  const canReport = ['table', 'borne', 'projo'].includes(machine.type);
+  const canReport = ['table', 'borne', 'projo', 'bar'].includes(machine.type);
 
   const loadMachineIncidents = useCallback(async () => {
     setLoadingIncidents(true);

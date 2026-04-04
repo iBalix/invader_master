@@ -20,6 +20,9 @@ const REASONS_BY_TYPE: Record<string, string[]> = {
   projo: [
     'Autre',
   ],
+  bar: [
+    'Autre',
+  ],
 };
 
 interface Props {
