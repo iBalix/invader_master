@@ -25,6 +25,9 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Agent runtime files
+agent/ping_results.json
+
 # Vite
 *.local
 
