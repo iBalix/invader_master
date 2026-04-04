@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const loginSucceeded = useRef(false);
 
   const refreshUser = useCallback(async () => {
     const token = localStorage.getItem('access_token');
@@ -40,14 +42,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.status === 'success' && data.user) {
         setUser(data.user);
         localStorage.setItem('user', JSON.stringify(data.user));
-      } else {
+      } else if (!loginSucceeded.current) {
         setUser(null);
       }
     } catch {
-      setUser(null);
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user');
+      if (!loginSucceeded.current) {
+        setUser(null);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
+      }
     } finally {
       setLoading(false);
     }
@@ -67,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string): Promise<{ success: boolean; message?: string; role?: string }> => {
+      loginSucceeded.current = false;
       try {
         const { data } = await api.post<{
           status: string;
@@ -76,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }>('/auth/login', { email, password });
 
         if (data.status === 'success' && data.session && data.user) {
+          loginSucceeded.current = true;
           localStorage.setItem('access_token', data.session.access_token);
           localStorage.setItem('refresh_token', data.session.refresh_token);
           localStorage.setItem('user', JSON.stringify(data.user));
@@ -94,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    loginSucceeded.current = false;
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
