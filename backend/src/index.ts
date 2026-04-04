@@ -24,6 +24,7 @@ import { financeImportRoutes } from './routes/financeImport.js';
 import { battleQuestionRoutes } from './routes/battleQuestions.js';
 import { publicRoutes } from './routes/public.js';
 import { barRoutes } from './routes/bar.js';
+import { cashRoutes } from './routes/cash.js';
 import { initAgentBridge } from './websocket/agent-bridge.js';
 
 const app = express();
@@ -60,6 +61,7 @@ app.use('/api/translations', translationRoutes);
 app.use('/api/finance-import', financeImportRoutes);
 app.use('/api/battle-questions', battleQuestionRoutes);
 app.use('/api/bar', barRoutes);
+app.use('/api/cash', cashRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'error', message: 'Not found' });

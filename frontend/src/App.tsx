@@ -21,6 +21,7 @@ import ImportFinancesPage from './pages/ImportFinancesPage';
 import BattleQuestionsPage from './pages/BattleQuestionsPage';
 import ComingSoon from './pages/ComingSoon';
 import BarManagementPage from './pages/BarManagementPage';
+import CashManagementPage from './pages/CashManagementPage';
 
 export default function App() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="contenus/medias" element={<MediaSupportPage />} />
             <Route path="contenus/traductions" element={<TranslationsPage />} />
             <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
+            <Route path="utilitaires/comptabilite" element={<CashManagementPage />} />
             <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />
             <Route path="users" element={<UserManagementPage />} />
             <Route path="bientot" element={<ComingSoon />} />

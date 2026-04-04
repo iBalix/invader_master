@@ -19,6 +19,7 @@ import {
   ChevronRight,
   BookOpen,
   Upload,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -99,6 +100,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
     roles: ['admin'],
     items: [
       { title: 'Import finances', icon: Upload, disabled: false, path: '/utilitaires/import-finances', roles: ['admin'] },
+      { title: 'Comptabilite', icon: Wallet, disabled: false, path: '/utilitaires/comptabilite', roles: ['admin'] },
     ],
   },
   {
