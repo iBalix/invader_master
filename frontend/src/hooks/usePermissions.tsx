@@ -64,6 +64,17 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [permissions, setPermissions] = useState<Record<Role, string[]>>(defaultPerms);
   const [loading, setLoading] = useState(isAuthenticated);
+  const [prevAuth, setPrevAuth] = useState(isAuthenticated);
+
+  if (isAuthenticated !== prevAuth) {
+    setPrevAuth(isAuthenticated);
+    if (isAuthenticated) {
+      setLoading(true);
+    } else {
+      setPermissions(defaultPerms);
+      setLoading(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -82,11 +93,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated) {
-      setLoading(true);
       load();
-    } else {
-      setPermissions(defaultPerms);
-      setLoading(false);
     }
   }, [isAuthenticated, load]);
 
