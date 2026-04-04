@@ -1,6 +1,5 @@
 /**
  * Finance import routes — Popina sales (.xlsx) and Tiime flux (.xlsx)
- * Dual-write: inserts into both MySQL (legacy) and Supabase (new).
  * Uses SSE for progressive feedback, multer for file upload, xlsx for parsing.
  */
 
@@ -123,15 +122,10 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
     sendSSE(res, 'progress', { step: 'parsed', message: `${rows.length} lignes trouvées` });
 
     sendSSE(res, 'progress', { step: 'mysql', message: 'Connexion MySQL...' });
-    try {
-      mysqlConn = await getMysqlPool().getConnection();
-      sendSSE(res, 'progress', { step: 'mysql', message: 'MySQL connecté ✓' });
-    } catch (mysqlErr) {
-      const msg = mysqlErr instanceof Error ? mysqlErr.message : String(mysqlErr);
-      sendSSE(res, 'progress', { step: 'warn', message: `MySQL indisponible — import Supabase seul : ${msg}` });
-    }
+    mysqlConn = await getMysqlPool().getConnection();
+    sendSSE(res, 'progress', { step: 'mysql', message: 'MySQL connecté ✓' });
 
-    if (mysqlConn) await mysqlConn.beginTransaction();
+    await mysqlConn.beginTransaction();
 
     const mysqlStmt = `INSERT IGNORE INTO sales
       (id, date, salle, table_number, parent, cat, name, unit, tier, tax, quantity, brut, discount, net, tva, ht, ticket)
@@ -139,10 +133,7 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
 
     let imported = 0;
     let skipped = 0;
-    let mysqlInserted = 0;
-    let supabaseInserted = 0;
     const BATCH = 200;
-    let supabaseBatch: Array<Record<string, unknown>> = [];
     let mysqlBatchCount = 0;
 
     if (rows.length > 0) {
@@ -155,6 +146,10 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
       const cancelled = row['cancelled'];
       if (cancelled === true || String(cancelled ?? '').toUpperCase() === 'VRAI') { skipped++; continue; }
 
+      const cat = String(row['cat'] ?? '').trim();
+      const NON_PRODUCT_CATS = ['Paiement', 'Total', 'Pourboire', 'Rendu'];
+      if (NON_PRODUCT_CATS.includes(cat)) { skipped++; continue; }
+
       const ticket = String(row['ticket'] ?? '').trim();
       const name = String(row['name'] ?? '').trim();
       if (!ticket || !name) { skipped++; continue; }
@@ -166,7 +161,6 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
       const salle = String(row['salle'] ?? '');
       const table_number = parseInt(String(row['table'] ?? '0'), 10) || 0;
       const parent = String(row['parent'] ?? '');
-      const cat = String(row['cat'] ?? '');
       const unit = parseFloat(String(row['unit'] ?? '0')) || 0;
       const tier = String(row['tier'] ?? '');
       const tax = parseFloat(String(row['tax'] ?? '0')) || 0;
@@ -178,63 +172,39 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
       const ht = parseFloat(String(row['ht'] ?? '0')) || 0;
       const ticketInt = parseInt(ticket, 10) || 0;
 
-      // MySQL (types must match: table_number=int, unit=float, ticket=int, quantity=int)
-      if (mysqlConn) {
-        try {
-          await mysqlConn.execute(mysqlStmt, [
-            id, formatMySQLDate(date), salle, table_number, parent, cat, name,
-            unit, tier, tax, quantity, brut, discount, net, tva, ht, ticketInt,
-          ]);
-          mysqlInserted++;
-        } catch (mysqlErr) {
-          if (mysqlInserted === 0) {
-            sendSSE(res, 'progress', { step: 'warn', message: `MySQL insert error: ${(mysqlErr as Error).message}` });
-          }
+      try {
+        await mysqlConn.execute(mysqlStmt, [
+          id, formatMySQLDate(date), salle, table_number, parent, cat, name,
+          unit, tier, tax, quantity, brut, discount, net, tva, ht, ticketInt,
+        ]);
+      } catch (mysqlErr) {
+        if (imported === 0) {
+          sendSSE(res, 'progress', { step: 'warn', message: `MySQL insert error: ${(mysqlErr as Error).message}` });
         }
       }
 
-      // Supabase batch (keeps original string ticket for TEXT id matching)
-      supabaseBatch.push({
-        id, date, salle, table_number: String(row['table'] ?? ''), parent, cat, name,
-        unit, tier, tax, quantity, brut, discount, net, tva, ht, ticket,
-      });
-
-      mysqlBatchCount++;
       imported++;
+      mysqlBatchCount++;
 
-      if (mysqlConn && mysqlBatchCount >= BATCH) {
+      if (mysqlBatchCount >= BATCH) {
         await mysqlConn.commit();
         await mysqlConn.beginTransaction();
         mysqlBatchCount = 0;
       }
 
-      if (supabaseBatch.length >= BATCH) {
-        const { error, count } = await supabaseAdmin.from('sales').upsert(supabaseBatch, { onConflict: 'id', ignoreDuplicates: true });
-        if (error) sendSSE(res, 'progress', { step: 'warn', message: `Supabase batch warn: ${error.message}` });
-        else supabaseInserted += supabaseBatch.length;
-        supabaseBatch = [];
-      }
-
       if ((i + 1) % BATCH === 0) {
         sendSSE(res, 'progress', {
           step: 'batch',
-          message: `${imported} traitées (MySQL: ${mysqlInserted}, Supabase: ${supabaseInserted})...`,
+          message: `${imported} importées...`,
           current: i + 1,
           total: rows.length,
         });
       }
     }
 
-    // Flush remaining
-    if (mysqlConn) await mysqlConn.commit();
+    await mysqlConn.commit();
 
-    if (supabaseBatch.length > 0) {
-      const { error } = await supabaseAdmin.from('sales').upsert(supabaseBatch, { onConflict: 'id', ignoreDuplicates: true });
-      if (error) sendSSE(res, 'progress', { step: 'warn', message: `Supabase batch final warn: ${error.message}` });
-      else supabaseInserted += supabaseBatch.length;
-    }
-
-    sendSSE(res, 'done', { imported, mysqlInserted, supabaseInserted, skipped, total: rows.length });
+    sendSSE(res, 'done', { imported, skipped, total: rows.length });
     res.end();
   } catch (err) {
     if (mysqlConn) {
