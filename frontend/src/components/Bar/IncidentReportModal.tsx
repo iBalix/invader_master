@@ -13,8 +13,6 @@ const REASONS_BY_TYPE: Record<string, string[]> = {
     'Autre',
   ],
   borne: [
-    'Ne répond pas au ping',
-    'Borne éteinte',
     'Autre',
   ],
   projo: [
