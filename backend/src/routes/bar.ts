@@ -163,6 +163,55 @@ barRoutes.post('/incidents', async (req, res) => {
   }
 });
 
+// ── Action logs ──────────────────────────────────────────────────────
+
+barRoutes.get('/action-logs', async (req, res) => {
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+
+    let query = supabaseAdmin
+      .from('bar_action_logs')
+      .select('*')
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: false });
+
+    if (req.query.machine) {
+      query = query.eq('machine_name', req.query.machine as string);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    res.json({ status: 'success', items: data ?? [] });
+  } catch (err) {
+    console.error('List action logs error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+barRoutes.post('/action-logs', async (req, res) => {
+  try {
+    const { machine_name, action_label } = req.body;
+
+    if (!machine_name || !action_label) {
+      res.status(400).json({ status: 'error', message: 'machine_name et action_label requis' });
+      return;
+    }
+
+    const { error } = await supabaseAdmin
+      .from('bar_action_logs')
+      .insert({ machine_name, action_label });
+
+    if (error) throw error;
+
+    res.status(201).json({ status: 'success' });
+  } catch (err) {
+    console.error('Create action log error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
 barRoutes.patch('/incidents/:id/resolve', async (req, res) => {
   try {
     const resolved = Boolean(req.body.resolved);

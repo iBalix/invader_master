@@ -3,14 +3,16 @@ import { X, Play, Loader2, AlertTriangle, Plus, Pencil, Save, Power, RefreshCw, 
 import type { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
-import type { MachineConfig, MachineType, MachineLabels, BarIncident } from '../../pages/BarManagementPage';
+import type { MachineConfig, MachineType, MachineLabels, BarIncident, ActionLog } from '../../pages/BarManagementPage';
 import { useAuth } from '../../hooks/useAuth';
 import IncidentReportModal from './IncidentReportModal';
 
 interface ActionDef {
   label: string;
   command: string;
+  id?: string;
   variant?: 'danger' | 'warning' | 'default';
+  logged?: boolean;
 }
 
 const BORNE_GAMES = [
@@ -36,12 +38,13 @@ const PROJO_MODES = [
 
 const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
   table: [
-    { label: 'Redémarrer', command: 'restart_pc', variant: 'danger' },
+    { label: 'Redémarrer', command: 'restart_pc', variant: 'danger', logged: true },
     { label: 'Relancer interface', command: 'restart_edge' },
     { label: 'Fermer le jeu', command: 'close_game' },
     { label: 'Régénérer le cache', command: 'clear_cache' },
-    { label: 'Corriger écran dupliqué', command: 'reset_slave_screen', variant: 'warning' },
-    { label: 'Corriger tactile/manettes', command: 'restart_usb', variant: 'warning' },
+    { label: 'Corriger écran dupliqué', command: 'reset_slave_screen', variant: 'warning', logged: true },
+    { label: 'Corriger écran tactile', command: 'restart_usb', id: 'restart_usb_tactile', variant: 'warning', logged: true },
+    { label: 'Corriger manettes', command: 'restart_usb', id: 'restart_usb_manettes', variant: 'warning', logged: true },
   ],
   borne: [
     { label: 'Redémarrer', command: 'restart_pc', variant: 'danger' },
@@ -60,12 +63,13 @@ const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
     { label: 'Relancer interface', command: 'restart_edge' },
   ],
   all_tables: [
-    { label: 'Redémarrer toutes', command: 'restart_pc', variant: 'danger' },
+    { label: 'Redémarrer toutes', command: 'restart_pc', variant: 'danger', logged: true },
     { label: 'Relancer interface', command: 'restart_edge' },
     { label: 'Fermer le jeu', command: 'close_game' },
     { label: 'Régénérer le cache', command: 'clear_cache' },
-    { label: 'Corriger écran dupliqué', command: 'reset_slave_screen', variant: 'warning' },
-    { label: 'Corriger tactile/manettes', command: 'restart_usb', variant: 'warning' },
+    { label: 'Corriger écran dupliqué', command: 'reset_slave_screen', variant: 'warning', logged: true },
+    { label: 'Corriger écran tactile', command: 'restart_usb', id: 'restart_usb_tactile', variant: 'warning', logged: true },
+    { label: 'Corriger manettes', command: 'restart_usb', id: 'restart_usb_manettes', variant: 'warning', logged: true },
   ],
 };
 
@@ -76,6 +80,8 @@ const COMMAND_ICONS: Record<string, LucideIcon> = {
   clear_cache: RotateCcw,
   reset_slave_screen: Monitor,
   restart_usb: Gamepad2,
+  restart_usb_tactile: Monitor,
+  restart_usb_manettes: Gamepad2,
 };
 
 const VARIANT_CLASSES: Record<string, string> = {
@@ -84,7 +90,7 @@ const VARIANT_CLASSES: Record<string, string> = {
   danger: 'bg-red-100 hover:bg-red-200 text-red-800',
 };
 
-type Tab = 'actions' | 'incidents';
+type Tab = 'actions' | 'incidents' | 'historique';
 
 interface Props {
   machine: MachineConfig;
@@ -104,6 +110,8 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
   const [machineIncidents, setMachineIncidents] = useState<BarIncident[]>([]);
   const [loadingIncidents, setLoadingIncidents] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [actionLogs, setActionLogs] = useState<ActionLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
   const [selectedGame, setSelectedGame] = useState(BORNE_GAMES[0].value);
   const [selectedProjoMode, setSelectedProjoMode] = useState(PROJO_MODES[0].value);
   const [editingLabels, setEditingLabels] = useState(false);
@@ -127,21 +135,41 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
     }
   }, [machine.name]);
 
+  const loadActionLogs = useCallback(async () => {
+    setLoadingLogs(true);
+    try {
+      const { data } = await api.get<{ items: ActionLog[] }>(`/api/bar/action-logs?machine=${machine.name}`);
+      setActionLogs(data.items);
+    } catch {
+      toast.error('Erreur chargement historique');
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, [machine.name]);
+
   useEffect(() => {
     loadMachineIncidents();
-  }, [loadMachineIncidents]);
+    loadActionLogs();
+  }, [loadMachineIncidents, loadActionLogs]);
 
   const handleExecute = async (action: ActionDef) => {
     if (action.variant === 'danger' && !confirm(`Confirmer : ${action.label} sur ${machine.label} ?`)) {
       return;
     }
 
-    setExecuting(action.command);
+    const actionId = action.id ?? action.command;
+    setExecuting(actionId);
     try {
       await api.post('/api/bar/execute-command', {
         command: action.command,
         targetName,
       });
+      if (action.logged) {
+        api.post('/api/bar/action-logs', {
+          machine_name: machine.name,
+          action_label: action.label,
+        }).catch(() => {});
+      }
       toast.success(`${action.label} — commande envoyée`);
     } catch (err: any) {
       const msg = err.response?.data?.message ?? 'Erreur lors de l\'exécution';
@@ -350,6 +378,21 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
                 </span>
               )}
             </button>
+            <button
+              onClick={() => setTab('historique')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition flex items-center gap-2 ${
+                tab === 'historique'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Historique
+              {actionLogs.length > 0 && (
+                <span className="bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">
+                  {actionLogs.length}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Content */}
@@ -376,17 +419,18 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
 
                 <div className="grid grid-cols-2 gap-2">
                   {actions.map((action) => {
-                    const Icon = COMMAND_ICONS[action.command] ?? Play;
+                    const actionId = action.id ?? action.command;
+                    const Icon = COMMAND_ICONS[actionId] ?? COMMAND_ICONS[action.command] ?? Play;
                     return (
                       <button
-                        key={action.command}
+                        key={actionId}
                         disabled={!agentConnected || executing !== null}
                         onClick={() => handleExecute(action)}
                         className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
                           VARIANT_CLASSES[action.variant ?? 'default']
                         }`}
                       >
-                        {executing === action.command ? (
+                        {executing === actionId ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <Icon className="w-4 h-4" />
@@ -524,6 +568,32 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
                             {new Date(incident.created_at).toLocaleString('fr-FR')}
                           </p>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {tab === 'historique' && (
+              <div className="space-y-3">
+                {loadingLogs ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  </div>
+                ) : actionLogs.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8 text-sm">Aucune action enregistrée (30 derniers jours)</p>
+                ) : (
+                  <div className="space-y-2">
+                    {actionLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-gray-50 text-sm"
+                      >
+                        <span className="font-medium text-gray-900">{log.action_label}</span>
+                        <span className="text-gray-400 text-xs whitespace-nowrap ml-4">
+                          {new Date(log.created_at).toLocaleString('fr-FR')}
+                        </span>
                       </div>
                     ))}
                   </div>

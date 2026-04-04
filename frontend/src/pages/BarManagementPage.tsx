@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import MachineActionModal from '../components/Bar/MachineActionModal';
 import IncidentList from '../components/Bar/IncidentList';
+import ActionLogList from '../components/Bar/ActionLogList';
 
 export interface BarIncident {
   id: string;
@@ -16,6 +17,13 @@ export interface BarIncident {
   resolved_by: string | null;
   created_at: string;
   created_by: string | null;
+}
+
+export interface ActionLog {
+  id: string;
+  machine_name: string;
+  action_label: string;
+  created_at: string;
 }
 
 export type MachineType = 'table' | 'borne' | 'bar' | 'tv' | 'projo' | 'all_tables';
@@ -78,9 +86,11 @@ const GRID_TEMPLATE = `
 
 export default function BarManagementPage() {
   const [incidents, setIncidents] = useState<BarIncident[]>([]);
+  const [actionLogs, setActionLogs] = useState<ActionLog[]>([]);
   const [agentConnected, setAgentConnected] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<MachineConfig | null>(null);
-  const [showIncidents, setShowIncidents] = useState(true);
+  const [showBottom, setShowBottom] = useState(true);
+  const [bottomTab, setBottomTab] = useState<'incidents' | 'actions'>('incidents');
   const [machineLabels, setMachineLabels] = useState<Record<string, MachineLabels>>({});
   const [pingStatus, setPingStatus] = useState<Record<string, boolean>>({});
 
@@ -107,6 +117,13 @@ export default function BarManagementPage() {
     } catch { /* silent */ }
   }, []);
 
+  const loadActionLogs = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ items: ActionLog[] }>('/api/bar/action-logs');
+      setActionLogs(data.items);
+    } catch { /* silent */ }
+  }, []);
+
   const checkAgentStatus = useCallback(async () => {
     try {
       const { data } = await api.get<{ connected: boolean }>('/api/bar/agent-status');
@@ -118,6 +135,7 @@ export default function BarManagementPage() {
 
   useEffect(() => {
     loadIncidents();
+    loadActionLogs();
     loadLabels();
     checkAgentStatus();
     loadPingStatus();
@@ -127,7 +145,7 @@ export default function BarManagementPage() {
       clearInterval(agentInterval);
       clearInterval(pingInterval);
     };
-  }, [loadIncidents, loadLabels, checkAgentStatus, loadPingStatus]);
+  }, [loadIncidents, loadActionLogs, loadLabels, checkAgentStatus, loadPingStatus]);
 
   const hasPingData = Object.keys(pingStatus).length > 0;
 
@@ -225,25 +243,53 @@ export default function BarManagementPage() {
         </div>
       </div>
 
-      {/* Incidents section */}
+      {/* Bottom section: Incidents + Actions */}
       <div className="bg-white rounded-xl shadow-sm border">
-        <button
-          onClick={() => setShowIncidents(!showIncidents)}
-          className="w-full flex items-center justify-between px-6 py-4 text-left"
-        >
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">Incidents signalés</h2>
-            {incidents.filter((i) => !i.resolved).length > 0 && (
-              <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                {incidents.filter((i) => !i.resolved).length} non résolu(s)
-              </span>
-            )}
+        <div className="flex items-center justify-between px-6 border-b">
+          <div className="flex">
+            <button
+              onClick={() => { setBottomTab('incidents'); setShowBottom(true); }}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition flex items-center gap-2 ${
+                bottomTab === 'incidents'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Incidents
+              {incidents.filter((i) => !i.resolved).length > 0 && (
+                <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-1.5 py-0.5 rounded-full">
+                  {incidents.filter((i) => !i.resolved).length}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => { setBottomTab('actions'); setShowBottom(true); }}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition flex items-center gap-2 ${
+                bottomTab === 'actions'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Actions
+              {actionLogs.length > 0 && (
+                <span className="bg-gray-100 text-gray-600 text-xs font-medium px-1.5 py-0.5 rounded-full">
+                  {actionLogs.length}
+                </span>
+              )}
+            </button>
           </div>
-          {showIncidents ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
-        </button>
-        {showIncidents && (
-          <div className="px-6 pb-6">
-            <IncidentList incidents={incidents} machineLabels={machineLabels} onUpdate={loadIncidents} />
+          <button onClick={() => setShowBottom(!showBottom)} className="p-1 hover:bg-gray-100 rounded-lg transition">
+            {showBottom ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+          </button>
+        </div>
+        {showBottom && (
+          <div className="px-6 py-4">
+            {bottomTab === 'incidents' && (
+              <IncidentList incidents={incidents} machineLabels={machineLabels} onUpdate={loadIncidents} />
+            )}
+            {bottomTab === 'actions' && (
+              <ActionLogList logs={actionLogs} machineLabels={machineLabels} />
+            )}
           </div>
         )}
       </div>
@@ -255,7 +301,7 @@ export default function BarManagementPage() {
           agentConnected={agentConnected}
           labels={machineLabels[selectedMachine.name]}
           pingStatus={pingStatus}
-          onClose={() => setSelectedMachine(null)}
+          onClose={() => { setSelectedMachine(null); loadActionLogs(); }}
           onIncidentCreated={loadIncidents}
           onLabelsUpdated={loadLabels}
         />
