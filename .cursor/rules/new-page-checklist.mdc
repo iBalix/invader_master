@@ -1,0 +1,16 @@
+---
+description: Checklist lors de l'ajout d'une nouvelle page dans invader_master
+globs:
+alwaysApply: true
+---
+
+# Checklist nouvelle page
+
+Quand une nouvelle page est ajoutée dans invader_master, toujours penser à :
+
+1. **Créer le composant page** dans `frontend/src/pages/`
+2. **Ajouter la route** dans `frontend/src/App.tsx`
+3. **Ajouter le lien** dans `frontend/src/components/Layout/Sidebar.tsx` (dans la bonne section/accordion)
+4. **Ajouter la carte** dans `frontend/src/pages/Dashboard.tsx` (dans le bon tableau `CONTENUS`, `EVENEMENTS` ou `UTILITAIRES`)
+
+Ne jamais oublier l'étape 4 (Dashboard) qui est souvent la plus facile à manquer.
