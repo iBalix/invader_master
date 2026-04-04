@@ -23,11 +23,18 @@ const pendingCommands = new Map<string, { resolve: PendingResolve; timer: Return
 
 const COMMAND_TIMEOUT_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
+const PING_STATUS_INTERVAL_MS = 60_000;
 
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let pingStatusInterval: ReturnType<typeof setInterval> | null = null;
+let lastPingStatus: Record<string, boolean> = {};
 
 export function isAgentConnected(): boolean {
   return agentSocket !== null && agentSocket.readyState === WebSocket.OPEN;
+}
+
+export function getPingStatus(): Record<string, boolean> {
+  return lastPingStatus;
 }
 
 export function sendCommand(
@@ -85,11 +92,25 @@ export function initAgentBridge(server: Server): void {
       }
     }, HEARTBEAT_INTERVAL_MS);
 
+    const requestPingStatus = () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping_all' }));
+      }
+    };
+
+    requestPingStatus();
+    pingStatusInterval = setInterval(requestPingStatus, PING_STATUS_INTERVAL_MS);
+
     ws.on('message', (raw) => {
       try {
         const msg = JSON.parse(raw.toString());
 
         if (msg.type === 'pong') return;
+
+        if (msg.type === 'ping_status') {
+          lastPingStatus = msg.results ?? {};
+          return;
+        }
 
         if (msg.type === 'result') {
           const pending = pendingCommands.get(msg.id);
@@ -111,6 +132,11 @@ export function initAgentBridge(server: Server): void {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
       }
+      if (pingStatusInterval) {
+        clearInterval(pingStatusInterval);
+        pingStatusInterval = null;
+      }
+      lastPingStatus = {};
       for (const [id, pending] of pendingCommands) {
         clearTimeout(pending.timer);
         pending.resolve({ type: 'result', id, success: false, output: 'Agent disconnected' });

@@ -18,13 +18,18 @@ export interface BarIncident {
   created_by: string | null;
 }
 
-export type MachineType = 'table' | 'borne' | 'bar' | 'tv' | 'projo' | 'salon' | 'all_tables';
+export type MachineType = 'table' | 'borne' | 'bar' | 'tv' | 'projo' | 'all_tables';
 
 export interface MachineConfig {
   name: string;
   type: MachineType;
   label: string;
   gridArea: string;
+}
+
+export interface MachineLabels {
+  display_name: string;
+  technical_name: string;
 }
 
 const MACHINES: MachineConfig[] = [
@@ -45,7 +50,6 @@ const MACHINES: MachineConfig[] = [
   { name: 'BORNE02', type: 'borne', label: 'BORNE02', gridArea: 'BN2' },
   { name: 'BORNE03', type: 'borne', label: 'BORNE03', gridArea: 'BN3' },
   { name: 'BORNE04', type: 'borne', label: 'BORNE04', gridArea: 'BN4' },
-  { name: 'SALON01', type: 'salon', label: 'SALON01', gridArea: 'SAL' },
   { name: 'ALL TABLES', type: 'all_tables', label: 'ALL TABLES', gridArea: 'ALL' },
   { name: 'TV01',    type: 'tv',    label: 'TV01',    gridArea: 'TV1' },
   { name: 'TV02',    type: 'tv',    label: 'TV02',    gridArea: 'TV2' },
@@ -58,14 +62,12 @@ const TYPE_COLORS: Record<MachineType, string> = {
   bar: 'bg-gray-500 hover:bg-gray-600',
   tv: 'bg-gray-500 hover:bg-gray-600',
   projo: 'bg-red-500 hover:bg-red-600',
-  salon: 'bg-gray-500 hover:bg-gray-600',
   all_tables: 'bg-teal-600 hover:bg-teal-700',
 };
 
 const TYPE_ICONS: Partial<Record<MachineType, string>> = {
   bar: '🖥',
   tv: '🖥',
-  salon: '🎮',
 };
 
 const GRID_TEMPLATE = `
@@ -74,7 +76,7 @@ const GRID_TEMPLATE = `
   "B02 .   .   .   .   .   .   T08"
   "B01 .   .   .   .   .   .   T09"
   ".   .   .   T01 T04 .   .   T10"
-  "BN1 BN2 BN3 BN4 .   .   .   SAL"
+  "BN1 BN2 BN3 BN4 .   .   .   ."
   "ALL TV1 TV2 TV3 .   .   .   ."
 `;
 
@@ -83,6 +85,8 @@ export default function BarManagementPage() {
   const [agentConnected, setAgentConnected] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<MachineConfig | null>(null);
   const [showIncidents, setShowIncidents] = useState(true);
+  const [machineLabels, setMachineLabels] = useState<Record<string, MachineLabels>>({});
+  const [pingStatus, setPingStatus] = useState<Record<string, boolean>>({});
 
   const loadIncidents = useCallback(async () => {
     try {
@@ -91,6 +95,20 @@ export default function BarManagementPage() {
     } catch {
       toast.error('Erreur chargement des incidents');
     }
+  }, []);
+
+  const loadLabels = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ labels: Record<string, MachineLabels> }>('/api/bar/machine-labels');
+      setMachineLabels(data.labels);
+    } catch { /* silent */ }
+  }, []);
+
+  const loadPingStatus = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ results: Record<string, boolean> }>('/api/bar/ping-status');
+      setPingStatus(data.results ?? {});
+    } catch { /* silent */ }
   }, []);
 
   const checkAgentStatus = useCallback(async () => {
@@ -104,10 +122,37 @@ export default function BarManagementPage() {
 
   useEffect(() => {
     loadIncidents();
+    loadLabels();
     checkAgentStatus();
-    const interval = setInterval(checkAgentStatus, 15_000);
-    return () => clearInterval(interval);
-  }, [loadIncidents, checkAgentStatus]);
+    loadPingStatus();
+    const agentInterval = setInterval(checkAgentStatus, 15_000);
+    const pingInterval = setInterval(loadPingStatus, 30_000);
+    return () => {
+      clearInterval(agentInterval);
+      clearInterval(pingInterval);
+    };
+  }, [loadIncidents, loadLabels, checkAgentStatus, loadPingStatus]);
+
+  const hasPingData = Object.keys(pingStatus).length > 0;
+
+  const getDownSides = (machine: MachineConfig): string | null => {
+    if (!hasPingData || machine.type === 'all_tables') return null;
+
+    if (machine.type === 'table') {
+      const num = machine.name.replace('TABLE', '');
+      const side1 = pingStatus[`TABLE${num}-1`];
+      const side2 = pingStatus[`TABLE${num}-2`];
+      if (side1 === undefined && side2 === undefined) return null;
+      const down: string[] = [];
+      if (side1 === false) down.push('1');
+      if (side2 === false) down.push('2');
+      return down.length > 0 ? down.join(',') : null;
+    }
+
+    const alive = pingStatus[machine.name];
+    if (alive === undefined) return null;
+    return alive ? null : '';
+  };
 
   const unresolvedByMachine = incidents
     .filter((i) => !i.resolved)
@@ -146,20 +191,36 @@ export default function BarManagementPage() {
         >
           {MACHINES.map((machine) => {
             const unresolvedCount = unresolvedByMachine[machine.name] ?? 0;
+            const labels = machineLabels[machine.name];
+            const displayName = labels?.display_name || machine.label;
+            const techName = labels?.technical_name || '';
+            const downSides = getDownSides(machine);
             return (
               <button
                 key={machine.name}
                 onClick={() => setSelectedMachine(machine)}
-                className={`relative rounded-lg text-white font-bold text-xs flex flex-col items-center justify-center gap-1 transition-all shadow-md active:scale-95 cursor-pointer ${TYPE_COLORS[machine.type]}`}
+                className={`relative rounded-lg text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 transition-all shadow-md active:scale-95 cursor-pointer px-1 ${TYPE_COLORS[machine.type]}`}
                 style={{ gridArea: machine.gridArea }}
               >
                 {TYPE_ICONS[machine.type] && (
-                  <span className="text-base">{TYPE_ICONS[machine.type]}</span>
+                  <span className="text-base leading-none">{TYPE_ICONS[machine.type]}</span>
                 )}
-                <span>{machine.label}</span>
+                <span className="truncate max-w-full leading-tight">{displayName}</span>
+                {techName && (
+                  <span className="text-[9px] font-normal opacity-70 truncate max-w-full leading-tight">{techName}</span>
+                )}
                 {unresolvedCount > 0 && (
                   <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center w-6 h-6 bg-yellow-400 text-yellow-900 rounded-full shadow text-xs">
                     <AlertTriangle className="w-3.5 h-3.5" />
+                  </span>
+                )}
+                {downSides !== null && (
+                  <span
+                    className="absolute -bottom-1.5 -left-1.5 flex items-center gap-0.5 bg-red-600 text-white rounded-full shadow px-1 py-0.5"
+                    title={downSides ? `Cote ${downSides} injoignable` : 'Injoignable'}
+                  >
+                    <WifiOff className="w-3 h-3" />
+                    {downSides && <span className="text-[9px] font-bold leading-none">{downSides}</span>}
                   </span>
                 )}
               </button>
@@ -196,8 +257,10 @@ export default function BarManagementPage() {
         <MachineActionModal
           machine={selectedMachine}
           agentConnected={agentConnected}
+          labels={machineLabels[selectedMachine.name]}
           onClose={() => setSelectedMachine(null)}
           onIncidentCreated={loadIncidents}
+          onLabelsUpdated={loadLabels}
         />
       )}
     </div>

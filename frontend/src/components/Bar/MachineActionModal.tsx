@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Play, Loader2, AlertTriangle, Plus } from 'lucide-react';
+import { X, Play, Loader2, AlertTriangle, Plus, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
-import type { MachineConfig, MachineType, BarIncident } from '../../pages/BarManagementPage';
+import type { MachineConfig, MachineType, MachineLabels, BarIncident } from '../../pages/BarManagementPage';
+import { useAuth } from '../../hooks/useAuth';
 import IncidentReportModal from './IncidentReportModal';
 
 interface ActionDef {
@@ -49,10 +50,6 @@ const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
     { label: 'Redémarrer', command: 'restart_pc', variant: 'danger' },
     { label: 'Relancer interface', command: 'restart_edge' },
   ],
-  salon: [
-    { label: 'Redémarrer', command: 'restart_pc', variant: 'danger' },
-    { label: 'Relancer interface', command: 'restart_edge' },
-  ],
   all_tables: [
     { label: 'Redémarrer toutes', command: 'restart_pc', variant: 'danger' },
     { label: 'Relancer interface', command: 'restart_edge' },
@@ -74,17 +71,25 @@ type Tab = 'actions' | 'incidents';
 interface Props {
   machine: MachineConfig;
   agentConnected: boolean;
+  labels?: MachineLabels;
   onClose: () => void;
   onIncidentCreated: () => void;
+  onLabelsUpdated: () => void;
 }
 
-export default function MachineActionModal({ machine, agentConnected, onClose, onIncidentCreated }: Props) {
+export default function MachineActionModal({ machine, agentConnected, labels, onClose, onIncidentCreated, onLabelsUpdated }: Props) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<Tab>('actions');
   const [executing, setExecuting] = useState<string | null>(null);
   const [machineIncidents, setMachineIncidents] = useState<BarIncident[]>([]);
   const [loadingIncidents, setLoadingIncidents] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedGame, setSelectedGame] = useState(BORNE_GAMES[0].value);
+  const [editingLabels, setEditingLabels] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editTechName, setEditTechName] = useState('');
+  const [savingLabels, setSavingLabels] = useState(false);
 
   const targetName = machine.type === 'all_tables' ? 'TABLE' : machine.name;
   const actions = ACTIONS_BY_TYPE[machine.type] ?? [];
@@ -167,6 +172,29 @@ export default function MachineActionModal({ machine, agentConnected, onClose, o
     onIncidentCreated();
   };
 
+  const openLabelEdit = () => {
+    setEditDisplayName(labels?.display_name || machine.label);
+    setEditTechName(labels?.technical_name || '');
+    setEditingLabels(true);
+  };
+
+  const saveLabels = async () => {
+    setSavingLabels(true);
+    try {
+      await api.put(`/api/bar/machine-labels/${machine.name}`, {
+        display_name: editDisplayName,
+        technical_name: editTechName,
+      });
+      toast.success('Noms mis à jour');
+      setEditingLabels(false);
+      onLabelsUpdated();
+    } catch {
+      toast.error('Erreur lors de la sauvegarde');
+    } finally {
+      setSavingLabels(false);
+    }
+  };
+
   const unresolvedCount = machineIncidents.filter((i) => !i.resolved).length;
 
   return (
@@ -175,11 +203,70 @@ export default function MachineActionModal({ machine, agentConnected, onClose, o
         <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b">
-            <h2 className="text-lg font-semibold text-gray-900">{machine.label}</h2>
-            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-gray-900 truncate">
+                  {labels?.display_name || machine.label}
+                </h2>
+                {labels?.technical_name && (
+                  <p className="text-xs text-gray-400">{labels.technical_name}</p>
+                )}
+              </div>
+              {isAdmin && !editingLabels && (
+                <button
+                  onClick={openLabelEdit}
+                  className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-gray-100 rounded-lg transition flex-shrink-0"
+                  title="Renommer"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg transition flex-shrink-0">
               <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
+
+          {editingLabels && (
+            <div className="px-6 py-3 border-b bg-gray-50 space-y-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nom d'affichage</label>
+                <input
+                  type="text"
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg"
+                  placeholder={machine.label}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Nom technique</label>
+                <input
+                  type="text"
+                  value={editTechName}
+                  onChange={(e) => setEditTechName(e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg"
+                  placeholder={machine.name}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setEditingLabels(false)}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={saveLabels}
+                  disabled={savingLabels}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition disabled:opacity-50"
+                >
+                  {savingLabels ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Tabs */}
           <div className="flex border-b px-6">

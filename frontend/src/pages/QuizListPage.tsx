@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, RefreshCw, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Eye, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
-import SyncQuizModal from '../components/Quiz/SyncQuizModal';
 import QuizRecapModal from '../components/Quiz/QuizRecapModal';
 
 interface QuizRow {
@@ -22,7 +21,6 @@ export default function QuizListPage() {
   const [quizzes, setQuizzes] = useState<QuizRow[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [importOpen, setImportOpen] = useState(false);
   const [recapQuiz, setRecapQuiz] = useState<{ id: string; name: string } | null>(null);
 
   const load = async () => {
@@ -69,15 +67,17 @@ export default function QuizListPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Quiz</h1>
-        {canEdit && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setImportOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Synchroniser Contentful
-            </button>
+        <div className="flex items-center gap-3">
+          <a
+            href="http://gestion.invader.bar/quizz.php"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition"
+          >
+            <Play className="w-4 h-4" />
+            Animer un quiz
+          </a>
+          {canEdit && (
             <Link
               to="/contenus/quiz/new"
               className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
@@ -85,8 +85,8 @@ export default function QuizListPage() {
               <Plus className="w-4 h-4" />
               Créer un quiz
             </Link>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="relative mb-4">
@@ -191,13 +191,6 @@ export default function QuizListPage() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {importOpen && (
-        <SyncQuizModal
-          onClose={() => setImportOpen(false)}
-          onImported={load}
-        />
       )}
 
       {recapQuiz && (

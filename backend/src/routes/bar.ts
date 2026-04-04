@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { isAgentConnected, sendCommand } from '../websocket/agent-bridge.js';
+import { isAgentConnected, sendCommand, getPingStatus } from '../websocket/agent-bridge.js';
 
 export const barRoutes = Router();
 
@@ -30,6 +30,63 @@ barRoutes.post('/execute-command', async (req, res) => {
   } catch (err: any) {
     console.error('Execute command error:', err);
     res.status(503).json({ status: 'error', message: err.message ?? 'Erreur agent' });
+  }
+});
+
+// ── Ping status ────────────────────────────────────────────────────
+
+barRoutes.get('/ping-status', (_req, res) => {
+  res.json({ status: 'success', results: getPingStatus() });
+});
+
+// ── Machine labels ──────────────────────────────────────────────────
+
+barRoutes.get('/machine-labels', async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('machine_labels')
+      .select('machine_name, display_name, technical_name');
+
+    if (error) throw error;
+
+    const labels: Record<string, { display_name: string; technical_name: string }> = {};
+    for (const row of data ?? []) {
+      labels[row.machine_name] = {
+        display_name: row.display_name,
+        technical_name: row.technical_name,
+      };
+    }
+
+    res.json({ status: 'success', labels });
+  } catch (err) {
+    console.error('Machine labels list error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+barRoutes.put('/machine-labels/:machineName', requireRole('admin'), async (req, res) => {
+  try {
+    const { machineName } = req.params;
+    const { display_name, technical_name } = req.body;
+
+    if (typeof display_name !== 'string' || typeof technical_name !== 'string') {
+      res.status(400).json({ status: 'error', message: 'display_name et technical_name requis' });
+      return;
+    }
+
+    const { error } = await supabaseAdmin
+      .from('machine_labels')
+      .upsert(
+        { machine_name: machineName, display_name, technical_name },
+        { onConflict: 'machine_name' },
+      );
+
+    if (error) throw error;
+
+    res.json({ status: 'success' });
+  } catch (err) {
+    console.error('Machine label update error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
   }
 });
 

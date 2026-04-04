@@ -7,14 +7,13 @@ import {
   Languages,
   BookOpen,
   Swords,
-  Music,
-  Skull,
   Upload,
   Wallet,
   ArrowRight,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface DashCard {
   title: string;
@@ -23,27 +22,24 @@ interface DashCard {
   disabled?: boolean;
   badge?: string;
   description: string;
-  roles: string[];
+  pageKey: string;
 }
 
 const CONTENUS: DashCard[] = [
-  { title: 'Carte', icon: UtensilsCrossed, path: '/contenus/carte', description: 'Menu, catégories et produits', roles: ['admin', 'salarie'] },
-  { title: 'Jeux', icon: Gamepad2, path: '/contenus/jeux', description: 'Bornes, consoles et catalogue', roles: ['admin', 'salarie'] },
-  { title: 'Support médias', icon: Monitor, path: '/contenus/medias', description: 'TV, projecteur et diffusion', roles: ['admin', 'salarie'] },
-  { title: 'Traductions', icon: Languages, path: '/contenus/traductions', description: 'Textes multilingues', roles: ['admin', 'salarie'] },
+  { title: 'Carte', icon: UtensilsCrossed, path: '/contenus/carte', description: 'Menu, catégories et produits', pageKey: 'contenus/carte' },
+  { title: 'Jeux', icon: Gamepad2, path: '/contenus/jeux', description: 'Bornes, consoles et catalogue', pageKey: 'contenus/jeux' },
+  { title: 'Support médias', icon: Monitor, path: '/contenus/medias', description: 'TV, projecteur et diffusion', pageKey: 'contenus/medias' },
+  { title: 'Traductions', icon: Languages, path: '/contenus/traductions', description: 'Textes multilingues', pageKey: 'contenus/traductions' },
 ];
 
 const EVENEMENTS: DashCard[] = [
-  { title: 'Quiz', icon: BookOpen, path: '/contenus/quiz', description: 'Questions, thèmes et médias', roles: ['admin', 'salarie', 'externe'] },
-  { title: 'Battle Royal', icon: Swords, path: '/evenements/battle-questions', description: 'Questions pour les battles', roles: ['admin', 'salarie'] },
-  { title: 'Mario Kart', icon: Gamepad2, disabled: true, badge: 'Bientôt', description: 'Tournois Mario Kart', roles: ['admin', 'salarie'] },
-  { title: 'Blindtest', icon: Music, disabled: true, badge: 'Bientôt', description: 'Soirées blindtest', roles: ['admin', 'salarie'] },
-  { title: 'Manoir du crime', icon: Skull, disabled: true, badge: 'Bientôt', description: 'Escape game', roles: ['admin', 'salarie'] },
+  { title: 'Quiz', icon: BookOpen, path: '/contenus/quiz', description: 'Questions, thèmes et médias', pageKey: 'contenus/quiz' },
+  { title: 'Battle Royal', icon: Swords, path: '/evenements/battle-questions', description: 'Questions pour les battles', pageKey: 'evenements/battle-questions' },
 ];
 
 const UTILITAIRES: DashCard[] = [
-  { title: 'Import finances', icon: Upload, path: '/utilitaires/import-finances', description: 'Import des données comptables', roles: ['admin'] },
-  { title: 'Comptabilité', icon: Wallet, path: '/utilitaires/comptabilite', description: 'Gestion des flux d\'espèces', roles: ['admin'] },
+  { title: 'Import finances', icon: Upload, path: '/utilitaires/import-finances', description: 'Import des données comptables', pageKey: 'utilitaires/import-finances' },
+  { title: 'Comptabilité', icon: Wallet, path: '/utilitaires/comptabilite', description: 'Gestion des flux d\'espèces', pageKey: 'utilitaires/comptabilite' },
 ];
 
 const SECTIONS = [
@@ -60,17 +56,17 @@ const SECTION_STYLES: Record<string, { heading: string; accent: string; iconBg: 
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { hasPageAccess } = usePermissions();
   const role = user?.role ?? 'externe';
 
   return (
     <div className="space-y-8">
-      {/* Welcome + Bar button */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-500 mt-1">Bienvenue sur le back-office Invader Master.</p>
         </div>
-        {(role === 'admin' || role === 'salarie') && (
+        {hasPageAccess(role, 'gestion-bar') && (
           <Link
             to="/gestion-bar"
             className="flex items-center gap-3 px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl shadow-lg shadow-amber-200/50 hover:shadow-amber-300/60 hover:scale-[1.02] transition-all font-medium"
@@ -82,10 +78,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* 3-column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {SECTIONS.map(({ title, items, color }) => {
-          const visible = items.filter((c) => c.roles.includes(role));
+          const visible = items.filter((c) => hasPageAccess(role, c.pageKey));
           if (visible.length === 0) return null;
           const s = SECTION_STYLES[color];
           return (

@@ -3,8 +3,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { MoreVertical, Loader, X, UserPlus } from 'lucide-react';
+import { MoreVertical, Loader, X, UserPlus, Save, Shield } from 'lucide-react';
 import { api } from '../lib/api';
+import { usePermissions, ALL_PAGES } from '../hooks/usePermissions';
 import type { UserProfile, Role } from '../types';
 import toast from 'react-hot-toast';
 
@@ -176,6 +177,8 @@ export default function UserManagementPage() {
         </table>
       </div>
 
+      <RolePermissionsSection />
+
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
@@ -244,6 +247,97 @@ export default function UserManagementPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const EDITABLE_ROLES: Role[] = ['salarie', 'externe'];
+
+function RolePermissionsSection() {
+  const { permissions, reload } = usePermissions();
+  const [draft, setDraft] = useState<Record<string, string[]>>({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft({
+      salarie: [...(permissions.salarie ?? [])],
+      externe: [...(permissions.externe ?? [])],
+    });
+  }, [permissions]);
+
+  const toggle = (role: string, pageKey: string) => {
+    setDraft((prev) => {
+      const list = prev[role] ?? [];
+      const next = list.includes(pageKey) ? list.filter((k) => k !== pageKey) : [...list, pageKey];
+      return { ...prev, [role]: next };
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      for (const role of EDITABLE_ROLES) {
+        await api.put(`/api/role-permissions/${role}`, { pages: draft[role] ?? [] });
+      }
+      await reload();
+      toast.success('Permissions enregistrées');
+    } catch {
+      toast.error('Erreur lors de la sauvegarde des permissions');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Shield className="w-5 h-5 text-primary-500" />
+          <h2 className="text-lg font-semibold text-gray-900">Permissions par rôle</h2>
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50"
+        >
+          <Save className="w-4 h-4" />
+          {saving ? 'Enregistrement...' : 'Enregistrer'}
+        </button>
+      </div>
+
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Page</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Admin</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Salarié</th>
+              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Externe</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {ALL_PAGES.map((page) => (
+              <tr key={page.key} className="hover:bg-gray-50">
+                <td className="px-6 py-3 text-sm text-gray-900">{page.label}</td>
+                <td className="px-6 py-3 text-center">
+                  <input type="checkbox" checked disabled className="w-4 h-4 rounded accent-primary-500" />
+                </td>
+                {EDITABLE_ROLES.map((role) => (
+                  <td key={role} className="px-6 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={(draft[role] ?? []).includes(page.key)}
+                      onChange={() => toggle(role, page.key)}
+                      className="w-4 h-4 rounded accent-primary-500 cursor-pointer"
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -152,6 +152,39 @@ while ($true) {
                 $responseSegment = New-Object System.ArraySegment[byte] $responseBytes, 0, $responseBytes.Length
                 $ws.SendAsync($responseSegment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).Wait() | Out-Null
             }
+
+            # Handle ping_all - read cached ping results file
+            if ($msg.type -eq "ping_all") {
+                $pingFile = Join-Path $PSScriptRoot "ping_results.json"
+                $pingResponse = @{ type = "ping_status"; results = @{} }
+
+                if (Test-Path $pingFile) {
+                    try {
+                        $content = Get-Content $pingFile -Raw -Encoding UTF8 | ConvertFrom-Json
+                        $fileAge = ((Get-Date) - (Get-Item $pingFile).LastWriteTime).TotalMinutes
+                        if ($fileAge -le 10) {
+                            $resultsHash = @{}
+                            $content.results.PSObject.Properties | ForEach-Object {
+                                $resultsHash[$_.Name] = [bool]$_.Value
+                            }
+                            $pingResponse.results = $resultsHash
+                            Write-Host "[ping] Resultats lus ($($resultsHash.Count) machines, age: $([math]::Round($fileAge,1)) min)" -ForegroundColor Green
+                        } else {
+                            Write-Host "[ping] Fichier trop ancien ($([math]::Round($fileAge,1)) min), resultats ignores" -ForegroundColor Yellow
+                        }
+                    }
+                    catch {
+                        Write-Host "[ping] Erreur lecture fichier: $_" -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "[ping] Fichier ping_results.json introuvable" -ForegroundColor Yellow
+                }
+
+                $pingJson = $pingResponse | ConvertTo-Json -Compress -Depth 4
+                $pingBytes = [System.Text.Encoding]::UTF8.GetBytes($pingJson)
+                $pingSeg = New-Object System.ArraySegment[byte] $pingBytes, 0, $pingBytes.Length
+                $ws.SendAsync($pingSeg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).Wait() | Out-Null
+            }
         }
     }
     catch {

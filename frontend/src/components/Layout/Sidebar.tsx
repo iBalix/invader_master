@@ -1,5 +1,5 @@
 /**
- * Sidebar - Menu lateral filtre par role
+ * Sidebar - Menu lateral filtre par permissions dynamiques
  */
 
 import { useState } from 'react';
@@ -8,8 +8,6 @@ import {
   LayoutDashboard,
   Gamepad2,
   Swords,
-  Music,
-  Skull,
   Beer,
   UtensilsCrossed,
   Monitor,
@@ -23,6 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import type { Role } from '../../types';
 
 interface SidebarLinkItem {
@@ -30,25 +29,26 @@ interface SidebarLinkItem {
   title: string;
   icon: LucideIcon;
   path: string;
-  roles: Role[];
+  pageKey: string;
   disabled?: boolean;
   badgeText?: string;
   separator?: boolean;
 }
 
+interface SidebarSubItem {
+  title: string;
+  icon: LucideIcon;
+  disabled: boolean;
+  badgeText?: string;
+  path?: string;
+  pageKey?: string;
+}
+
 interface SidebarAccordionItem {
   kind: 'accordion';
   title: string;
-  roles: Role[];
   defaultOpen?: boolean;
-  items: Array<{
-    title: string;
-    icon: LucideIcon;
-    disabled: boolean;
-    badgeText?: string;
-    path?: string;
-    roles?: Role[];
-  }>;
+  items: SidebarSubItem[];
 }
 
 type SidebarItem = SidebarLinkItem | SidebarAccordionItem;
@@ -59,48 +59,42 @@ const SIDEBAR_MENU: SidebarItem[] = [
     title: 'Dashboard',
     icon: LayoutDashboard,
     path: '/',
-    roles: ['admin', 'salarie'],
+    pageKey: 'dashboard',
   },
   {
     kind: 'link',
     title: 'Gestion bar',
     icon: Beer,
     path: '/gestion-bar',
-    roles: ['admin', 'salarie'],
+    pageKey: 'gestion-bar',
   },
   {
     kind: 'accordion',
     title: 'Contenus',
     defaultOpen: true,
-    roles: ['admin', 'salarie'],
     items: [
-      { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', roles: ['admin', 'salarie'] },
-      { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', roles: ['admin', 'salarie'] },
-      { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias', roles: ['admin', 'salarie'] },
-      { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions', roles: ['admin', 'salarie'] },
+      { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', pageKey: 'contenus/carte' },
+      { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', pageKey: 'contenus/jeux' },
+      { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias', pageKey: 'contenus/medias' },
+      { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions', pageKey: 'contenus/traductions' },
     ],
   },
   {
     kind: 'accordion',
     title: 'Evenement',
     defaultOpen: false,
-    roles: ['admin', 'salarie', 'externe'],
     items: [
-      { title: 'Mario Kart', icon: Gamepad2, disabled: true, badgeText: 'Bientot' },
-      { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', roles: ['admin', 'salarie', 'externe'] },
-      { title: 'Battle Royal', icon: Swords, disabled: false, path: '/evenements/battle-questions', roles: ['admin', 'salarie'] },
-      { title: 'Blindtest', icon: Music, disabled: true, badgeText: 'Bientot' },
-      { title: 'Manoir du crime', icon: Skull, disabled: true, badgeText: 'Bientot' },
+      { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', pageKey: 'contenus/quiz' },
+      { title: 'Battle Royal', icon: Swords, disabled: false, path: '/evenements/battle-questions', pageKey: 'evenements/battle-questions' },
     ],
   },
   {
     kind: 'accordion',
     title: 'Utilitaires',
     defaultOpen: false,
-    roles: ['admin'],
     items: [
-      { title: 'Import finances', icon: Upload, disabled: false, path: '/utilitaires/import-finances', roles: ['admin'] },
-      { title: 'Comptabilite', icon: Wallet, disabled: false, path: '/utilitaires/comptabilite', roles: ['admin'] },
+      { title: 'Import finances', icon: Upload, disabled: false, path: '/utilitaires/import-finances', pageKey: 'utilitaires/import-finances' },
+      { title: 'Comptabilite', icon: Wallet, disabled: false, path: '/utilitaires/comptabilite', pageKey: 'utilitaires/comptabilite' },
     ],
   },
   {
@@ -108,16 +102,24 @@ const SIDEBAR_MENU: SidebarItem[] = [
     title: 'Gestion des users',
     icon: Users,
     path: '/users',
-    roles: ['admin'],
+    pageKey: 'users',
     separator: true,
   },
 ];
 
 export default function Sidebar() {
   const { user } = useAuth();
+  const { hasPageAccess } = usePermissions();
   const role = user?.role ?? 'externe';
 
-  const filteredMenu = SIDEBAR_MENU.filter((item) => item.roles.includes(role));
+  const filteredMenu = SIDEBAR_MENU.filter((item) => {
+    if (item.kind === 'link') {
+      return hasPageAccess(role, item.pageKey);
+    }
+    return item.items.some(
+      (sub) => sub.pageKey && hasPageAccess(role, sub.pageKey),
+    );
+  });
 
   const [openAccordions, setOpenAccordions] = useState<Record<number, boolean>>(() => {
     const initial: Record<number, boolean> = {};
@@ -155,6 +157,7 @@ export default function Sidebar() {
                 open={!!openAccordions[index]}
                 onToggle={() => toggleAccordion(index)}
                 role={role}
+                hasPageAccess={hasPageAccess}
               />
             ) : (
               <LinkItem item={item} />
@@ -171,13 +174,17 @@ function AccordionSection({
   open,
   onToggle,
   role,
+  hasPageAccess,
 }: {
   item: SidebarAccordionItem;
   open: boolean;
   onToggle: () => void;
   role: Role;
+  hasPageAccess: (role: Role, pageKey: string) => boolean;
 }) {
-  const visibleItems = item.items.filter((sub) => !sub.roles || sub.roles.includes(role));
+  const visibleItems = item.items.filter(
+    (sub) => sub.disabled || (sub.pageKey && hasPageAccess(role, sub.pageKey)),
+  );
 
   if (visibleItems.length === 0) return null;
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   Plus, Trash2, Pencil, Sparkles, AlertTriangle,
-  Search, X, Info, Loader2, Filter,
+  Search, X, Info, Loader2, Filter, Play,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
@@ -174,13 +174,24 @@ export default function BattleQuestionsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Questions Battle Royal</h1>
-        <button
-          onClick={() => setModal({ open: true, editing: null })}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
-        >
-          <Plus className="w-4 h-4" />
-          Ajouter une question
-        </button>
+        <div className="flex items-center gap-3">
+          <a
+            href="http://gestion.invader.bar/battle.php"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition"
+          >
+            <Play className="w-4 h-4" />
+            Animer un Battle Royal
+          </a>
+          <button
+            onClick={() => setModal({ open: true, editing: null })}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
+          >
+            <Plus className="w-4 h-4" />
+            Ajouter une question
+          </button>
+        </div>
       </div>
 
       {/* Difficulty tabs */}
