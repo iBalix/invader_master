@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { AlertTriangle, Wifi, WifiOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, Wifi, WifiOff, ChevronDown, ChevronUp, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import MachineActionModal from '../components/Bar/MachineActionModal';
@@ -216,10 +216,10 @@ export default function BarManagementPage() {
                 )}
                 {downSides !== null && (
                   <span
-                    className="absolute -bottom-1.5 -left-1.5 flex items-center gap-0.5 bg-red-600 text-white rounded-full shadow px-1 py-0.5"
+                    className="absolute -top-1.5 -left-1.5 flex items-center gap-0.5 bg-red-600 text-white rounded-full shadow px-1 py-0.5"
                     title={downSides ? `Cote ${downSides} injoignable` : 'Injoignable'}
                   >
-                    <WifiOff className="w-3 h-3" />
+                    <Zap className="w-3 h-3" />
                     {downSides && <span className="text-[9px] font-bold leading-none">{downSides}</span>}
                   </span>
                 )}
