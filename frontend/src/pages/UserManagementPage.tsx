@@ -210,7 +210,7 @@ export default function UserManagementPage() {
                     value={formPassword}
                     onChange={(e) => setFormPassword(e.target.value)}
                     required
-                    minLength={6}
+                    minLength={4}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg"
                   />
                 </div>
