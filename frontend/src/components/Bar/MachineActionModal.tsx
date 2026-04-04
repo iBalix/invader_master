@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Play, Loader2, AlertTriangle, Plus, Pencil, Save } from 'lucide-react';
+import { X, Play, Loader2, AlertTriangle, Plus, Pencil, Save, Power, RefreshCw, XCircle, RotateCcw, Monitor, Gamepad2, Zap } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
 import type { MachineConfig, MachineType, MachineLabels, BarIncident } from '../../pages/BarManagementPage';
@@ -23,6 +24,14 @@ const BORNE_GAMES = [
   { label: 'Windjammers', value: 'wjammers.zip;fbneo_libretro.dll' },
   { label: 'Crash Team Racing', value: 'CrashTeamRacing/CrashTeamRacing.cue;swanstation_libretro.dll' },
   { label: 'Muggle (Manoir)', value: 'MUGGLE_MANOIR' },
+];
+
+const PROJO_MODES = [
+  { label: 'Invader', value: '' },
+  { label: 'Quizz', value: 'http://quizz.invader.bar?type=projecteur' },
+  { label: 'Battle Royale', value: 'http://quizz.invader.bar/battle.php?type=projecteur&hostname=PROJO' },
+  { label: 'TV', value: 'http://localhost/tv.php?type=projecteur&hostname=PROJO' },
+  { label: 'Stand Up', value: 'http://localhost/standup.php?type=projecteur&hostname=PROJO' },
 ];
 
 const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
@@ -60,6 +69,15 @@ const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
   ],
 };
 
+const COMMAND_ICONS: Record<string, LucideIcon> = {
+  restart_pc: Power,
+  restart_edge: RefreshCw,
+  close_game: XCircle,
+  clear_cache: RotateCcw,
+  reset_slave_screen: Monitor,
+  restart_usb: Gamepad2,
+};
+
 const VARIANT_CLASSES: Record<string, string> = {
   default: 'bg-gray-100 hover:bg-gray-200 text-gray-800',
   warning: 'bg-amber-100 hover:bg-amber-200 text-amber-800',
@@ -72,12 +90,13 @@ interface Props {
   machine: MachineConfig;
   agentConnected: boolean;
   labels?: MachineLabels;
+  pingStatus?: Record<string, boolean>;
   onClose: () => void;
   onIncidentCreated: () => void;
   onLabelsUpdated: () => void;
 }
 
-export default function MachineActionModal({ machine, agentConnected, labels, onClose, onIncidentCreated, onLabelsUpdated }: Props) {
+export default function MachineActionModal({ machine, agentConnected, labels, pingStatus, onClose, onIncidentCreated, onLabelsUpdated }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<Tab>('actions');
@@ -86,6 +105,7 @@ export default function MachineActionModal({ machine, agentConnected, labels, on
   const [loadingIncidents, setLoadingIncidents] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [selectedGame, setSelectedGame] = useState(BORNE_GAMES[0].value);
+  const [selectedProjoMode, setSelectedProjoMode] = useState(PROJO_MODES[0].value);
   const [editingLabels, setEditingLabels] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editTechName, setEditTechName] = useState('');
@@ -154,6 +174,27 @@ export default function MachineActionModal({ machine, agentConnected, labels, on
     }
   };
 
+  const handleChangeProjoMode = async () => {
+    setExecuting('projo_mode');
+    try {
+      await api.post('/api/bar/execute-command', {
+        command: 'url_edge_server',
+        targetName: 'PROJO',
+        gameName: selectedProjoMode,
+      });
+      await api.post('/api/bar/execute-command', {
+        command: 'restart_edge',
+        targetName: 'PROJO',
+      });
+      toast.success('Mode d\'affichage modifié');
+    } catch (err: any) {
+      const msg = err.response?.data?.message ?? 'Erreur lors de l\'exécution';
+      toast.error(msg);
+    } finally {
+      setExecuting(null);
+    }
+  };
+
   const handleToggleResolved = async (incident: BarIncident) => {
     try {
       await api.patch(`/api/bar/incidents/${incident.id}/resolve`, {
@@ -196,6 +237,20 @@ export default function MachineActionModal({ machine, agentConnected, labels, on
   };
 
   const unresolvedCount = machineIncidents.filter((i) => !i.resolved).length;
+
+  const getPingWarnings = (): string[] => {
+    if (!pingStatus || Object.keys(pingStatus).length === 0 || machine.type === 'all_tables') return [];
+    const warnings: string[] = [];
+    if (machine.type === 'table') {
+      const num = machine.name.replace('TABLE', '');
+      if (pingStatus[`TABLE${num}-1`] === false) warnings.push('côté mur');
+      if (pingStatus[`TABLE${num}-2`] === false) warnings.push('côté intérieur');
+    } else {
+      if (pingStatus[machine.name] === false) warnings.push('machine injoignable');
+    }
+    return warnings;
+  };
+  const pingWarnings = getPingWarnings();
 
   return (
     <>
@@ -309,23 +364,26 @@ export default function MachineActionModal({ machine, agentConnected, labels, on
                 )}
 
                 <div className="grid grid-cols-2 gap-2">
-                  {actions.map((action) => (
-                    <button
-                      key={action.command}
-                      disabled={!agentConnected || executing !== null}
-                      onClick={() => handleExecute(action)}
-                      className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                        VARIANT_CLASSES[action.variant ?? 'default']
-                      }`}
-                    >
-                      {executing === action.command ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Play className="w-4 h-4" />
-                      )}
-                      {action.label}
-                    </button>
-                  ))}
+                  {actions.map((action) => {
+                    const Icon = COMMAND_ICONS[action.command] ?? Play;
+                    return (
+                      <button
+                        key={action.command}
+                        disabled={!agentConnected || executing !== null}
+                        onClick={() => handleExecute(action)}
+                        className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                          VARIANT_CLASSES[action.variant ?? 'default']
+                        }`}
+                      >
+                        {executing === action.command ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Icon className="w-4 h-4" />
+                        )}
+                        {action.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {machine.type === 'borne' && (
@@ -357,6 +415,38 @@ export default function MachineActionModal({ machine, agentConnected, labels, on
                   </div>
                 )}
 
+                {machine.type === 'projo' && (
+                  <div className="mt-4 pt-4 border-t">
+                    <label className="block text-xs font-medium text-gray-500 mb-2">Mode d'affichage</label>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedProjoMode}
+                        onChange={(e) => setSelectedProjoMode(e.target.value)}
+                        disabled={!agentConnected || executing !== null}
+                        className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white disabled:opacity-50"
+                      >
+                        {PROJO_MODES.map((mode) => (
+                          <option key={mode.label} value={mode.value}>
+                            {mode.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        disabled={!agentConnected || executing !== null}
+                        onClick={handleChangeProjoMode}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-100 hover:bg-green-200 text-green-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {executing === 'projo_mode' ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
+                        Appliquer
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {canReport && (
                   <button
                     onClick={() => setShowReportModal(true)}
@@ -371,6 +461,16 @@ export default function MachineActionModal({ machine, agentConnected, labels, on
 
             {tab === 'incidents' && (
               <div className="space-y-3">
+                {pingWarnings.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
+                    <Zap className="w-4 h-4 flex-shrink-0" />
+                    <span>
+                      {machine.type === 'table'
+                        ? `Ne répond pas au ping : ${pingWarnings.join(', ')}`
+                        : 'Ne répond pas au ping'}
+                    </span>
+                  </div>
+                )}
                 {canReport && (
                   <button
                     onClick={() => setShowReportModal(true)}

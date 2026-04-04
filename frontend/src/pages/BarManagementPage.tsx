@@ -261,6 +261,7 @@ export default function BarManagementPage() {
           machine={selectedMachine}
           agentConnected={agentConnected}
           labels={machineLabels[selectedMachine.name]}
+          pingStatus={pingStatus}
           onClose={() => setSelectedMachine(null)}
           onIncidentCreated={loadIncidents}
           onLabelsUpdated={loadLabels}
