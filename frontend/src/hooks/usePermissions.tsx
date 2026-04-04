@@ -63,7 +63,7 @@ export function pathToPageKey(path: string): string | null {
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
   const [permissions, setPermissions] = useState<Record<Role, string[]>>(defaultPerms);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isAuthenticated);
 
   const load = useCallback(async () => {
     try {
