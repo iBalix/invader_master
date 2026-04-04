@@ -363,6 +363,17 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
                   </div>
                 )}
 
+                {pingWarnings.length > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
+                    <Zap className="w-4 h-4 flex-shrink-0" />
+                    <span>
+                      {machine.type === 'table'
+                        ? `Ne répond pas au ping : ${pingWarnings.join(', ')}`
+                        : 'Ne répond pas au ping'}
+                    </span>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   {actions.map((action) => {
                     const Icon = COMMAND_ICONS[action.command] ?? Play;

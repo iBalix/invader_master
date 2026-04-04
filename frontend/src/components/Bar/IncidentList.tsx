@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
-import type { BarIncident } from '../../pages/BarManagementPage';
+import type { BarIncident, MachineLabels } from '../../pages/BarManagementPage';
 
 type Filter = 'all' | 'open' | 'resolved';
 
 interface Props {
   incidents: BarIncident[];
+  machineLabels: Record<string, MachineLabels>;
   onUpdate: () => void;
 }
 
-export default function IncidentList({ incidents, onUpdate }: Props) {
+export default function IncidentList({ incidents, machineLabels, onUpdate }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -67,7 +68,8 @@ export default function IncidentList({ incidents, onUpdate }: Props) {
             <thead>
               <tr className="border-b text-left text-gray-500">
                 <th className="pb-2 pr-4 font-medium w-8">Résolu</th>
-                <th className="pb-2 pr-4 font-medium">Machine</th>
+                <th className="pb-2 pr-4 font-medium">Element</th>
+                <th className="pb-2 pr-4 font-medium">Poste</th>
                 <th className="pb-2 pr-4 font-medium">Raison</th>
                 <th className="pb-2 pr-4 font-medium">Description</th>
                 <th className="pb-2 font-medium">Date</th>
@@ -91,7 +93,12 @@ export default function IncidentList({ incidents, onUpdate }: Props) {
                       />
                     )}
                   </td>
-                  <td className="py-3 pr-4 font-medium whitespace-nowrap">{incident.machine_name}</td>
+                  <td className="py-3 pr-4 font-medium whitespace-nowrap">
+                    {machineLabels[incident.machine_name]?.display_name || incident.machine_name}
+                  </td>
+                  <td className="py-3 pr-4 whitespace-nowrap text-gray-500">
+                    {machineLabels[incident.machine_name]?.technical_name || '—'}
+                  </td>
                   <td className="py-3 pr-4">
                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
                       incident.resolved

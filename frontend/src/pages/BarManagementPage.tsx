@@ -250,7 +250,7 @@ export default function BarManagementPage() {
         </button>
         {showIncidents && (
           <div className="px-6 pb-6">
-            <IncidentList incidents={incidents} onUpdate={loadIncidents} />
+            <IncidentList incidents={incidents} machineLabels={machineLabels} onUpdate={loadIncidents} />
           </div>
         )}
       </div>
