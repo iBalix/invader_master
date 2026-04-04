@@ -82,6 +82,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated) {
+      setLoading(true);
       load();
     } else {
       setPermissions(defaultPerms);
