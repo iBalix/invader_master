@@ -7,6 +7,7 @@ import type { MachineConfig } from '../../pages/BarManagementPage';
 const REASONS = [
   'Aucune manette ne fonctionne',
   'Ecran tactile ne fonctionne pas',
+  'Ne répond pas au ping',
   'Table éteinte',
   'Autre',
 ];
