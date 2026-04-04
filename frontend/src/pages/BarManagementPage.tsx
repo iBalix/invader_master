@@ -72,8 +72,8 @@ const TYPE_ICONS: Partial<Record<MachineType, string>> = {
 
 const GRID_TEMPLATE = `
   "T02 .   .   T03 T05 .   .   T06"
-  ".   .   .   .   PRJ .   .   T07"
-  "B02 .   .   .   .   .   .   T08"
+  "B02 .   .   .   .   .   .   T07"
+  "CMP .   .   .   PRJ .   .   T08"
   "B01 .   .   .   .   .   .   T09"
   ".   .   .   .   .   .   .   T10"
   "BN4 .   .   T01 T04 .   .   BN1"
@@ -164,10 +164,7 @@ export default function BarManagementPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestion bar</h1>
-          <p className="text-gray-500 mt-1">Plan du bar — cliquez sur un élément pour interagir</p>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-900">Gestion bar</h1>
         <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
           agentConnected
             ? 'bg-green-100 text-green-700'
@@ -226,6 +223,12 @@ export default function BarManagementPage() {
               </button>
             );
           })}
+          <div
+            className="rounded-lg border-2 border-dashed border-gray-400 bg-gray-100 text-gray-500 font-bold text-xs flex items-center justify-center select-none"
+            style={{ gridArea: 'CMP' }}
+          >
+            Comptoir
+          </div>
         </div>
       </div>
 
