@@ -1,14 +1,20 @@
 import mysql from 'mysql2/promise';
 
-const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST,
-  port: Number(process.env.MYSQL_PORT) || 3306,
-  user: process.env.MYSQL_USER,
-  password: process.env.MYSQL_PASSWORD,
-  database: process.env.MYSQL_DATABASE,
-  waitForConnections: true,
-  connectionLimit: 5,
-  timezone: '+00:00',
-});
+let pool: mysql.Pool | null = null;
 
-export default pool;
+export function getMysqlPool(): mysql.Pool {
+  if (!pool) {
+    pool = mysql.createPool({
+      host: process.env.MYSQL_HOST ?? 'sr603743-001.eu.clouddb.ovh.net',
+      port: Number(process.env.MYSQL_PORT ?? 35305),
+      database: process.env.MYSQL_DATABASE ?? 'invader',
+      user: process.env.MYSQL_USER ?? 'invader',
+      password: process.env.MYSQL_PASSWORD ?? '',
+      waitForConnections: true,
+      connectionLimit: 5,
+    });
+  }
+  return pool;
+}
+
+export default getMysqlPool;

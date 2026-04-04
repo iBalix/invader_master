@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import pool from '../config/mysql.js';
+import { getMysqlPool } from '../config/mysql.js';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 
 export const cashRoutes = Router();
@@ -10,6 +10,7 @@ cashRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
 
 cashRoutes.get('/', async (_req, res) => {
   try {
+    const pool = getMysqlPool();
     const [rows] = await pool.query<RowDataPacket[]>(
       'SELECT * FROM Cash ORDER BY date DESC'
     );
@@ -22,6 +23,7 @@ cashRoutes.get('/', async (_req, res) => {
 
 cashRoutes.get('/stats', async (_req, res) => {
   try {
+    const pool = getMysqlPool();
     const [totalRows] = await pool.query<RowDataPacket[]>(
       'SELECT COALESCE(SUM(montant), 0) AS total FROM Cash WHERE date >= DATE_SUB(NOW(), INTERVAL 30 DAY) AND montant > 0'
     );
@@ -49,6 +51,7 @@ cashRoutes.post('/', async (req, res) => {
       return;
     }
 
+    const pool = getMysqlPool();
     const [result] = await pool.query<ResultSetHeader>(
       'INSERT INTO Cash (responsable, montant, date, comment) VALUES (?, ?, NOW(), ?)',
       [responsable, Number(amount), comment ?? '']
@@ -69,6 +72,7 @@ cashRoutes.delete('/:id', async (req, res) => {
       return;
     }
 
+    const pool = getMysqlPool();
     await pool.query<ResultSetHeader>('DELETE FROM Cash WHERE id = ?', [id]);
     res.json({ status: 'success' });
   } catch (err) {
