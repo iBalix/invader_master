@@ -4,13 +4,23 @@ import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
 import type { MachineConfig } from '../../pages/BarManagementPage';
 
-const REASONS = [
-  'Aucune manette ne fonctionne',
-  'Ecran tactile ne fonctionne pas',
-  'Ne répond pas au ping',
-  'Table éteinte',
-  'Autre',
-];
+const REASONS_BY_TYPE: Record<string, string[]> = {
+  table: [
+    'Aucune manette ne fonctionne',
+    'Ecran tactile ne fonctionne pas',
+    'Ne répond pas au ping',
+    'Table éteinte',
+    'Autre',
+  ],
+  borne: [
+    'Ne répond pas au ping',
+    'Borne éteinte',
+    'Autre',
+  ],
+  projo: [
+    'Autre',
+  ],
+};
 
 interface Props {
   machine: MachineConfig;
@@ -19,7 +29,8 @@ interface Props {
 }
 
 export default function IncidentReportModal({ machine, onClose, onCreated }: Props) {
-  const [reason, setReason] = useState(REASONS[0]);
+  const reasons = REASONS_BY_TYPE[machine.type] ?? ['Autre'];
+  const [reason, setReason] = useState(reasons[0]);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -62,7 +73,7 @@ export default function IncidentReportModal({ machine, onClose, onCreated }: Pro
               onChange={(e) => setReason(e.target.value)}
               className="w-full rounded-lg border-gray-300 border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {REASONS.map((r) => (
+              {reasons.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
