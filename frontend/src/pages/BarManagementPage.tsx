@@ -65,10 +65,6 @@ const TYPE_COLORS: Record<MachineType, string> = {
   all_tables: 'bg-teal-600 hover:bg-teal-700',
 };
 
-const TYPE_ICONS: Partial<Record<MachineType, string>> = {
-  bar: '🖥',
-  tv: '🖥',
-};
 
 const GRID_TEMPLATE = `
   "T02 .   .   T03 T05 .   .   T06"
@@ -199,9 +195,6 @@ export default function BarManagementPage() {
                 className={`relative rounded-lg text-white font-bold text-xs flex flex-col items-center justify-center gap-0.5 transition-all shadow-md active:scale-95 cursor-pointer px-1 ${TYPE_COLORS[machine.type]}`}
                 style={{ gridArea: machine.gridArea }}
               >
-                {TYPE_ICONS[machine.type] && (
-                  <span className="text-base leading-none">{TYPE_ICONS[machine.type]}</span>
-                )}
                 <span className="truncate max-w-full leading-tight">{displayName}</span>
                 {techName && (
                   <span className="text-[9px] font-normal opacity-70 truncate max-w-full leading-tight">{techName}</span>
