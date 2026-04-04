@@ -75,9 +75,9 @@ const GRID_TEMPLATE = `
   ".   .   .   .   PRJ .   .   T07"
   "B02 .   .   .   .   .   .   T08"
   "B01 .   .   .   .   .   .   T09"
-  ".   .   .   T01 T04 .   .   T10"
-  "BN1 BN2 BN3 BN4 .   .   .   ."
-  "ALL TV1 TV2 TV3 .   .   .   ."
+  ".   .   .   .   .   .   .   T10"
+  "BN4 .   .   T01 T04 .   .   BN1"
+  "ALL TV1 TV2 TV3 .   BN3 .   BN2"
 `;
 
 export default function BarManagementPage() {
