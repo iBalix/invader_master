@@ -64,6 +64,7 @@ export default function QuestionModal({ initial, onSave, onClose, saving }: Prop
 
   const valid =
     form.question.trim() !== '' &&
+    form.difficulty.length > 0 &&
     form.answers.length === 4 &&
     form.answers.every((a) => a.trim() !== '');
 
@@ -101,7 +102,7 @@ export default function QuestionModal({ initial, onSave, onClose, saving }: Prop
 
           {/* Difficulty */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Difficulté</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Difficulté *</label>
             <div className="flex gap-2">
               {DIFFICULTIES.map((d) => (
                 <button
