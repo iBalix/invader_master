@@ -12,9 +12,9 @@ export const battleQuestionRoutes = Router();
 battleQuestionRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
 
 const DEFAULT_CATEGORIES = [
-  'Cinéma', 'Séries TV', 'Jeux-vidéo', 'Musique', 'Littérature',
-  'Géographie', 'Histoire', 'Sciences animaux & nature', 'Sport',
-  'Pop culture', 'Actualités & société', 'Culture générale et logique', 'Insolite',
+  'Actualités', 'Célébrités', 'Cinéma', 'Culture', 'Culture Pop',
+  'France', 'Géographie', 'Histoire', 'Jeux-vidéos', 'Mathématiques',
+  'Montpellier', 'Musique', 'Séries TV', 'Sport',
 ];
 
 const VALID_DIFFICULTIES = ['Facile', 'Moyen', 'Difficile'] as const;
