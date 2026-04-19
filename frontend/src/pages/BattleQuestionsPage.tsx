@@ -167,8 +167,6 @@ export default function BattleQuestionsPage() {
     return true;
   });
 
-  const usedThemes = [...new Set(questions.map((q) => q.theme))].sort();
-
   return (
     <div>
       {/* Header */}
@@ -337,7 +335,7 @@ export default function BattleQuestionsPage() {
                 className="pl-9 pr-8 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm appearance-none bg-white min-w-[180px]"
               >
                 <option value="">Toutes catégories</option>
-                {usedThemes.map((t) => (
+                {categories.map((t) => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>

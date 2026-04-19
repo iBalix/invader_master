@@ -84,8 +84,9 @@ battleQuestionRoutes.get('/categories', async (_req: Request, res: Response) => 
       'SELECT DISTINCT theme FROM battle_questions ORDER BY theme',
     );
 
-    const categories = (rows as any[]).map((r) => r.theme as string);
-    res.json({ status: 'success', categories: categories.length > 0 ? categories : DEFAULT_CATEGORIES });
+    const dbCategories = (rows as any[]).map((r) => r.theme as string);
+    const merged = [...new Set([...DEFAULT_CATEGORIES, ...dbCategories])].sort();
+    res.json({ status: 'success', categories: merged });
   } catch (err) {
     console.error('[battle-questions] GET /categories error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });
