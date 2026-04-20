@@ -18,6 +18,7 @@ export interface HomeFeatured {
   position: number;
   title: string;
   subtitle: string | null;
+  description: string | null;
   image_url: string | null;
   cta_label: string | null;
   cta_target: string | null;

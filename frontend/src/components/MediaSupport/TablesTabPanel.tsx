@@ -20,6 +20,7 @@ interface FeaturedItem {
   position: number;
   title: string;
   subtitle: string | null;
+  description?: string | null;
   image_url: string | null;
   lottie_url?: string | null;
   cta_label?: string | null;
@@ -105,6 +106,7 @@ export default function TablesTabPanel() {
               position: items.length,
               title: '',
               subtitle: '',
+              description: '',
               image_url: '',
               cta_label: '',
               cta_target: '',
@@ -248,6 +250,7 @@ function FeaturedEditModal({
         active: item.active,
       };
       if (subTab === 'home') {
+        payload.description = item.description?.trim() || null;
         payload.cta_label = item.cta_label?.trim() || null;
         payload.cta_target = item.cta_target?.trim() || null;
       }
@@ -347,6 +350,22 @@ function FeaturedEditModal({
           {subTab === 'home' && (
             <>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={item.description ?? ''}
+                  onChange={(e) => set('description', e.target.value)}
+                  rows={4}
+                  placeholder="Texte affiche dans la modale de detail (si la card n'a pas de CTA)."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 resize-y"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Affichee cote table tactile dans une modale au clic sur la card,
+                  uniquement quand aucun CTA n'est defini.
+                </p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Label CTA</label>
                 <input
                   type="text"
@@ -364,6 +383,9 @@ function FeaturedEditModal({
                   placeholder="/table/menu"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 font-mono text-xs"
                 />
+                <p className="mt-1 text-xs text-gray-400">
+                  Si rempli, la card devient un lien et la description ne s'affiche pas.
+                </p>
               </div>
             </>
           )}

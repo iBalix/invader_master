@@ -6,11 +6,17 @@
  *   - Plus de motion.div + AnimatePresence rotation pages : on fait
  *     un crossfade CSS simple (key change avec opacity transition).
  *   - Aspect "verre" via fond opaque sombre + bordure claire.
+ *
+ * Comportement clic :
+ *   - Si `cta_target` est defini : la card est un <a>, clic = navigation.
+ *   - Sinon : la card est un <button>, clic = ouvre une modale detail
+ *     (image grand format + titre + sous-titre + description).
  */
 
 import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { HomeFeatured } from '../../types';
+import ArcadeModal from '../ui/ArcadeModal';
 
 interface Props {
   items: HomeFeatured[];
@@ -21,6 +27,7 @@ const PAGE_SIZE = 3;
 
 export default function FeaturedCards({ items, rotateMs = 7000 }: Props) {
   const [page, setPage] = useState(0);
+  const [detail, setDetail] = useState<HomeFeatured | null>(null);
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
 
   useEffect(() => {
@@ -57,7 +64,7 @@ export default function FeaturedCards({ items, rotateMs = 7000 }: Props) {
     <div className="relative">
       <div key={page} className="grid grid-cols-3 gap-3 animate-soft-pop">
         {visible.map((item) => (
-          <FeaturedCard key={item.id} item={item} />
+          <FeaturedCard key={item.id} item={item} onSelect={setDetail} />
         ))}
         {visible.length < PAGE_SIZE &&
           Array.from({ length: PAGE_SIZE - visible.length }).map((_, i) => (
@@ -83,11 +90,22 @@ export default function FeaturedCards({ items, rotateMs = 7000 }: Props) {
           ))}
         </div>
       )}
+
+      <FeaturedDetailModal
+        item={detail}
+        open={detail !== null}
+        onClose={() => setDetail(null)}
+      />
     </div>
   );
 }
 
-function FeaturedCard({ item }: { item: HomeFeatured }) {
+interface CardProps {
+  item: HomeFeatured;
+  onSelect: (item: HomeFeatured) => void;
+}
+
+function FeaturedCard({ item, onSelect }: CardProps) {
   const card = (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-table-bg-elev/85 shadow-glass">
       <div className="relative h-24 w-full overflow-hidden">
@@ -131,5 +149,56 @@ function FeaturedCard({ item }: { item: HomeFeatured }) {
       </a>
     );
   }
-  return card;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item)}
+      className="block h-full w-full cursor-pointer text-left transition active:scale-[0.985]"
+    >
+      {card}
+    </button>
+  );
+}
+
+function FeaturedDetailModal({
+  item,
+  open,
+  onClose,
+}: {
+  item: HomeFeatured | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  if (!item) return null;
+  return (
+    <ArcadeModal open={open} onClose={onClose} size="xl" title={item.title}>
+      <div className="space-y-5">
+        {item.image_url && (
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+            <img
+              src={item.image_url}
+              alt={item.title}
+              className="h-full w-full object-cover"
+              draggable={false}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        )}
+
+        {item.subtitle && (
+          <div className="font-display text-lg uppercase tracking-wider text-table-ink-soft">
+            {item.subtitle}
+          </div>
+        )}
+
+        {item.description && (
+          <p className="whitespace-pre-wrap text-base leading-relaxed text-table-ink-soft">
+            {item.description}
+          </p>
+        )}
+      </div>
+    </ArcadeModal>
+  );
 }
