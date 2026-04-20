@@ -108,7 +108,7 @@ interface CardProps {
 function FeaturedCard({ item, onSelect }: CardProps) {
   const card = (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-table-bg-elev/85 shadow-glass">
-      <div className="relative h-24 w-full overflow-hidden">
+      <div className="relative h-28 w-full overflow-hidden">
         {item.image_url ? (
           <img
             src={item.image_url}
@@ -129,12 +129,12 @@ function FeaturedCard({ item, onSelect }: CardProps) {
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/15 to-transparent" />
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-1 px-3.5 py-2.5">
-        <div className="truncate font-display text-base uppercase tracking-wider text-table-ink">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-4 py-3">
+        <div className="truncate font-display text-lg uppercase tracking-wider text-table-ink">
           {item.title}
         </div>
         {item.subtitle && (
-          <div className="truncate text-xs text-table-ink-muted">
+          <div className="truncate text-sm text-table-ink-muted">
             {item.subtitle}
           </div>
         )}

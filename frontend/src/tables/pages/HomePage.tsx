@@ -109,11 +109,11 @@ export default function HomePage() {
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.5 }}
-        className="absolute bottom-8 right-12 flex w-[44rem] flex-col gap-3"
+        className="absolute bottom-8 right-12 flex w-[52rem] flex-col gap-4"
       >
         <div className="flex items-center gap-3 px-1">
           <span className="h-px flex-1 bg-gradient-to-r from-transparent to-white/15" />
-          <span className="font-retro text-[10px] uppercase tracking-[0.3em] text-table-ink-muted">
+          <span className="font-retro text-[11px] uppercase tracking-[0.3em] text-table-ink-muted">
             {t('table.home.featured.title', 'A l\'affiche')}
           </span>
           <span className="h-px w-12 bg-white/15" />

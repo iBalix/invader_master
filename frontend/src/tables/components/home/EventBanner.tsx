@@ -33,19 +33,19 @@ export default function EventBanner({ liveEvent, nextEvent }: Props) {
     const label =
       liveEvent.event_label || liveEvent.event_type?.toUpperCase() || 'EVENT EN COURS';
     return (
-      <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-table-magenta/40 bg-gradient-to-r from-table-magenta/30 via-[#7A0F73]/40 to-table-violet/30 px-4 py-3.5 shadow-neon-magenta">
-        <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/40 px-2.5 py-1 font-display text-[9px] uppercase tracking-widest text-white">
+      <div className="relative flex items-center gap-5 overflow-hidden rounded-2xl border border-table-magenta/40 bg-gradient-to-r from-table-magenta/30 via-[#7A0F73]/40 to-table-violet/30 px-5 py-4 shadow-neon-magenta">
+        <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-white/20 bg-black/40 px-2.5 py-1 font-display text-[10px] uppercase tracking-widest text-white">
           <span className="h-2 w-2 rounded-full bg-table-magenta" />
           LIVE
         </div>
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/15 text-table-ink">
-          <Radio className="h-6 w-6" />
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/20 bg-white/15 text-table-ink">
+          <Radio className="h-7 w-7" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-retro text-[9px] uppercase tracking-widest text-white/70">
+          <div className="font-retro text-[11px] uppercase tracking-widest text-white/70">
             {liveEvent.event_type ?? 'event'}
           </div>
-          <div className="truncate font-display text-xl uppercase tracking-wider text-table-ink">
+          <div className="truncate font-display text-2xl uppercase tracking-wider text-table-ink">
             {label}
           </div>
         </div>
@@ -55,10 +55,10 @@ export default function EventBanner({ liveEvent, nextEvent }: Props) {
             onClick={() => {
               window.location.href = liveEvent.redirect_url!;
             }}
-            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/15 px-4 py-2 font-display text-sm uppercase tracking-wider text-table-ink transition hover:bg-white/25"
+            className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/15 px-4 py-2.5 font-display text-base uppercase tracking-wider text-table-ink transition hover:bg-white/25"
           >
             Rejoindre
-            <ArrowRight className="h-4 w-4" />
+            <ArrowRight className="h-5 w-5" />
           </button>
         )}
       </div>
@@ -67,18 +67,18 @@ export default function EventBanner({ liveEvent, nextEvent }: Props) {
 
   if (nextEvent) {
     return (
-      <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-table-bg-elev/85 px-4 py-3.5 shadow-glass">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-table-violet/40 text-table-ink">
-          <Calendar className="h-6 w-6" />
+      <div className="flex items-center gap-5 rounded-2xl border border-white/10 bg-table-bg-elev/85 px-5 py-4 shadow-glass">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-table-violet/40 text-table-ink">
+          <Calendar className="h-7 w-7" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="font-retro text-[9px] uppercase tracking-widest text-table-cyan">
+          <div className="font-retro text-[11px] uppercase tracking-widest text-table-cyan">
             Prochain evenement
           </div>
-          <div className="truncate font-display text-xl uppercase tracking-wider text-table-ink">
+          <div className="truncate font-display text-2xl uppercase tracking-wider text-table-ink">
             {nextEvent.title || nextEvent.name || 'Evenement'}
           </div>
-          <div className="truncate text-xs text-table-ink-muted">
+          <div className="truncate text-sm text-table-ink-muted">
             {formatDate(nextEvent.date)}
           </div>
         </div>
@@ -87,15 +87,15 @@ export default function EventBanner({ liveEvent, nextEvent }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-dashed border-white/10 bg-table-bg-elev/70 px-4 py-3.5">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/5 text-table-ink-muted">
-        <Sparkles className="h-5 w-5" />
+    <div className="flex items-center gap-5 rounded-2xl border border-dashed border-white/10 bg-table-bg-elev/70 px-5 py-4">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/5 text-table-ink-muted">
+        <Sparkles className="h-6 w-6" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="font-display text-lg uppercase tracking-wider text-table-ink-soft">
+        <div className="font-display text-xl uppercase tracking-wider text-table-ink-soft">
           Pas d'event a l'horizon
         </div>
-        <div className="text-xs text-table-ink-muted">
+        <div className="text-sm text-table-ink-muted">
           Reste branche, on en programme chaque semaine.
         </div>
       </div>
