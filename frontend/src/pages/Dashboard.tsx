@@ -48,7 +48,7 @@ const EVENEMENTS: DashCard[] = [
 const TABLES_TACTILES: DashCard[] = [
   { title: 'Codes promo', icon: Tag, path: '/tables-tactiles/coupons', description: 'Réductions appliquables au panier', pageKey: 'tables-tactiles/coupons' },
   { title: 'Commandes', icon: ShoppingBag, path: '/tables-tactiles/orders', description: 'Suivi des commandes (KDS)', pageKey: 'tables-tactiles/orders' },
-  { title: 'Aperçu interface', icon: Tablet, path: '/table/home', description: 'Ouvre l\'écran d\'accueil d\'une table dans un nouvel onglet', pageKey: 'tables-tactiles/preview', external: true },
+  { title: 'Aperçu interface', icon: Tablet, path: '/table/home?hostname=TABLE01-1', description: 'Ouvre l\'écran d\'accueil d\'une table dans un nouvel onglet', pageKey: 'tables-tactiles/preview', external: true },
 ];
 
 const UTILITAIRES: DashCard[] = [

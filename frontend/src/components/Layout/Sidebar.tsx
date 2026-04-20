@@ -104,7 +104,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
     items: [
       { title: 'Codes promo', icon: Tag, disabled: false, path: '/tables-tactiles/coupons', pageKey: 'tables-tactiles/coupons' },
       { title: 'Commandes', icon: ShoppingBag, disabled: false, path: '/tables-tactiles/orders', pageKey: 'tables-tactiles/orders' },
-      { title: 'Apercu interface', icon: Tablet, disabled: false, path: '/table/home', pageKey: 'tables-tactiles/preview', external: true },
+      { title: 'Apercu interface', icon: Tablet, disabled: false, path: '/table/home?hostname=TABLE01-1', pageKey: 'tables-tactiles/preview', external: true },
     ],
   },
   {
