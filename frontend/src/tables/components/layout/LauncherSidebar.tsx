@@ -16,6 +16,7 @@
 
 import { useId, useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { ChevronDown } from 'lucide-react';
 import { usePerfMode } from '../../hooks/usePerfMode';
 
 export interface SidebarEntry {
@@ -30,6 +31,15 @@ export interface SidebarEntry {
    * en avant (ex: categorie Happy Hour active a l'instant T).
    */
   pulse?: boolean;
+  /**
+   * Categorie parente avec sous-categories : affiche un chevron de pliage
+   * a droite (rotation pilotee par `expanded`).
+   */
+  hasChildren?: boolean;
+  /**
+   * Etat plie/deplie de la categorie parente. Pilote la rotation du chevron.
+   */
+  expanded?: boolean;
 }
 
 interface Props {
@@ -39,6 +49,12 @@ interface Props {
   currentId: string | null;
   onSelect: (id: string) => void;
   showCount?: boolean;
+  /**
+   * Si true, insere un fin separateur avant chaque entree de profondeur 0
+   * (sauf la premiere). Aucun separateur entre les sous-categories
+   * (depth >= 1). Default: false.
+   */
+  showCategoryDividers?: boolean;
 }
 
 const ACCENT_BAR: Record<NonNullable<Props['accent']>, string> = {
@@ -66,6 +82,7 @@ export default function LauncherSidebar({
   currentId,
   onSelect,
   showCount = true,
+  showCategoryDividers = false,
 }: Props) {
   const perf = usePerfMode();
   const reactId = useId();
@@ -103,9 +120,21 @@ export default function LauncherSidebar({
         {title}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden px-3 pb-4">
-        {entries.map((e) => {
+        {entries.flatMap((e, i) => {
           const active = e.id === currentId;
-          return (
+          const nodes: React.ReactNode[] = [];
+
+          if (showCategoryDividers && i > 0 && (e.depth ?? 0) === 0) {
+            nodes.push(
+              <div
+                key={`divider-${e.id}`}
+                aria-hidden
+                className="my-1 mx-2 h-px shrink-0 bg-gradient-to-r from-transparent via-white/15 to-transparent"
+              />,
+            );
+          }
+
+          nodes.push(
             <button
               key={e.id}
               type="button"
@@ -177,8 +206,21 @@ export default function LauncherSidebar({
                   {e.count}
                 </span>
               )}
-            </button>
+
+              {e.hasChildren && (
+                <ChevronDown
+                  aria-hidden
+                  className={[
+                    'relative z-[1] h-5 w-5 shrink-0 transition-transform duration-200',
+                    active ? 'text-white/85' : 'text-table-ink-muted',
+                  ].join(' ')}
+                  style={{ transform: e.expanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+                />
+              )}
+            </button>,
           );
+
+          return nodes;
         })}
       </div>
     </aside>

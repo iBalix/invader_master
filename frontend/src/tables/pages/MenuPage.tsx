@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Beer } from 'lucide-react';
 import { useHostname } from '../hooks/useHostname';
 import { useCarte, type MenuCategory, type MenuProduct } from '../hooks/useCarte';
@@ -26,6 +27,7 @@ import CartDrawer from '../components/menu/CartDrawer';
 import CheckoutModal from '../components/menu/CheckoutModal';
 import RetroLoader from '../components/ui/RetroLoader';
 import AnimatedGrid, { AnimatedGridItem } from '../components/ui/AnimatedGrid';
+import { EASE_OUT_QUART } from '../lib/motion';
 import type { PricedCart } from '../types';
 
 function findCategory(cats: MenuCategory[], id: string): MenuCategory | null {
@@ -82,12 +84,30 @@ function isHappyHourCategoryWindow(now: Date): boolean {
   return minutes >= 17 * 60 + 30 && minutes < 19 * 60;
 }
 
-function flattenCategories(cats: MenuCategory[], now: Date): SidebarEntry[] {
+/**
+ * Construit la liste affichee dans la sidebar (mode accordeon) :
+ *   - Toujours toutes les categories de profondeur 0 visibles (avec un
+ *     chevron si elles ont des sous-categories).
+ *   - Les sous-categories sont injectees uniquement pour la categorie
+ *     parente actuellement depliee (`openParentId`).
+ * Les categories Happy Hour sont masquees hors fenetre (lun-ven 17h30-19h).
+ */
+function flattenCategories(
+  cats: MenuCategory[],
+  now: Date,
+  openParentId: string | null,
+): SidebarEntry[] {
   const inWindow = isHappyHourCategoryWindow(now);
   const out: SidebarEntry[] = [];
   for (const c of cats) {
     const isHH = isHappyHourCategory(c.name);
     if (isHH && !inWindow) continue; // cachee hors fenetre
+    const subs = c.subCategories ?? [];
+    const visibleSubs = subs.filter(
+      (sc) => !(isHappyHourCategory(sc.name) && !inWindow),
+    );
+    const hasChildren = visibleSubs.length > 0;
+    const expanded = hasChildren && c.id === openParentId;
     out.push({
       id: c.id,
       name: c.name,
@@ -96,19 +116,21 @@ function flattenCategories(cats: MenuCategory[], now: Date): SidebarEntry[] {
       emoji: c.iconEmoji,
       depth: 0,
       pulse: isHH,
+      hasChildren,
+      expanded,
     });
-    for (const sc of c.subCategories ?? []) {
-      const isSubHH = isHappyHourCategory(sc.name);
-      if (isSubHH && !inWindow) continue;
-      out.push({
-        id: sc.id,
-        name: sc.name,
-        count: sc.products?.length ?? 0,
-        imageUrl: sc.imageUrl,
-        emoji: sc.iconEmoji,
-        depth: 1,
-        pulse: isSubHH,
-      });
+    if (expanded) {
+      for (const sc of visibleSubs) {
+        out.push({
+          id: sc.id,
+          name: sc.name,
+          count: sc.products?.length ?? 0,
+          imageUrl: sc.imageUrl,
+          emoji: sc.iconEmoji,
+          depth: 1,
+          pulse: isHappyHourCategory(sc.name),
+        });
+      }
     }
   }
   return out;
@@ -134,6 +156,7 @@ export default function MenuPage() {
   const t = useT();
 
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [openParentId, setOpenParentId] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState<PricedCart | null>(null);
   const [detailProduct, setDetailProduct] = useState<MenuProduct | null>(null);
@@ -160,19 +183,61 @@ export default function MenuPage() {
     [currentCategory]
   );
   const sidebarEntries = useMemo(
-    () => flattenCategories(categories, now),
-    [categories, now]
+    () => flattenCategories(categories, now, openParentId),
+    [categories, now, openParentId]
   );
 
+  // Set des ids actuellement exposables (filtre Happy Hour applique a tous les
+  // niveaux), independamment de l'etat deplie/replie de la sidebar. Sert a
+  // detecter quand une categorie selectionnee disparait reellement (ex: la
+  // fenetre Happy Hour vient de se fermer).
+  const exposedIds = useMemo(() => {
+    const ids = new Set<string>();
+    const inWindow = isHappyHourCategoryWindow(now);
+    for (const c of categories) {
+      if (isHappyHourCategory(c.name) && !inWindow) continue;
+      ids.add(c.id);
+      for (const sc of c.subCategories ?? []) {
+        if (isHappyHourCategory(sc.name) && !inWindow) continue;
+        ids.add(sc.id);
+      }
+    }
+    return ids;
+  }, [categories, now]);
+
+  /**
+   * Clic sur une entree de la sidebar (mode accordeon) :
+   *   - Categorie de profondeur 0 avec sous-categories : toggle l'accordeon
+   *     (replie les autres) et selectionne la categorie parente.
+   *   - Categorie de profondeur 0 sans sous-categories : selectionne et
+   *     replie tout.
+   *   - Sous-categorie : selectionne, garde le parent ouvert.
+   */
+  function handleSelectCategory(id: string) {
+    const isTopLevel = categories.some((c) => c.id === id);
+    if (isTopLevel) {
+      const cat = categories.find((c) => c.id === id);
+      const hasChildren = (cat?.subCategories?.length ?? 0) > 0;
+      if (hasChildren) {
+        setOpenParentId((prev) => (prev === id ? null : id));
+      } else {
+        setOpenParentId(null);
+      }
+    }
+    setCurrentId(id);
+  }
+
   // Si la categorie selectionnee est masquee (ex: Happy Hour passee 19h),
-  // bascule automatiquement sur la premiere categorie visible.
+  // bascule automatiquement sur la premiere categorie visible. NE PAS se baser
+  // sur sidebarEntries (qui filtre selon openParentId) pour ne pas perdre la
+  // selection d'une sous-categorie quand on replie son parent.
   useEffect(() => {
     if (!currentId || sidebarEntries.length === 0) return;
-    const stillVisible = sidebarEntries.some((e) => e.id === currentId);
-    if (!stillVisible) {
+    if (!exposedIds.has(currentId)) {
       setCurrentId(sidebarEntries[0].id);
+      setOpenParentId(null);
     }
-  }, [currentId, sidebarEntries]);
+  }, [currentId, sidebarEntries, exposedIds]);
 
   const qtyByProduct = useMemo(() => {
     const map = new Map<string, number>();
@@ -213,8 +278,9 @@ export default function MenuPage() {
           accent="violet"
           entries={sidebarEntries}
           currentId={currentId}
-          onSelect={setCurrentId}
+          onSelect={handleSelectCategory}
           showCount={false}
+          showCategoryDividers
         />
 
         <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-table-bg-soft/85">
@@ -268,19 +334,38 @@ export default function MenuPage() {
         </section>
       </div>
 
-      <button
+      <style>{`
+        @keyframes order-cta-glow {
+          0%, 100% {
+            box-shadow:
+              0 0 22px 0 rgba(123, 43, 255, 0.55),
+              0 0 44px 0 rgba(123, 43, 255, 0.22);
+          }
+          50% {
+            box-shadow:
+              0 0 32px 6px rgba(255, 43, 214, 0.55),
+              0 0 64px 14px rgba(123, 43, 255, 0.38);
+          }
+        }
+      `}</style>
+      <motion.button
         type="button"
         onClick={() => setCartOpen(true)}
-        className="fixed bottom-8 right-8 z-40 flex items-center gap-3 rounded-full border border-white/20 bg-gradient-to-br from-table-violet to-table-violet-deep px-7 py-4 font-display text-lg uppercase tracking-wider text-white shadow-neon-violet transition-transform duration-150 active:scale-95"
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.45, ease: EASE_OUT_QUART, delay: 0.2 }}
+        whileTap={{ scale: 0.95 }}
+        style={{ animation: 'order-cta-glow 2.8s ease-in-out infinite' }}
+        className="fixed bottom-8 right-8 z-40 flex items-center gap-3 rounded-full border border-white/30 bg-gradient-to-br from-table-violet via-[#9C36FF] to-table-magenta px-9 py-5 font-display text-xl uppercase tracking-wider text-white"
       >
-        <Beer className="h-6 w-6" />
+        <Beer className="h-7 w-7" />
         {t('table.menu.order', 'Commander')}
         {totalQty() > 0 && (
-          <span className="ml-1 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full border border-white/25 bg-white/20 px-2 font-display text-sm text-white">
+          <span className="ml-1 flex h-8 min-w-[2rem] items-center justify-center rounded-full border border-white/30 bg-white/25 px-2.5 font-display text-base text-white">
             {totalQty()}
           </span>
         )}
-      </button>
+      </motion.button>
 
       <ProductDetailModal
         open={!!detailProduct}
