@@ -17,7 +17,6 @@ import GamesListPage from './pages/GamesListPage';
 import GameFormPage from './pages/GameFormPage';
 import ScreensConfigPage from './pages/ScreensConfigPage';
 import EventsPage from './pages/EventsPage';
-import DevicesPage from './pages/TablesTactiles/DevicesPage';
 import CouponsPage from './pages/TablesTactiles/CouponsPage';
 import OrdersPage from './pages/TablesTactiles/OrdersPage';
 import TranslationsPage from './pages/TranslationsPage';
@@ -75,7 +74,6 @@ export default function App() {
                     <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
                     <Route path="utilitaires/comptabilite" element={<CashManagementPage />} />
                     <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />
-                    <Route path="tables-tactiles/devices" element={<DevicesPage />} />
                     <Route path="tables-tactiles/coupons" element={<CouponsPage />} />
                     <Route path="tables-tactiles/orders" element={<OrdersPage />} />
                     <Route path="users" element={<UserManagementPage />} />

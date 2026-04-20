@@ -20,9 +20,9 @@ export const ALL_PAGES: PageDef[] = [
   { key: 'evenements/battle-questions', label: 'Battle Royal' },
   { key: 'utilitaires/import-finances', label: 'Import finances' },
   { key: 'utilitaires/comptabilite', label: 'Comptabilite' },
-  { key: 'tables-tactiles/devices', label: 'Tables tactiles - Bornes' },
   { key: 'tables-tactiles/coupons', label: 'Tables tactiles - Codes promo' },
   { key: 'tables-tactiles/orders', label: 'Tables tactiles - Commandes' },
+  { key: 'tables-tactiles/preview', label: 'Tables tactiles - Apercu interface (lien externe)' },
   { key: 'users', label: 'Gestion des users' },
 ];
 

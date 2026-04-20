@@ -22,6 +22,7 @@ import {
   Tablet,
   Tag,
   ShoppingBag,
+  ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -46,6 +47,9 @@ interface SidebarSubItem {
   badgeText?: string;
   path?: string;
   pageKey?: string;
+  // Si true, `path` est une URL absolue / interne hors back-office et est
+  // rendue via <a target="_blank"> au lieu d'un NavLink.
+  external?: boolean;
 }
 
 interface SidebarAccordionItem {
@@ -98,9 +102,9 @@ const SIDEBAR_MENU: SidebarItem[] = [
     title: 'Tables tactiles',
     defaultOpen: false,
     items: [
-      { title: 'Bornes', icon: Tablet, disabled: false, path: '/tables-tactiles/devices', pageKey: 'tables-tactiles/devices' },
       { title: 'Codes promo', icon: Tag, disabled: false, path: '/tables-tactiles/coupons', pageKey: 'tables-tactiles/coupons' },
       { title: 'Commandes', icon: ShoppingBag, disabled: false, path: '/tables-tactiles/orders', pageKey: 'tables-tactiles/orders' },
+      { title: 'Apercu interface', icon: Tablet, disabled: false, path: '/table/home', pageKey: 'tables-tactiles/preview', external: true },
     ],
   },
   {
@@ -218,6 +222,21 @@ function AccordionSection({
           {visibleItems.map((sub, subIndex) => {
             const SubIcon = sub.icon;
             if (!sub.disabled && sub.path) {
+              if (sub.external) {
+                return (
+                  <a
+                    key={subIndex}
+                    href={sub.path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-4 py-2 rounded-lg transition text-sm hover:bg-gray-800 text-gray-300"
+                  >
+                    <SubIcon className="w-4 h-4 flex-shrink-0" />
+                    <span>{sub.title}</span>
+                    <ExternalLink className="w-3 h-3 ml-auto text-gray-500 flex-shrink-0" />
+                  </a>
+                );
+              }
               return (
                 <NavLink
                   key={subIndex}

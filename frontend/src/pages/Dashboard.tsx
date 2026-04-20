@@ -14,6 +14,7 @@ import {
   Tag,
   ShoppingBag,
   ArrowRight,
+  ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -27,6 +28,8 @@ interface DashCard {
   badge?: string;
   description: string;
   pageKey: string;
+  // Si true, ouvre `path` dans un nouvel onglet via <a target="_blank">.
+  external?: boolean;
 }
 
 const CONTENUS: DashCard[] = [
@@ -43,9 +46,9 @@ const EVENEMENTS: DashCard[] = [
 ];
 
 const TABLES_TACTILES: DashCard[] = [
-  { title: 'Bornes', icon: Tablet, path: '/tables-tactiles/devices', description: 'Tables connectées', pageKey: 'tables-tactiles/devices' },
   { title: 'Codes promo', icon: Tag, path: '/tables-tactiles/coupons', description: 'Réductions appliquables au panier', pageKey: 'tables-tactiles/coupons' },
   { title: 'Commandes', icon: ShoppingBag, path: '/tables-tactiles/orders', description: 'Suivi des commandes (KDS)', pageKey: 'tables-tactiles/orders' },
+  { title: 'Aperçu interface', icon: Tablet, path: '/table/home', description: 'Ouvre l\'écran d\'accueil d\'une table dans un nouvel onglet', pageKey: 'tables-tactiles/preview', external: true },
 ];
 
 const UTILITAIRES: DashCard[] = [
@@ -102,6 +105,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {visible.map((card) => {
                   const Icon = card.icon;
+                  const TrailingIcon = card.external ? ExternalLink : ArrowRight;
                   const inner = (
                     <div className={`flex items-center gap-3 p-4 rounded-xl border bg-white transition group ${
                       card.disabled
@@ -123,13 +127,26 @@ export default function Dashboard() {
                         <p className="text-xs text-gray-400 mt-0.5 truncate">{card.description}</p>
                       </div>
                       {!card.disabled && (
-                        <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition shrink-0" />
+                        <TrailingIcon className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition shrink-0" />
                       )}
                     </div>
                   );
 
                   if (card.disabled || !card.path) {
                     return <div key={card.title}>{inner}</div>;
+                  }
+                  if (card.external) {
+                    return (
+                      <a
+                        key={card.title}
+                        href={card.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                      >
+                        {inner}
+                      </a>
+                    );
                   }
                   return (
                     <Link key={card.title} to={card.path} className="block">
