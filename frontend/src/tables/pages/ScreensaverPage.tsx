@@ -105,10 +105,6 @@ export default function ScreensaverPage() {
                 transition={{ delay: 0.2, duration: 0.5 }}
                 className="space-y-6 text-center lg:text-left"
               >
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-table-bg-elev/70 px-5 py-2 font-retro text-xs uppercase tracking-[0.3em] text-table-cyan">
-                  <span className="h-1.5 w-1.5 rounded-full bg-table-cyan" />
-                  {t('table.screensaver.featured', 'Mis en avant')}
-                </span>
                 <h2
                   className="font-display text-7xl leading-none tracking-wide text-table-ink"
                   style={{
