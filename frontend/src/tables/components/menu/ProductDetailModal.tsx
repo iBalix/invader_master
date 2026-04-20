@@ -2,7 +2,9 @@
  * Modale de detail produit (DA V3 launcher).
  *
  * Affiche :
- *   - Image grand format (object-contain pour respecter le ratio natif)
+ *   - Si product.videoUrl : video grand format en autoplay (muted),
+ *     puis fondu vers product.imageUrl ~0.5s avant la fin.
+ *   - Sinon : image grand format (object-contain, ratio natif).
  *   - Nom + sous-titre
  *   - Description complete
  *   - Prix (avec Happy Hour si applicable)
@@ -12,13 +14,20 @@
  * (gere par ArcadeModal).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Minus, Plus, ShoppingCart } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import ArcadeButton from '../ui/ArcadeButton';
 import type { MenuProduct } from '../../hooks/useCarte';
 import { formatPrice } from '../../lib/format';
 import { useT } from '../../i18n/useT';
+
+// Duree (en secondes) avant la fin de la video a partir de laquelle on
+// declenche le fondu vers l'image du produit.
+const FADE_LEAD_TIME_S = 0.5;
+// Duree CSS du fondu (doit rester proche de FADE_LEAD_TIME_S pour que le fondu
+// se termine pile a la fin de la video).
+const FADE_DURATION_MS = 500;
 
 interface Props {
   open: boolean;
@@ -39,12 +48,58 @@ export default function ProductDetailModal({
 }: Props) {
   const t = useT();
   const [qty, setQty] = useState(1);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  // videoEnded : la video a fini ET il y a une image vers laquelle basculer
+  // (la video est alors demontee, l'image reste seule).
+  const [videoEnded, setVideoEnded] = useState(false);
+  // videoFading : on est dans la phase de fondu vers l'image (les 0.5 dernieres s).
+  const [videoFading, setVideoFading] = useState(false);
 
   useEffect(() => {
-    if (open) setQty(1);
+    if (open) {
+      setQty(1);
+      setVideoEnded(false);
+      setVideoFading(false);
+    } else {
+      // Pause la video quand la modal se ferme pour ne pas la laisser tourner
+      // pendant l'animation de sortie d'ArcadeModal.
+      const v = videoRef.current;
+      if (v) {
+        try {
+          v.pause();
+        } catch {
+          /* noop */
+        }
+      }
+    }
   }, [open, product?.id]);
 
   if (!product) return null;
+
+  const hasImage = Boolean(product.imageUrl);
+  const hasVideo = Boolean(product.videoUrl);
+
+  function handleTimeUpdate() {
+    const v = videoRef.current;
+    if (!v) return;
+    // Pas de fondu si pas d'image cible : on laisse la video terminer
+    // naturellement sur sa derniere frame.
+    if (!hasImage) return;
+    const remaining = v.duration - v.currentTime;
+    if (Number.isFinite(remaining) && remaining <= FADE_LEAD_TIME_S && !videoFading) {
+      setVideoFading(true);
+    }
+  }
+
+  function handleVideoEnded() {
+    // On ne demonte la video que si une image peut prendre le relais.
+    if (hasImage) setVideoEnded(true);
+  }
+
+  function handleVideoError() {
+    // Si la video echoue, on retombe immediatement sur l'image (ou le placeholder).
+    setVideoEnded(true);
+  }
 
   const price = Number(product.price ?? 0);
   const priceHh = product.priceHh != null ? Number(product.priceHh) : null;
@@ -61,9 +116,9 @@ export default function ProductDetailModal({
     <ArcadeModal open={open} onClose={onClose} size="2xl">
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.1fr,1fr]">
         <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-          {product.imageUrl ? (
+          {hasImage ? (
             <img
-              src={product.imageUrl}
+              src={product.imageUrl ?? undefined}
               alt={product.name}
               className="h-full w-full object-contain"
               draggable={false}
@@ -80,6 +135,28 @@ export default function ProductDetailModal({
             >
               {t('table.menu.noImage', 'Pas d\'image')}
             </div>
+          )}
+
+          {hasVideo && !videoEnded && (
+            <video
+              ref={videoRef}
+              // re-mount a chaque ouverture / changement de produit pour
+              // garantir un replay propre depuis le debut.
+              key={`${product.id}-${open ? 'open' : 'closed'}`}
+              src={product.videoUrl ?? undefined}
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain bg-black"
+              style={{
+                opacity: videoFading ? 0 : 1,
+                transition: `opacity ${FADE_DURATION_MS}ms ease-out`,
+              }}
+              autoPlay
+              muted
+              playsInline
+              preload="auto"
+              onTimeUpdate={handleTimeUpdate}
+              onEnded={handleVideoEnded}
+              onError={handleVideoError}
+            />
           )}
 
           {hhActive && (

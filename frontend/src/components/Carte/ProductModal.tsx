@@ -15,6 +15,7 @@ export interface ProductData {
   price_second: number | null;
   icon_url: string | null;
   image_url: string | null;
+  video_url: string | null;
   display_order: number;
 }
 
@@ -30,6 +31,7 @@ const EMPTY: ProductData = {
   price_second: null,
   icon_url: null,
   image_url: null,
+  video_url: null,
   display_order: 100,
 };
 
@@ -58,6 +60,7 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
         price_second: initial.price_second ?? null,
         icon_url: initial.icon_url ?? null,
         image_url: initial.image_url ?? null,
+        video_url: initial.video_url ?? null,
         display_order: initial.display_order ?? 100,
       });
     }
@@ -204,6 +207,20 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
               />
               <p className="mt-1 text-xs text-gray-400">Minimum 1280 x 720 px</p>
             </div>
+          </div>
+
+          <div>
+            <FileUpload
+              label="Vidéo (optionnelle)"
+              accept="video/mp4,video/webm"
+              value={form.video_url}
+              onChange={(v) => set('video_url', v)}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              MP4 ou WebM, 50&nbsp;Mo max. Jouée automatiquement à l'ouverture de la
+              fiche produit sur les tables tactiles, puis fondu vers l'image HD à
+              0,5&nbsp;s de la fin. Conseil : 5–10&nbsp;s, 1280×720, sans son.
+            </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

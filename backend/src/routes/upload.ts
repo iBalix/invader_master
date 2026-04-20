@@ -7,16 +7,22 @@ import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
 const BUCKET = 'invader-assets';
-const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+// Limite globale a 50 MB pour permettre les videos courtes (mp4/webm).
+// Les images et audio restent largement sous cette limite.
+const MAX_SIZE = 50 * 1024 * 1024; // 50 MB
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE },
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('audio/')) {
+    if (
+      file.mimetype.startsWith('image/') ||
+      file.mimetype.startsWith('audio/') ||
+      file.mimetype.startsWith('video/')
+    ) {
       cb(null, true);
     } else {
-      cb(new Error('Seuls les fichiers image et audio sont acceptés'));
+      cb(new Error('Seuls les fichiers image, audio et video sont acceptés'));
     }
   },
 });
@@ -34,7 +40,11 @@ uploadRoutes.post('/', upload.single('file'), async (req, res) => {
     }
 
     const ext = path.extname(file.originalname).toLowerCase();
-    const folder = file.mimetype.startsWith('image/') ? 'images' : 'audio';
+    const folder = file.mimetype.startsWith('image/')
+      ? 'images'
+      : file.mimetype.startsWith('video/')
+        ? 'videos'
+        : 'audio';
     const storagePath = `${folder}/${randomUUID()}${ext}`;
 
     const { error: uploadError } = await supabaseAdmin.storage

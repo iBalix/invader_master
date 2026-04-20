@@ -37,6 +37,7 @@ export default function FileUpload({ label, accept, value, onChange }: FileUploa
   };
 
   const isImage = accept.includes('image');
+  const isVideo = accept.includes('video');
 
   return (
     <div>
@@ -49,6 +50,15 @@ export default function FileUpload({ label, accept, value, onChange }: FileUploa
               alt=""
               className="w-20 h-20 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition"
               onClick={() => setPreview(true)}
+            />
+          ) : isVideo ? (
+            <video
+              src={value}
+              className="w-32 h-20 object-cover rounded-lg border bg-black cursor-pointer hover:opacity-80 transition"
+              onClick={() => setPreview(true)}
+              muted
+              playsInline
+              preload="metadata"
             />
           ) : (
             <audio src={value} controls className="h-10" />
@@ -85,12 +95,23 @@ export default function FileUpload({ label, accept, value, onChange }: FileUploa
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 cursor-pointer"
           onClick={() => setPreview(false)}
         >
-          <img
-            src={value}
-            alt=""
-            className="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+          {isVideo ? (
+            <video
+              src={value}
+              className="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl bg-black"
+              onClick={(e) => e.stopPropagation()}
+              controls
+              autoPlay
+              playsInline
+            />
+          ) : (
+            <img
+              src={value}
+              alt=""
+              className="max-w-[90vw] max-h-[90vh] rounded-xl shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
         </div>
       )}
     </div>

@@ -16,6 +16,7 @@ export interface MenuProduct {
   price: number | string | null;
   priceHh?: number | string | null;
   imageUrl?: string | null;
+  videoUrl?: string | null;
   weight?: number;
 }
 
