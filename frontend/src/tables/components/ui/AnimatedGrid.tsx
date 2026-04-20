@@ -17,9 +17,10 @@
  *   </AnimatedGrid>
  */
 
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { usePerfMode } from '../../hooks/usePerfMode';
+import { EASE_OUT_QUART } from '../../lib/motion';
 
 interface GridProps {
   resetKey: string | number | null;
@@ -27,7 +28,7 @@ interface GridProps {
   children: ReactNode;
 }
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 1 },
   show: {
     opacity: 1,
@@ -38,13 +39,13 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 14, scale: 0.97 },
   show: {
     opacity: 1,
     y: 0,
     scale: 1,
-    transition: { duration: 0.32, ease: [0.32, 0.72, 0, 1] },
+    transition: { duration: 0.32, ease: EASE_OUT_QUART },
   },
 };
 

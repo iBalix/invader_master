@@ -20,6 +20,7 @@ import { useT } from '../i18n/useT';
 import EventBanner from '../components/home/EventBanner';
 import FeaturedCards from '../components/home/FeaturedCards';
 import LocaleSwitcher from '../components/layout/LocaleSwitcher';
+import { EASE_OUT_QUART } from '../lib/motion';
 
 export default function HomePage() {
   const identity = useHostname();
@@ -53,7 +54,7 @@ export default function HomePage() {
           <motion.h1
             initial={{ y: 30, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.7, delay: 0.1, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ duration: 0.7, delay: 0.1, ease: EASE_OUT_QUART }}
             className="font-display text-[12rem] leading-[0.85] tracking-tight text-table-ink"
             style={{
               textShadow:

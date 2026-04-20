@@ -14,6 +14,7 @@ import type { PricedCart } from '../../types';
 import ArcadeButton from '../ui/ArcadeButton';
 import GoogleReviewModal from './GoogleReviewModal';
 import CouponModal from './CouponModal';
+import { EASE_OUT_QUART } from '../../lib/motion';
 
 interface Props {
   open: boolean;
@@ -86,7 +87,7 @@ export default function CartDrawer({ open, onClose, hostname, onCheckout }: Prop
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'tween', duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ type: 'tween', duration: 0.3, ease: EASE_OUT_QUART }}
             className="relative flex h-full w-full max-w-md flex-col border-l border-white/10 bg-table-bg-elev shadow-glass"
           >
             {/* halo violet doux gauche */}

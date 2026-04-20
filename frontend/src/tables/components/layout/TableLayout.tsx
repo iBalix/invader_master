@@ -22,6 +22,7 @@ import { useHeartbeat } from '../../hooks/useHeartbeat';
 import { useSlaveGameSync } from '../../hooks/useSlaveGameSync';
 import { usePerfMode } from '../../hooks/usePerfMode';
 import ParticlesBackground from '../fx/ParticlesBackground';
+import { EASE_OUT_QUART } from '../../lib/motion';
 
 const IDLE_TIMEOUT_MS = 90_000;
 const BG_IMAGE_URL = '/table-bg.png';
@@ -163,7 +164,7 @@ export default function TableLayout() {
               exit="exit"
               transition={{
                 type: 'tween',
-                ease: [0.32, 0.72, 0, 1],
+                ease: EASE_OUT_QUART,
                 duration: direction === 'fade' ? 0.32 : 0.45,
               }}
               className="absolute inset-0 h-full w-full"
