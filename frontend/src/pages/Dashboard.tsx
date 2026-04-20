@@ -9,6 +9,10 @@ import {
   Swords,
   Upload,
   Wallet,
+  Calendar,
+  Tablet,
+  Tag,
+  ShoppingBag,
   ArrowRight,
   type LucideIcon,
 } from 'lucide-react';
@@ -28,13 +32,20 @@ interface DashCard {
 const CONTENUS: DashCard[] = [
   { title: 'Carte', icon: UtensilsCrossed, path: '/contenus/carte', description: 'Menu, catégories et produits', pageKey: 'contenus/carte' },
   { title: 'Jeux', icon: Gamepad2, path: '/contenus/jeux', description: 'Bornes, consoles et catalogue', pageKey: 'contenus/jeux' },
-  { title: 'Support médias', icon: Monitor, path: '/contenus/medias', description: 'TV, projecteur et diffusion', pageKey: 'contenus/medias' },
+  { title: 'Évènements', icon: Calendar, path: '/contenus/evenements', description: 'Quizz, soirées, tournois', pageKey: 'contenus/evenements' },
+  { title: 'Config écrans', icon: Monitor, path: '/contenus/config-ecrans', description: 'Projecteur, TV et tables tactiles', pageKey: 'contenus/medias' },
   { title: 'Traductions', icon: Languages, path: '/contenus/traductions', description: 'Textes multilingues', pageKey: 'contenus/traductions' },
 ];
 
 const EVENEMENTS: DashCard[] = [
   { title: 'Quiz', icon: BookOpen, path: '/contenus/quiz', description: 'Questions, thèmes et médias', pageKey: 'contenus/quiz' },
   { title: 'Battle Royal', icon: Swords, path: '/evenements/battle-questions', description: 'Questions pour les battles', pageKey: 'evenements/battle-questions' },
+];
+
+const TABLES_TACTILES: DashCard[] = [
+  { title: 'Bornes', icon: Tablet, path: '/tables-tactiles/devices', description: 'Tables connectées', pageKey: 'tables-tactiles/devices' },
+  { title: 'Codes promo', icon: Tag, path: '/tables-tactiles/coupons', description: 'Réductions appliquables au panier', pageKey: 'tables-tactiles/coupons' },
+  { title: 'Commandes', icon: ShoppingBag, path: '/tables-tactiles/orders', description: 'Suivi des commandes (KDS)', pageKey: 'tables-tactiles/orders' },
 ];
 
 const UTILITAIRES: DashCard[] = [
@@ -45,12 +56,14 @@ const UTILITAIRES: DashCard[] = [
 const SECTIONS = [
   { title: 'Contenus', items: CONTENUS, color: 'blue' },
   { title: 'Événements', items: EVENEMENTS, color: 'purple' },
+  { title: 'Tables tactiles', items: TABLES_TACTILES, color: 'pink' },
   { title: 'Utilitaires', items: UTILITAIRES, color: 'amber' },
 ] as const;
 
 const SECTION_STYLES: Record<string, { heading: string; accent: string; iconBg: string; iconText: string }> = {
   blue:   { heading: 'text-blue-700',   accent: 'border-blue-200', iconBg: 'bg-blue-100',   iconText: 'text-blue-600' },
   purple: { heading: 'text-purple-700', accent: 'border-purple-200', iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
+  pink:   { heading: 'text-pink-700',   accent: 'border-pink-200', iconBg: 'bg-pink-100',   iconText: 'text-pink-600' },
   amber:  { heading: 'text-amber-700',  accent: 'border-amber-200', iconBg: 'bg-amber-100',  iconText: 'text-amber-600' },
 };
 

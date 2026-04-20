@@ -1,3 +1,54 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ============================================================
+ * Scrollbars custom pour le module "tables tactiles" (DA V3 launcher).
+ * A appliquer via la classe `.tables-scroll` sur n'importe quel
+ * container avec overflow-y-auto / overflow-x-auto.
+ *
+ * - Track : tres sombre, presque transparent
+ * - Thumb : gradient violet -> magenta (couleurs du theme)
+ * - Width : fin (10px) mais visible, avec rounded
+ * - Hover : opacite renforcee
+ *
+ * Compatible Webkit (Chrome/Edge/Safari) + Firefox.
+ * ============================================================ */
+
+.tables-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(123, 43, 255, 0.6) rgba(15, 10, 36, 0.4);
+}
+
+.tables-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.tables-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 10, 36, 0.35);
+  border-radius: 10px;
+  margin: 4px;
+}
+
+.tables-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(123, 43, 255, 0.65), rgba(255, 43, 214, 0.55));
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 40px;
+}
+
+.tables-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(123, 43, 255, 0.95), rgba(255, 43, 214, 0.85));
+  background-clip: padding-box;
+}
+
+.tables-scroll::-webkit-scrollbar-thumb:active {
+  background: linear-gradient(180deg, rgba(123, 43, 255, 1), rgba(255, 43, 214, 1));
+  background-clip: padding-box;
+}
+
+.tables-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}

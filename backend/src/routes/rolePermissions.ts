@@ -11,11 +11,15 @@ const ALL_PAGE_KEYS = [
   'contenus/carte',
   'contenus/jeux',
   'contenus/medias',
+  'contenus/evenements',
   'contenus/traductions',
   'contenus/quiz',
   'evenements/battle-questions',
   'utilitaires/import-finances',
   'utilitaires/comptabilite',
+  'tables-tactiles/devices',
+  'tables-tactiles/coupons',
+  'tables-tactiles/orders',
   'users',
 ];
 

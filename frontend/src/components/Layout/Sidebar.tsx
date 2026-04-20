@@ -18,6 +18,10 @@ import {
   BookOpen,
   Upload,
   Wallet,
+  Calendar,
+  Tablet,
+  Tag,
+  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -75,7 +79,8 @@ const SIDEBAR_MENU: SidebarItem[] = [
     items: [
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', pageKey: 'contenus/carte' },
       { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', pageKey: 'contenus/jeux' },
-      { title: 'Support médias', icon: Monitor, disabled: false, path: '/contenus/medias', pageKey: 'contenus/medias' },
+      { title: 'Évènements', icon: Calendar, disabled: false, path: '/contenus/evenements', pageKey: 'contenus/evenements' },
+      { title: 'Config écrans', icon: Monitor, disabled: false, path: '/contenus/config-ecrans', pageKey: 'contenus/medias' },
       { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions', pageKey: 'contenus/traductions' },
     ],
   },
@@ -86,6 +91,16 @@ const SIDEBAR_MENU: SidebarItem[] = [
     items: [
       { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', pageKey: 'contenus/quiz' },
       { title: 'Battle Royal', icon: Swords, disabled: false, path: '/evenements/battle-questions', pageKey: 'evenements/battle-questions' },
+    ],
+  },
+  {
+    kind: 'accordion',
+    title: 'Tables tactiles',
+    defaultOpen: false,
+    items: [
+      { title: 'Bornes', icon: Tablet, disabled: false, path: '/tables-tactiles/devices', pageKey: 'tables-tactiles/devices' },
+      { title: 'Codes promo', icon: Tag, disabled: false, path: '/tables-tactiles/coupons', pageKey: 'tables-tactiles/coupons' },
+      { title: 'Commandes', icon: ShoppingBag, disabled: false, path: '/tables-tactiles/orders', pageKey: 'tables-tactiles/orders' },
     ],
   },
   {

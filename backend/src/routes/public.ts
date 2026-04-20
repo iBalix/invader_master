@@ -265,7 +265,7 @@ publicRoutes.get('/projector', async (_req, res) => {
       .single();
 
     const { data: events } = await supabaseAdmin
-      .from('projector_events')
+      .from('events')
       .select('*')
       .eq('active', true)
       .order('date', { ascending: true });
@@ -276,6 +276,27 @@ publicRoutes.get('/projector', async (_req, res) => {
     });
   } catch (err) {
     console.error('Public projector error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Next event a venir (table tactiles : teaser bloc events)
+publicRoutes.get('/events/next', async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('events')
+      .select('*')
+      .eq('active', true)
+      .gte('date', new Date().toISOString())
+      .order('date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    res.json({ event: data ? toCamel(data) : null });
+  } catch (err) {
+    console.error('Public next event error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

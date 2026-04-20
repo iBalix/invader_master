@@ -13,12 +13,16 @@ export const ALL_PAGES: PageDef[] = [
   { key: 'gestion-bar', label: 'Gestion bar' },
   { key: 'contenus/carte', label: 'Carte' },
   { key: 'contenus/jeux', label: 'Jeux' },
-  { key: 'contenus/medias', label: 'Support medias' },
+  { key: 'contenus/evenements', label: 'Evenements' },
+  { key: 'contenus/medias', label: 'Config ecrans' },
   { key: 'contenus/traductions', label: 'Traductions' },
   { key: 'contenus/quiz', label: 'Quiz' },
   { key: 'evenements/battle-questions', label: 'Battle Royal' },
   { key: 'utilitaires/import-finances', label: 'Import finances' },
   { key: 'utilitaires/comptabilite', label: 'Comptabilite' },
+  { key: 'tables-tactiles/devices', label: 'Tables tactiles - Bornes' },
+  { key: 'tables-tactiles/coupons', label: 'Tables tactiles - Codes promo' },
+  { key: 'tables-tactiles/orders', label: 'Tables tactiles - Commandes' },
   { key: 'users', label: 'Gestion des users' },
 ];
 
