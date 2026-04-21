@@ -37,7 +37,8 @@ export default function EventsPage() {
     setLoading(true);
     try {
       const { data } = await api.get('/api/events');
-      setEvents(data.events ?? data ?? []);
+      const list = data?.items ?? data?.events ?? data;
+      setEvents(Array.isArray(list) ? list : []);
     } catch {
       toast.error('Erreur lors du chargement');
     } finally {
