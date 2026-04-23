@@ -167,15 +167,20 @@ CREATE POLICY "authenticated read"
 -- ============================================================
 -- Verification : doit retourner 1 row par table tactile,
 -- avec rowsecurity = true et forcerowsecurity = false
+--
+-- NOTE : pg_tables n'expose PAS forcerowsecurity, c'est dans pg_class
+-- (relrowsecurity / relforcerowsecurity), d'ou le join sur pg_namespace.
 -- ============================================================
 SELECT
-  schemaname,
-  tablename,
-  rowsecurity,
-  forcerowsecurity
-FROM pg_tables
-WHERE schemaname = 'public'
-  AND tablename IN (
+  n.nspname              AS schemaname,
+  c.relname              AS tablename,
+  c.relrowsecurity       AS rowsecurity,
+  c.relforcerowsecurity  AS forcerowsecurity
+FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public'
+  AND c.relkind = 'r'
+  AND c.relname IN (
     'table_screensaver_featured',
     'table_home_featured',
     'live_event_state',
@@ -184,7 +189,7 @@ WHERE schemaname = 'public'
     'table_orders',
     'table_order_items'
   )
-ORDER BY tablename;
+ORDER BY c.relname;
 
 -- Liste des policies appliquees
 SELECT

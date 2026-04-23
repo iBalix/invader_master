@@ -17,13 +17,7 @@ tableHomeFeaturedRoutes.get('/', async (_req, res) => {
       .from('table_home_featured')
       .select('*')
       .order('position', { ascending: true });
-    if (error) {
-      console.error('[home-featured] GET supabase error:', error);
-      throw error;
-    }
-    console.log(
-      `[home-featured] GET -> ${data?.length ?? 0} item(s) | actives=${(data ?? []).filter((d) => d.active).length}`,
-    );
+    if (error) throw error;
     res.json({ status: 'success', items: data ?? [] });
   } catch (err) {
     console.error('List home featured error:', err);
