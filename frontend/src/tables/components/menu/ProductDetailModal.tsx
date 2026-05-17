@@ -36,6 +36,7 @@ interface Props {
   qtyInCart: number;
   onClose: () => void;
   onAdd: (qty: number) => void;
+  showAddControls?: boolean;
 }
 
 export default function ProductDetailModal({
@@ -45,6 +46,7 @@ export default function ProductDetailModal({
   qtyInCart,
   onClose,
   onAdd,
+  showAddControls = true,
 }: Props) {
   const t = useT();
   const [qty, setQty] = useState(1);
@@ -210,43 +212,47 @@ export default function ProductDetailModal({
               </span>
             </div>
 
-            <div className="mt-5 flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-3">
-              <span className="font-display text-xs uppercase tracking-widest text-table-ink-muted">
-                {t('table.menu.quantity', 'Quantite')}
-              </span>
-              <div className="ml-auto flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setQty((q) => Math.max(1, q - 1))}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-table-ink transition-transform duration-150 active:scale-90"
-                  aria-label="Moins"
-                >
-                  <Minus className="h-5 w-5" />
-                </button>
-                <span className="min-w-[2.5rem] text-center font-display text-2xl tabular-nums text-table-ink">
-                  {qty}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setQty((q) => Math.min(99, q + 1))}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-table-ink transition-transform duration-150 active:scale-90"
-                  aria-label="Plus"
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
+            {showAddControls && (
+              <>
+                <div className="mt-5 flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <span className="font-display text-xs uppercase tracking-widest text-table-ink-muted">
+                    {t('table.menu.quantity', 'Quantite')}
+                  </span>
+                  <div className="ml-auto flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setQty((q) => Math.max(1, q - 1))}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-table-ink transition-transform duration-150 active:scale-90"
+                      aria-label="Moins"
+                    >
+                      <Minus className="h-5 w-5" />
+                    </button>
+                    <span className="min-w-[2.5rem] text-center font-display text-2xl tabular-nums text-table-ink">
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setQty((q) => Math.min(99, q + 1))}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/8 text-table-ink transition-transform duration-150 active:scale-90"
+                      aria-label="Plus"
+                    >
+                      <Plus className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
 
-            <ArcadeButton
-              variant="primary"
-              size="lg"
-              fullWidth
-              onClick={handleAdd}
-              icon={<ShoppingCart className="h-5 w-5" />}
-              className="mt-5"
-            >
-              {t('table.menu.addCart', 'Ajouter')} - {formatPrice(total)}
-            </ArcadeButton>
+                <ArcadeButton
+                  variant="primary"
+                  size="lg"
+                  fullWidth
+                  onClick={handleAdd}
+                  icon={<ShoppingCart className="h-5 w-5" />}
+                  className="mt-5"
+                >
+                  {t('table.menu.addCart', 'Ajouter')} - {formatPrice(total)}
+                </ArcadeButton>
+              </>
+            )}
           </div>
         </div>
       </div>

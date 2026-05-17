@@ -48,7 +48,7 @@ export default function CheckoutModal({ open, onClose, hostname, priced }: Props
       const { data } = await tablesApi.post<{ order: CreatedOrder }>(
         `/${hostname}/orders`,
         {
-          items: items.map((i) => ({ productId: String(i.productId), quantity: i.qty })),
+          items: items.map((i) => ({ productId: String(i.realProductId ?? i.productId), quantity: i.qty })),
           couponCode,
           paymentMethod: m,
         }

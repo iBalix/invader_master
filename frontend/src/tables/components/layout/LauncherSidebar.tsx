@@ -14,10 +14,11 @@
  *   - Optionnellement un emoji discret a gauche si fourni.
  */
 
-import { useId, useMemo } from 'react';
+import { useId, useMemo, type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { usePerfMode } from '../../hooks/usePerfMode';
+import LucideIcon from '../../../lib/LucideIcon';
 
 export interface SidebarEntry {
   id: string;
@@ -40,6 +41,14 @@ export interface SidebarEntry {
    * Etat plie/deplie de la categorie parente. Pilote la rotation du chevron.
    */
   expanded?: boolean;
+  /**
+   * Nom d'icone Lucide (carte v2). Affichee a gauche du libelle.
+   */
+  iconName?: string | null;
+  /**
+   * Couleur hex (#RRGGBB) appliquee en background subtil sur l'item (carte v2).
+   */
+  color?: string | null;
 }
 
 interface Props {
@@ -55,6 +64,11 @@ interface Props {
    * (depth >= 1). Default: false.
    */
   showCategoryDividers?: boolean;
+  /**
+   * Slot rendu en bas de la sidebar, sous la liste d'entries (shrink-0).
+   * Utilise pour le bloc Happy Hour fixe sur la carte v2.
+   */
+  bottomSlot?: ReactNode;
 }
 
 const ACCENT_BAR: Record<NonNullable<Props['accent']>, string> = {
@@ -83,6 +97,7 @@ export default function LauncherSidebar({
   onSelect,
   showCount = true,
   showCategoryDividers = false,
+  bottomSlot,
 }: Props) {
   const perf = usePerfMode();
   const reactId = useId();
@@ -134,12 +149,13 @@ export default function LauncherSidebar({
             );
           }
 
+          const colorBg = e.color && !active ? `${e.color}22` : undefined;
           nodes.push(
             <button
               key={e.id}
               type="button"
               onClick={() => onSelect(e.id)}
-              style={{ maxHeight: maxH, minHeight: minH }}
+              style={{ maxHeight: maxH, minHeight: minH, backgroundColor: colorBg }}
               className={[
                 'group relative flex flex-1 items-center gap-3 rounded-xl px-4 text-left transition-colors duration-150 active:scale-[0.98]',
                 e.depth && e.depth > 0 ? 'ml-3' : '',
@@ -181,11 +197,20 @@ export default function LauncherSidebar({
                 />
               )}
 
-              {e.emoji && (
+              {e.iconName ? (
+                <LucideIcon
+                  name={e.iconName}
+                  className={[
+                    'relative z-[1] shrink-0 h-5 w-5',
+                    active ? 'text-white' : 'text-table-ink-muted group-hover:text-table-ink-soft',
+                  ].join(' ')}
+                  style={!active && e.color ? { color: e.color } : undefined}
+                />
+              ) : e.emoji ? (
                 <span className="relative z-[1] shrink-0 text-2xl leading-none">
                   {e.emoji}
                 </span>
-              )}
+              ) : null}
 
               <span
                 className={[
@@ -223,6 +248,7 @@ export default function LauncherSidebar({
           return nodes;
         })}
       </div>
+      {bottomSlot}
     </aside>
   );
 }

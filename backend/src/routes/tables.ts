@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { triggerSafe } from '../config/pusher.js';
+import { requireOrderingEnabled } from '../middleware/requireOrderingEnabled.js';
 
 export const tablesRoutes = Router();
 
@@ -355,7 +356,7 @@ tablesRoutes.post('/:hostname/orders/preview', async (req, res) => {
 // POST /public/tables/:hostname/orders
 // Body: { items: [{productId, quantity}], couponCode?, paymentMethod: 'card'|'cash', customerNote? }
 // ------------------------------------------------------------
-tablesRoutes.post('/:hostname/orders', async (req, res) => {
+tablesRoutes.post('/:hostname/orders', requireOrderingEnabled, async (req, res) => {
   const parsed = getHostnameFromReq(req);
   if (!parsed) {
     res.status(400).json({ status: 'error', message: 'hostname invalide' });

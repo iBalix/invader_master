@@ -23,6 +23,8 @@ import {
   Tag,
   ShoppingBag,
   ExternalLink,
+  Settings,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -82,6 +84,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
     defaultOpen: true,
     items: [
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', pageKey: 'contenus/carte' },
+      { title: 'Carte v2', icon: Sparkles, disabled: false, path: '/contenus/carte-v2', pageKey: 'contenus/carte' },
       { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', pageKey: 'contenus/jeux' },
       { title: 'Évènements', icon: Calendar, disabled: false, path: '/contenus/evenements', pageKey: 'contenus/evenements' },
       { title: 'Config écrans', icon: Monitor, disabled: false, path: '/contenus/config-ecrans', pageKey: 'contenus/medias' },

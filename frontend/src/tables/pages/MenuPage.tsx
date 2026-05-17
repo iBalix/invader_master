@@ -1,36 +1,43 @@
 /**
- * Ecran carte (DA V3 launcher glass).
+ * Ecran carte v2 (DA V3 launcher glass).
  *
  * Layout :
- *   - Header transparent : back + titre + happy hour badge
- *   - Sidebar gauche moderne (LauncherSidebar) sans scroll
- *   - Centre : panel, grid de produits
- *   - Click produit = ouvre ProductDetailModal
- *   - Bouton + sur la card = ajoute direct au panier
- *   - Bouton flottant panier (gradient violet, glow)
- *   - Drawer panier + modale paiement
+ *   - Header transparent : back + badge happy hour (titre supprime).
+ *   - Sidebar gauche moderne (LauncherSidebar) avec icones Lucide + tinted color
+ *     + bloc Happy Hour fixe en bas.
+ *   - Centre : liste verticale de ProductRow (plus de grid de cards).
+ *   - Click produit = ouvre ProductDetailModal.
+ *   - Bouton + sur la row (ou par conditionnement) = ajoute au panier.
+ *   - Bouton flottant panier (gradient violet, glow) - sera conditionne par
+ *     settings.orderingEnabled en M5.
+ *   - Indicateur de scroll en bas du panneau.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Beer } from 'lucide-react';
 import { useHostname } from '../hooks/useHostname';
-import { useCarte, type MenuCategory, type MenuProduct } from '../hooks/useCarte';
-import { useCart } from '../store/cartStore';
+import { useCarteV2, type MenuCategoryV2, type MenuProductV2, type MenuConditioningV2, type MenuVariantV2 } from '../hooks/useCarteV2';
+import { useCarteSettings } from '../hooks/useCarteSettings';
+import { useCart, buildCartKey } from '../store/cartStore';
 import { useT } from '../i18n/useT';
 import HeaderBar from '../components/layout/HeaderBar';
 import BackButton from '../components/layout/BackButton';
 import LauncherSidebar, { type SidebarEntry } from '../components/layout/LauncherSidebar';
-import ProductCard from '../components/menu/ProductCard';
+import ProductRow from '../components/menu/ProductRow';
 import ProductDetailModal from '../components/menu/ProductDetailModal';
 import CartDrawer from '../components/menu/CartDrawer';
 import CheckoutModal from '../components/menu/CheckoutModal';
+import HappyHourSidebarBlock from '../components/menu/HappyHourSidebarBlock';
+import ScrollIndicator from '../components/menu/ScrollIndicator';
+import VariantPicker from '../components/menu/VariantPicker';
+import GoogleReviewCTA from '../components/menu/GoogleReviewCTA';
 import RetroLoader from '../components/ui/RetroLoader';
-import AnimatedGrid, { AnimatedGridItem } from '../components/ui/AnimatedGrid';
 import { EASE_OUT_QUART } from '../lib/motion';
+import type { MenuProduct } from '../hooks/useCarte';
 import type { PricedCart } from '../types';
 
-function findCategory(cats: MenuCategory[], id: string): MenuCategory | null {
+function findCategory(cats: MenuCategoryV2[], id: string): MenuCategoryV2 | null {
   for (const c of cats) {
     if (c.id === id) return c;
     for (const sc of c.subCategories ?? []) {
@@ -40,16 +47,11 @@ function findCategory(cats: MenuCategory[], id: string): MenuCategory | null {
   return null;
 }
 
-/**
- * Retourne les produits d'une categorie + ceux de toutes ses sous-categories
- * (dedupliques par id). Permet a l'utilisateur de cliquer sur une categorie
- * "parente" et de voir l'ensemble des produits qu'elle regroupe.
- */
-function getCategoryProducts(cat: MenuCategory | null): MenuProduct[] {
+function getCategoryProducts(cat: MenuCategoryV2 | null): MenuProductV2[] {
   if (!cat) return [];
   const seen = new Set<string>();
-  const out: MenuProduct[] = [];
-  const push = (p: MenuProduct) => {
+  const out: MenuProductV2[] = [];
+  const push = (p: MenuProductV2) => {
     const id = String(p.id);
     if (seen.has(id)) return;
     seen.add(id);
@@ -61,74 +63,41 @@ function getCategoryProducts(cat: MenuCategory | null): MenuProduct[] {
 }
 
 /**
- * Detecte une categorie "Happy Hour" par son nom (case + accent insensitive).
- * Couvre "Happy Hour", "HappyHour", "Happy", "HH", etc.
- */
-function isHappyHourCategory(name: string): boolean {
-  const n = name
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-  return n.includes('happy') || n === 'hh';
-}
-
-/**
- * Fenetre d'affichage de la categorie Happy Hour : lundi a vendredi,
- * 17h30 -> 19h00. En dehors, la categorie est cachee de la sidebar.
- */
-function isHappyHourCategoryWindow(now: Date): boolean {
-  const day = now.getDay(); // 0 = dim, 1..5 = lun-ven, 6 = sam
-  if (day < 1 || day > 5) return false;
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  return minutes >= 17 * 60 + 30 && minutes < 19 * 60;
-}
-
-/**
- * Construit la liste affichee dans la sidebar (mode accordeon) :
- *   - Toujours toutes les categories de profondeur 0 visibles (avec un
- *     chevron si elles ont des sous-categories).
+ * Construit la liste sidebar (mode accordeon) :
+ *   - Toutes les categories de profondeur 0 visibles, chevron si elles ont
+ *     des sous-categories.
  *   - Les sous-categories sont injectees uniquement pour la categorie
  *     parente actuellement depliee (`openParentId`).
- * Les categories Happy Hour sont masquees hors fenetre (lun-ven 17h30-19h).
+ *   - Plus de filtre par nom (Happy Hour) : la fenetre HH vient de settings.
  */
 function flattenCategories(
-  cats: MenuCategory[],
-  now: Date,
+  cats: MenuCategoryV2[],
   openParentId: string | null,
 ): SidebarEntry[] {
-  const inWindow = isHappyHourCategoryWindow(now);
   const out: SidebarEntry[] = [];
   for (const c of cats) {
-    const isHH = isHappyHourCategory(c.name);
-    if (isHH && !inWindow) continue; // cachee hors fenetre
     const subs = c.subCategories ?? [];
-    const visibleSubs = subs.filter(
-      (sc) => !(isHappyHourCategory(sc.name) && !inWindow),
-    );
-    const hasChildren = visibleSubs.length > 0;
+    const hasChildren = subs.length > 0;
     const expanded = hasChildren && c.id === openParentId;
     out.push({
       id: c.id,
       name: c.name,
       count: c.products?.length ?? 0,
-      imageUrl: c.imageUrl,
-      emoji: c.iconEmoji,
+      iconName: c.iconName,
+      color: c.color,
       depth: 0,
-      pulse: isHH,
       hasChildren,
       expanded,
     });
     if (expanded) {
-      for (const sc of visibleSubs) {
+      for (const sc of subs) {
         out.push({
           id: sc.id,
           name: sc.name,
           count: sc.products?.length ?? 0,
-          imageUrl: sc.imageUrl,
-          emoji: sc.iconEmoji,
+          iconName: sc.iconName,
+          color: sc.color,
           depth: 1,
-          pulse: isHappyHourCategory(sc.name),
         });
       }
     }
@@ -136,22 +105,10 @@ function flattenCategories(
   return out;
 }
 
-/**
- * Fenetre Happy Hour cote client (badge + prix barre dans listing/modale).
- * Doit rester alignee avec :
- *   - isHappyHourCategoryWindow (visibilite categorie)
- *   - backend isHappyHourNow (calcul du prix applique)
- */
-function isHappyHourClient(now: Date): boolean {
-  const day = now.getDay();
-  if (day < 1 || day > 5) return false;
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  return minutes >= 17 * 60 + 30 && minutes < 19 * 60;
-}
-
 export default function MenuPage() {
   const identity = useHostname();
-  const { loading, categories, error } = useCarte();
+  const { loading, categories, error } = useCarteV2();
+  const { settings, isHappyHourNow } = useCarteSettings();
   const { items, add, totalQty } = useCart();
   const t = useT();
 
@@ -159,17 +116,26 @@ export default function MenuPage() {
   const [openParentId, setOpenParentId] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState<PricedCart | null>(null);
-  const [detailProduct, setDetailProduct] = useState<MenuProduct | null>(null);
+  const [detailProduct, setDetailProduct] = useState<MenuProductV2 | null>(null);
+  const [variantPicker, setVariantPicker] = useState<{
+    product: MenuProductV2;
+    conditioning: MenuConditioningV2 | null;
+  } | null>(null);
 
-  // Tick toutes les minutes pour reevaluer la fenetre Happy Hour (17h30-19h)
-  // sans avoir a recharger la page.
-  const [now, setNow] = useState<Date>(() => new Date());
+  const orderingEnabled = settings?.orderingEnabled ?? true;
+  const googleReviewUrl = settings?.googleReviewUrl ?? null;
+  const showGoogleCta = !orderingEnabled && !!googleReviewUrl;
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Tick toutes les minutes pour reevaluer la fenetre Happy Hour sans recharger.
+  const [, setNow] = useState<Date>(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 60_000);
     return () => window.clearInterval(id);
   }, []);
 
-  const happyHour = useMemo(() => isHappyHourClient(now), [now]);
+  const happyHour = isHappyHourNow();
 
   useEffect(() => {
     if (!currentId && categories.length > 0) {
@@ -178,41 +144,15 @@ export default function MenuPage() {
   }, [categories, currentId]);
 
   const currentCategory = currentId ? findCategory(categories, currentId) : null;
-  const products: MenuProduct[] = useMemo(
+  const products: MenuProductV2[] = useMemo(
     () => getCategoryProducts(currentCategory),
-    [currentCategory]
+    [currentCategory],
   );
   const sidebarEntries = useMemo(
-    () => flattenCategories(categories, now, openParentId),
-    [categories, now, openParentId]
+    () => flattenCategories(categories, openParentId),
+    [categories, openParentId],
   );
 
-  // Set des ids actuellement exposables (filtre Happy Hour applique a tous les
-  // niveaux), independamment de l'etat deplie/replie de la sidebar. Sert a
-  // detecter quand une categorie selectionnee disparait reellement (ex: la
-  // fenetre Happy Hour vient de se fermer).
-  const exposedIds = useMemo(() => {
-    const ids = new Set<string>();
-    const inWindow = isHappyHourCategoryWindow(now);
-    for (const c of categories) {
-      if (isHappyHourCategory(c.name) && !inWindow) continue;
-      ids.add(c.id);
-      for (const sc of c.subCategories ?? []) {
-        if (isHappyHourCategory(sc.name) && !inWindow) continue;
-        ids.add(sc.id);
-      }
-    }
-    return ids;
-  }, [categories, now]);
-
-  /**
-   * Clic sur une entree de la sidebar (mode accordeon) :
-   *   - Categorie de profondeur 0 avec sous-categories : toggle l'accordeon
-   *     (replie les autres) et selectionne la categorie parente.
-   *   - Categorie de profondeur 0 sans sous-categories : selectionne et
-   *     replie tout.
-   *   - Sous-categorie : selectionne, garde le parent ouvert.
-   */
   function handleSelectCategory(id: string) {
     const isTopLevel = categories.some((c) => c.id === id);
     if (isTopLevel) {
@@ -227,40 +167,87 @@ export default function MenuPage() {
     setCurrentId(id);
   }
 
-  // Si la categorie selectionnee est masquee (ex: Happy Hour passee 19h),
-  // bascule automatiquement sur la premiere categorie visible. NE PAS se baser
-  // sur sidebarEntries (qui filtre selon openParentId) pour ne pas perdre la
-  // selection d'une sous-categorie quand on replie son parent.
-  useEffect(() => {
-    if (!currentId || sidebarEntries.length === 0) return;
-    if (!exposedIds.has(currentId)) {
-      setCurrentId(sidebarEntries[0].id);
-      setOpenParentId(null);
-    }
-  }, [currentId, sidebarEntries, exposedIds]);
-
+  // Quantite affichee par produit reel : on regroupe toutes les variantes /
+  // conditionnements d'un meme produit pour le badge "x3" sur la ligne.
   const qtyByProduct = useMemo(() => {
     const map = new Map<string, number>();
-    items.forEach((i) => map.set(String(i.productId), i.qty));
+    items.forEach((i) => {
+      const realId = String(i.realProductId ?? i.productId);
+      map.set(realId, (map.get(realId) ?? 0) + i.qty);
+    });
     return map;
   }, [items]);
 
-  function addProduct(p: MenuProduct, qty: number) {
+  function num(v: number | string | null | undefined): number {
+    if (v == null) return 0;
+    const n = typeof v === 'number' ? v : parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function priceWithHh(base: number, hh: number | string | null | undefined): number {
+    const hhN = num(hh);
+    if (happyHour && hhN > 0 && hhN < base) return hhN;
+    return base;
+  }
+
+  /**
+   * Ajoute un produit au panier avec eventuellement un conditionnement et / ou
+   * une variante. La cle composite est encodee dans `productId` (cf. cartStore).
+   */
+  function addToCart(p: MenuProductV2, opts: {
+    conditioning?: MenuConditioningV2 | null;
+    variant?: MenuVariantV2 | null;
+    qty?: number;
+  } = {}) {
+    const { conditioning, variant, qty = 1 } = opts;
+    const basePrice = conditioning ? num(conditioning.price) : num(p.price);
+    const hhPrice = conditioning ? conditioning.priceHh : p.priceHh;
+    const unitPrice = priceWithHh(basePrice, hhPrice);
+    const cartKey = buildCartKey(p.id, conditioning?.id, variant?.id);
+    const variantLabel = variant ? variant.label : undefined;
+    const conditioningLabel = conditioning ? conditioning.label : undefined;
+    const labelSuffix = [conditioningLabel, variantLabel].filter(Boolean).join(' · ');
+    const displayName = labelSuffix ? `${p.name} (${labelSuffix})` : p.name;
+
     add(
       {
-        productId: p.id,
-        name: p.name,
-        unitPrice: Number(p.price ?? 0),
+        productId: cartKey,
+        realProductId: p.id,
+        conditioningId: conditioning?.id,
+        conditioningLabel,
+        variantId: variant?.id,
+        variantLabel,
+        name: displayName,
+        unitPrice,
         imageUrl: p.imageUrl ?? undefined,
       },
-      qty
+      qty,
     );
   }
+
+  /**
+   * Handler unifie pour le bouton + sur la row :
+   *   - Produit sans variantes : ajout direct.
+   *   - Produit avec variantes : ouvre VariantPicker (avec ou sans conditioning).
+   */
+  function handleAdd(p: MenuProductV2, conditioning?: MenuConditioningV2 | null) {
+    const variants = p.variants ?? [];
+    if (variants.length > 0) {
+      setVariantPicker({ product: p, conditioning: conditioning ?? null });
+      return;
+    }
+    addToCart(p, { conditioning });
+  }
+
+  // Adapter pour passer au ProductDetailModal qui type MenuProduct (v1).
+  // Les champs communs (id, name, price, priceHh, imageUrl, videoUrl, ...)
+  // sont identiques entre v1 et v2.
+  const detailProductV1 = detailProduct as unknown as MenuProduct | null;
 
   return (
     <div className="relative flex h-full w-full flex-col px-8 py-6">
       <HeaderBar
-        title={t('table.menu.title').toUpperCase()}
+        title=""
         left={<BackButton />}
         right={
           happyHour ? (
@@ -281,19 +268,20 @@ export default function MenuPage() {
           onSelect={handleSelectCategory}
           showCount={false}
           showCategoryDividers
+          bottomSlot={
+            settings ? (
+              <HappyHourSidebarBlock
+                start={settings.happyHourStart}
+                end={settings.happyHourEnd}
+                days={settings.happyHourDays}
+                active={happyHour}
+              />
+            ) : null
+          }
         />
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-table-bg-soft/85">
-          <div className="flex shrink-0 items-baseline justify-between border-b border-white/10 px-6 py-4">
-            <h2 className="font-display text-3xl uppercase tracking-wider text-table-ink">
-              {currentCategory?.name ?? ''}
-            </h2>
-            <span className="rounded-full border border-white/15 bg-white/8 px-3 py-1 font-display text-xs uppercase tracking-wider text-table-ink-soft">
-              {products.length} {t('table.menu.products', 'produits')}
-            </span>
-          </div>
-
-          <div className="tables-scroll relative flex-1 overflow-y-auto p-5">
+        <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-table-bg-soft/85">
+          <div ref={scrollRef} className="tables-scroll relative flex-1 overflow-y-auto p-5">
             {loading && (
               <div className="flex h-full items-center justify-center">
                 <RetroLoader label={t('table.common.loading', 'LOADING')} accent="violet" />
@@ -312,25 +300,24 @@ export default function MenuPage() {
                   {t('table.menu.empty', 'Aucun produit dans cette categorie.')}
                 </div>
               ) : (
-                <AnimatedGrid
-                  resetKey={currentId}
-                  className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4"
-                >
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                   {products.map((p) => (
-                    <AnimatedGridItem key={p.id}>
-                      <ProductCard
-                        product={p}
-                        happyHour={happyHour}
-                        qtyInCart={qtyByProduct.get(String(p.id)) ?? 0}
-                        onSelect={() => setDetailProduct(p)}
-                        onAdd={() => addProduct(p, 1)}
-                      />
-                    </AnimatedGridItem>
+                    <ProductRow
+                      key={p.id}
+                      product={p}
+                      happyHour={happyHour}
+                      qtyInCart={qtyByProduct.get(String(p.id)) ?? 0}
+                      onSelect={() => setDetailProduct(p)}
+                      onAdd={() => handleAdd(p)}
+                      onAddConditioning={(c) => handleAdd(p, c)}
+                      showAddButton={orderingEnabled}
+                    />
                   ))}
-                </AnimatedGrid>
+                </div>
               )
             )}
           </div>
+          <ScrollIndicator scrollRef={scrollRef} />
         </section>
       </div>
 
@@ -348,35 +335,56 @@ export default function MenuPage() {
           }
         }
       `}</style>
-      <motion.button
-        type="button"
-        onClick={() => setCartOpen(true)}
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.45, ease: EASE_OUT_QUART, delay: 0.2 }}
-        whileTap={{ scale: 0.95 }}
-        style={{ animation: 'order-cta-glow 2.8s ease-in-out infinite' }}
-        className="fixed bottom-8 right-8 z-40 flex items-center gap-3 rounded-full border border-white/30 bg-gradient-to-br from-table-violet via-[#9C36FF] to-table-magenta px-9 py-5 font-display text-xl uppercase tracking-wider text-white"
-      >
-        <Beer className="h-7 w-7" />
-        {t('table.menu.order', 'Commander')}
-        {totalQty() > 0 && (
-          <span className="ml-1 flex h-8 min-w-[2rem] items-center justify-center rounded-full border border-white/30 bg-white/25 px-2.5 font-display text-base text-white">
-            {totalQty()}
-          </span>
-        )}
-      </motion.button>
+      {orderingEnabled && (
+        <motion.button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.45, ease: EASE_OUT_QUART, delay: 0.2 }}
+          whileTap={{ scale: 0.95 }}
+          style={{ animation: 'order-cta-glow 2.8s ease-in-out infinite' }}
+          className="fixed bottom-8 right-8 z-40 flex items-center gap-3 rounded-full border border-white/30 bg-gradient-to-br from-table-violet via-[#9C36FF] to-table-magenta px-9 py-5 font-display text-xl uppercase tracking-wider text-white"
+        >
+          <Beer className="h-7 w-7" />
+          {t('table.menu.order', 'Commander')}
+          {totalQty() > 0 && (
+            <span className="ml-1 flex h-8 min-w-[2rem] items-center justify-center rounded-full border border-white/30 bg-white/25 px-2.5 font-display text-base text-white">
+              {totalQty()}
+            </span>
+          )}
+        </motion.button>
+      )}
+
+      {showGoogleCta && <GoogleReviewCTA url={googleReviewUrl!} />}
 
       <ProductDetailModal
         open={!!detailProduct}
-        product={detailProduct}
+        product={detailProductV1}
         happyHour={happyHour}
         qtyInCart={detailProduct ? qtyByProduct.get(String(detailProduct.id)) ?? 0 : 0}
         onClose={() => setDetailProduct(null)}
-        onAdd={(qty) => detailProduct && addProduct(detailProduct, qty)}
+        onAdd={(qty) => detailProduct && addToCart(detailProduct, { qty })}
+        showAddControls={orderingEnabled}
       />
 
-      {identity && (
+      {variantPicker && (
+        <VariantPicker
+          productName={variantPicker.product.name}
+          variants={variantPicker.product.variants ?? []}
+          conditioning={variantPicker.conditioning}
+          onSelect={(v) => {
+            addToCart(variantPicker.product, {
+              conditioning: variantPicker.conditioning,
+              variant: v,
+            });
+            setVariantPicker(null);
+          }}
+          onClose={() => setVariantPicker(null)}
+        />
+      )}
+
+      {orderingEnabled && identity && (
         <CartDrawer
           open={cartOpen}
           onClose={() => setCartOpen(false)}
@@ -388,7 +396,7 @@ export default function MenuPage() {
         />
       )}
 
-      {identity && checkout && (
+      {orderingEnabled && identity && checkout && (
         <CheckoutModal
           open={!!checkout}
           onClose={() => setCheckout(null)}

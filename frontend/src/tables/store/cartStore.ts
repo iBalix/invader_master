@@ -7,6 +7,15 @@
  * Persiste en localStorage par hostname pour qu'un refresh n'efface
  * pas la commande en cours, et qu'un master/slave aient leur panier
  * independant (leurs hostnames different).
+ *
+ * Carte v2 : un produit peut etre ajoute avec un conditionnement et / ou
+ * une variante. L'identite d'un item devient (productId, conditioningId,
+ * variantId). Pour minimiser l'impact sur le code consommateur :
+ *   - `productId` continue de jouer le role de "cle d'item" cote store
+ *     (la cle composite y est encodee : "<uuid>::<condId>::<varId>") ;
+ *   - `realProductId` contient l'UUID reel du produit, a envoyer au
+ *     backend lors du POST (les conditionnements/variants sont stockes
+ *     a part dans table_order_items en option de l'item).
  */
 
 import { create } from 'zustand';
@@ -14,6 +23,15 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 export interface CartItem {
   productId: number | string;
+  /**
+   * UUID reel du produit, utilise par le backend (pricing + insert order_items).
+   * Si absent, on fallback sur `productId` (cas legacy v1, pas de conditioning/variant).
+   */
+  realProductId?: string;
+  conditioningId?: string;
+  conditioningLabel?: string;
+  variantId?: string;
+  variantLabel?: string;
   name: string;
   unitPrice: number;
   qty: number;
@@ -31,6 +49,20 @@ interface CartState {
   clear: () => void;
   totalQty: () => number;
   subtotal: () => number;
+}
+
+/**
+ * Construit la cle composite stockee dans `productId` pour identifier un item
+ * unique dans le panier. Sans conditionnement ni variante, on garde l'UUID
+ * brut (retro-compat avec la carte v1).
+ */
+export function buildCartKey(
+  realProductId: string,
+  conditioningId?: string | null,
+  variantId?: string | null,
+): string {
+  if (!conditioningId && !variantId) return realProductId;
+  return `${realProductId}::${conditioningId ?? ''}::${variantId ?? ''}`;
 }
 
 function getKey(): string {
@@ -54,7 +86,7 @@ export const useCart = create<CartState>()(
           if (existing) {
             return {
               items: s.items.map((i) =>
-                i.productId === item.productId ? { ...i, qty: i.qty + qty } : i
+                i.productId === item.productId ? { ...i, qty: i.qty + qty } : i,
               ),
             };
           }
@@ -99,6 +131,6 @@ export const useCart = create<CartState>()(
           }
         },
       })),
-    }
-  )
+    },
+  ),
 );

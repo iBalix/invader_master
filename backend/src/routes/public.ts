@@ -185,6 +185,144 @@ publicRoutes.get('/carte', async (req, res) => {
   }
 });
 
+// Full carte v2: categories with products, conditionings, variants, icon+color
+publicRoutes.get('/carte-v2', async (req, res) => {
+  try {
+    const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
+
+    const { data: categories, error: catErr } = await supabaseAdmin
+      .from('menu_categories_v2')
+      .select('*')
+      .order('weight', { ascending: true });
+
+    if (catErr) throw catErr;
+
+    const { data: products } = await supabaseAdmin
+      .from('menu_products_v2')
+      .select('*');
+
+    const { data: links } = await supabaseAdmin
+      .from('category_products_v2')
+      .select('category_id, product_id, position')
+      .order('position', { ascending: true });
+
+    const { data: conditionings } = await supabaseAdmin
+      .from('product_v2_conditionings')
+      .select('*')
+      .order('position', { ascending: true });
+
+    const { data: variants } = await supabaseAdmin
+      .from('product_v2_variants')
+      .select('*')
+      .order('position', { ascending: true });
+
+    const { data: tagLinks } = await supabaseAdmin
+      .from('product_v2_product_tags')
+      .select('product_id, tag_id, position')
+      .order('position', { ascending: true });
+
+    const { data: tagsData } = await supabaseAdmin
+      .from('product_v2_tags')
+      .select('*');
+
+    const conditioningsByProduct: Record<string, Record<string, unknown>[]> = {};
+    for (const c of conditionings ?? []) {
+      const pid = c.product_id as string;
+      if (!conditioningsByProduct[pid]) conditioningsByProduct[pid] = [];
+      conditioningsByProduct[pid].push(
+        toCamel(localize(c as Record<string, unknown>, ['label'], locale)),
+      );
+    }
+
+    const variantsByProduct: Record<string, Record<string, unknown>[]> = {};
+    for (const v of variants ?? []) {
+      const pid = v.product_id as string;
+      if (!variantsByProduct[pid]) variantsByProduct[pid] = [];
+      variantsByProduct[pid].push(
+        toCamel(localize(v as Record<string, unknown>, ['label'], locale)),
+      );
+    }
+
+    const tagsById = new Map((tagsData ?? []).map((t) => [t.id, t]));
+    const tagsByProduct: Record<string, Record<string, unknown>[]> = {};
+    for (const l of tagLinks ?? []) {
+      const pid = l.product_id as string;
+      const tag = tagsById.get(l.tag_id);
+      if (!tag) continue;
+      if (!tagsByProduct[pid]) tagsByProduct[pid] = [];
+      tagsByProduct[pid].push(
+        toCamel(localize(tag as Record<string, unknown>, ['name'], locale)),
+      );
+    }
+
+    const productMap = new Map((products ?? []).map((p) => [p.id, p]));
+
+    const linksByCategory: Record<string, Array<{ product_id: string; position: number }>> = {};
+    for (const l of links ?? []) {
+      if (!linksByCategory[l.category_id]) linksByCategory[l.category_id] = [];
+      linksByCategory[l.category_id].push(l);
+    }
+
+    function buildProducts(catId: string) {
+      const catLinks = linksByCategory[catId] ?? [];
+      return catLinks
+        .sort((a, b) => a.position - b.position)
+        .map((l) => productMap.get(l.product_id))
+        .filter(Boolean)
+        .map((p) => {
+          const product = p as Record<string, unknown>;
+          const id = product.id as string;
+          return {
+            ...toCamel(localize(product, ['name', 'subtitle', 'description'], locale)),
+            conditionings: conditioningsByProduct[id] ?? [],
+            variants: variantsByProduct[id] ?? [],
+            tags: tagsByProduct[id] ?? [],
+          };
+        });
+    }
+
+    const allCats = categories ?? [];
+    const childIds = new Set(allCats.filter((c) => c.parent_id).map((c) => c.id));
+
+    const result = allCats.map((cat) => ({
+      ...toCamel(localize(cat, ['name'], locale)),
+      products: buildProducts(cat.id),
+      subCategories: allCats
+        .filter((sc) => sc.parent_id === cat.id)
+        .map((sc) => ({
+          ...toCamel(localize(sc, ['name'], locale)),
+          products: buildProducts(sc.id),
+        })),
+    }));
+
+    res.json({ categories: result.filter((c) => !childIds.has((c as Record<string, unknown>).id as string)) });
+  } catch (err) {
+    console.error('Public carte v2 error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// Carte settings (singleton) — public pour bornes tactiles (HH window + ordering toggle)
+publicRoutes.get('/carte-settings', async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('carte_settings')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      res.status(404).json({ error: 'Configuration introuvable' });
+      return;
+    }
+
+    res.json(toCamel(data));
+  } catch (err) {
+    console.error('Public carte settings error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Full games: categories, consoles, games with relations
 publicRoutes.get('/games', async (req, res) => {
   try {

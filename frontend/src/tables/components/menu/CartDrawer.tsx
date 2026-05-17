@@ -30,12 +30,17 @@ export default function CartDrawer({ open, onClose, hostname, onCheckout }: Prop
   const [reviewOpen, setReviewOpen] = useState(false);
   const [couponOpen, setCouponOpen] = useState(false);
 
+  // Pour pricing/checkout : utiliser realProductId (UUID reel) si present, sinon productId.
+  // En carte v2, productId contient une cle composite (cf. cartStore.buildCartKey).
   const payload = useMemo(
     () => ({
-      items: items.map((i) => ({ productId: String(i.productId), quantity: i.qty })),
+      items: items.map((i) => ({
+        productId: String(i.realProductId ?? i.productId),
+        quantity: i.qty,
+      })),
       couponCode,
     }),
-    [items, couponCode]
+    [items, couponCode],
   );
 
   useEffect(() => {
@@ -331,7 +336,7 @@ export default function CartDrawer({ open, onClose, hostname, onCheckout }: Prop
       open={couponOpen}
       onClose={() => setCouponOpen(false)}
       hostname={hostname}
-      items={items.map((i) => ({ productId: i.productId, qty: i.qty }))}
+      items={items.map((i) => ({ productId: i.realProductId ?? i.productId, qty: i.qty }))}
       initialCode={couponCode}
       onApply={(code) => setCoupon(code)}
     />
