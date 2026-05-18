@@ -15,7 +15,6 @@ import {
   ShoppingBag,
   ArrowRight,
   ExternalLink,
-  Settings,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';

@@ -23,7 +23,6 @@ import {
   Tag,
   ShoppingBag,
   ExternalLink,
-  Settings,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';

@@ -2,7 +2,7 @@ import * as LucideIcons from 'lucide-react';
 import { HelpCircle } from 'lucide-react';
 import type { LucideProps } from 'lucide-react';
 
-interface Props extends Omit<LucideProps, 'ref'> {
+interface Props extends Omit<LucideProps, 'ref' | 'name'> {
   name?: string | null;
 }
 
