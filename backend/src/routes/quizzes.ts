@@ -19,15 +19,27 @@ quizRoutes.get('/', async (_req, res) => {
     console.log(`[quizzes] DB result: error=${!!error}, count=${(quizzes ?? []).length}`);
     if (error) { console.error('List quizzes DB error:', error); throw error; }
 
-    const { data: counts } = await supabaseAdmin
-      .from('quiz_questions')
-      .select('quiz_id');
-
+    // Pagination requise: PostgREST plafonne à 1000 lignes par requête,
+    // donc un simple .select() perd les liens des quiz au-delà de cette limite
+    // (count tombait à 0 alors qu'il y avait des questions).
     const countMap: Record<string, number> = {};
-    if (counts) {
-      for (const row of counts) {
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data: page, error: countErr } = await supabaseAdmin
+        .from('quiz_questions')
+        .select('quiz_id')
+        .range(from, from + pageSize - 1);
+
+      if (countErr) throw countErr;
+      if (!page || page.length === 0) break;
+
+      for (const row of page) {
         countMap[row.quiz_id] = (countMap[row.quiz_id] ?? 0) + 1;
       }
+
+      if (page.length < pageSize) break;
+      from += pageSize;
     }
 
     const items = (quizzes ?? []).map((q) => ({
