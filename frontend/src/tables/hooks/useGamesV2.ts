@@ -1,30 +1,42 @@
 /**
- * Recupere le catalogue de jeux via /public/games.
+ * Recupere le catalogue de jeux v2 via /public/games-v2.
  *
- * Le payload contient categories, consoles et games (avec consoleLibrary,
- * categories, images...). On le passe brut au composant qui filtrera.
+ * Difference avec useGames :
+ *  - categories enrichies (iconName, color, textureUrl)
+ *  - consoles avec displayName
+ *  - games avec maxPlayers, youtube_*, control_*
  */
 
 import { useEffect, useState } from 'react';
 import { publicApi } from '../lib/tablesApi';
 
-export interface GameCategory {
+export interface GameCategoryV2 {
   id: string;
   name: string;
-  emoji?: string | null;
-  iconUrl?: string | null;
+  nameEn?: string | null;
   displayOrder?: number;
+  iconName?: string | null;
+  color?: string | null;
+  textureUrl?: string | null;
 }
 
-export interface Game {
+export interface GameConsoleV2 {
+  id: string;
+  name: string;
+  displayName?: string | null;
+  library?: string;
+  logoUrl?: string | null;
+}
+
+export interface GameV2 {
   id: string;
   name: string;
   subtitle?: string | null;
   description?: string | null;
   fileName?: string | null;
+  coverUrl?: string | null;
   consoleId?: string;
   consoleName?: string | null;
-  /** Optionnel : nom court affiche borne (jeux v2). Si undefined, fallback sur consoleName. */
   consoleDisplayName?: string | null;
   consoleLibrary?: string | null;
   consoleLogoUrl?: string | null;
@@ -35,11 +47,10 @@ export interface Game {
   multiplayer?: boolean;
   controllerCount?: number | null;
   displayOrder?: number;
-  /** v2 only — preview YouTube avec fade vers cover dans LaunchGameModal */
+  maxPlayers?: number;
   youtubeVideoId?: string | null;
   youtubeStartSec?: number;
   youtubeDurationSec?: number | null;
-  /** v2 only — schema manette SNES */
   controlA?: string | null;
   controlB?: string | null;
   controlX?: string | null;
@@ -48,31 +59,28 @@ export interface Game {
   controlR?: string | null;
   controlStart?: string | null;
   controlSelect?: string | null;
-  /** v2 only — mention speciale affichee dans la modale de lancement */
   specialNote?: string | null;
-  /** v2 only — cover bullet path */
-  coverUrl?: string | null;
 }
 
-export interface GamesPayload {
-  categories: GameCategory[];
-  consoles: Array<{ id: string; name: string; library?: string; logoUrl?: string }>;
-  games: Game[];
+export interface GamesV2Payload {
+  categories: GameCategoryV2[];
+  consoles: GameConsoleV2[];
+  games: GameV2[];
 }
 
 interface State {
   loading: boolean;
-  data: GamesPayload | null;
+  data: GamesV2Payload | null;
   error: string | null;
 }
 
-export function useGames(): State {
+export function useGamesV2(): State {
   const [state, setState] = useState<State>({ loading: true, data: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
     publicApi
-      .get<GamesPayload>('/games')
+      .get<GamesV2Payload>('/games-v2')
       .then((res) => {
         if (cancelled) return;
         setState({ loading: false, data: res.data, error: null });

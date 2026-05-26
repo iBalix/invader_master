@@ -12,7 +12,7 @@
  * Le compte de manettes est mis a jour live via la Gamepad API.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Coffee,
@@ -23,9 +23,12 @@ import {
   CheckCircle2,
   XCircle,
   Sparkles,
+  ArrowLeft,
 } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import ArcadeButton from '../ui/ArcadeButton';
+import YouTubeFadePreview from './YouTubeFadePreview';
+import SNESControllerSchematic from './SNESControllerSchematic';
 import type { Game } from '../../hooks/useGames';
 import {
   buildInvaderUrl,
@@ -93,26 +96,26 @@ interface StepCardProps {
 function StepCard({ index, icon: Icon, title, body, tone, badge }: StepCardProps) {
   const s = TONE_STYLES[tone];
   return (
-    <li className={['flex gap-3 rounded-2xl border p-3', s.wrap].join(' ')}>
+    <li className={['flex gap-4 rounded-2xl border p-5', s.wrap].join(' ')}>
       <div
         className={[
-          'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border',
+          'flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border',
           s.iconWrap,
         ].join(' ')}
       >
-        <Icon className="h-5 w-5" />
+        <Icon className="h-7 w-7" />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="font-display text-[10px] uppercase tracking-[0.3em] text-table-ink-muted">
+          <span className="font-display text-xs uppercase tracking-[0.3em] text-table-ink-muted">
             Etape {index}
           </span>
           {badge}
         </div>
-        <div className={['mt-0.5 font-display text-sm uppercase tracking-wider', s.title].join(' ')}>
+        <div className={['mt-1 font-display text-lg uppercase tracking-wider', s.title].join(' ')}>
           {title}
         </div>
-        <div className={['mt-0.5 text-xs leading-snug', s.body].join(' ')}>{body}</div>
+        <div className={['mt-1 text-sm leading-relaxed', s.body].join(' ')}>{body}</div>
       </div>
     </li>
   );
@@ -124,10 +127,20 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
   const t = useT();
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Etape de la modale : 'details' (defaut) ou 'controls' (rappel touches avant lancement)
+  const [step, setStep] = useState<'details' | 'controls'>('details');
 
   // Detection live des manettes uniquement quand la modale est ouverte
   // (sinon on consomme du CPU pour rien sur les autres ecrans).
   const gamepadCount = useGamepadCount(open);
+
+  // Reset de l'etape + erreur a la fermeture (et au changement de jeu)
+  useEffect(() => {
+    if (!open) {
+      setStep('details');
+      setError(null);
+    }
+  }, [open, game?.id]);
 
   if (!game) return null;
 
@@ -135,6 +148,15 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
   const invaderUrl = buildInvaderUrl(game);
   const noControllerNeeded = isInvaderGame(game);
   const hasController = gamepadCount > 0;
+
+  const hasControls = !!(
+    game.controlA || game.controlB || game.controlX || game.controlY ||
+    game.controlL || game.controlR || game.controlStart || game.controlSelect
+  );
+  const specialNote = game.specialNote?.trim() || '';
+  const hasSpecialNote = !!specialNote;
+  // L'etape de rappel s'affiche des qu'il y a une mention OU des touches configurees.
+  const hasPreLaunchInfo = hasControls || hasSpecialNote;
 
   // Validation de l'etape 2 :
   //   - jeu Invader (web) -> pas de manette requise, toujours OK
@@ -185,11 +207,99 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
     }
   }
 
+  // Action du bouton primaire en vue details :
+  //  - si le jeu a des touches configurees -> on affiche d'abord le rappel des touches
+  //  - sinon -> lancement direct
+  function handlePrimaryAction() {
+    if (hasPreLaunchInfo) {
+      setStep('controls');
+    } else {
+      handleLaunch();
+    }
+  }
+
+  // ----- Vue "rappel des touches" -----
+  if (step === 'controls') {
+    return (
+      <ArcadeModal open={open} onClose={onClose} size="2xl" title={game.name.toUpperCase()}>
+        <div className="flex flex-col">
+          <button
+            type="button"
+            onClick={() => setStep('details')}
+            className="mb-4 flex w-fit items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-2 font-display text-sm uppercase tracking-wider text-table-ink-soft transition-colors hover:bg-white/10"
+          >
+            <ArrowLeft className="h-4 w-4" /> Retour
+          </button>
+
+          <div className="mb-4 font-retro text-xs uppercase tracking-[0.3em] text-table-cyan">
+            {hasControls ? 'Rappel des touches' : 'A savoir'}
+          </div>
+
+          {hasSpecialNote && (
+            <div className="mb-4 flex gap-3 rounded-2xl border border-table-yellow/40 bg-table-yellow/10 p-4">
+              <Sparkles className="h-5 w-5 shrink-0 text-table-yellow" />
+              <p className="text-sm leading-relaxed text-table-ink whitespace-pre-line">
+                {specialNote}
+              </p>
+            </div>
+          )}
+
+          {hasControls && (
+            <SNESControllerSchematic
+              controls={{
+                controlA: game.controlA, controlB: game.controlB,
+                controlX: game.controlX, controlY: game.controlY,
+                controlL: game.controlL, controlR: game.controlR,
+                controlStart: game.controlStart, controlSelect: game.controlSelect,
+              }}
+            />
+          )}
+
+          {error && (
+            <div className="mt-4 flex items-center gap-2 rounded-xl border border-table-red/40 bg-table-red/15 p-3 text-sm text-table-red">
+              <AlertTriangle className="h-4 w-4" /> {error}
+            </div>
+          )}
+
+          <div className="mt-6">
+            <ArcadeButton
+              variant="primary"
+              size="xl"
+              fullWidth
+              disabled={launchDisabled}
+              onClick={handleLaunch}
+              icon={<Play className="h-6 w-6" />}
+            >
+              {launching
+                ? t('table.games.launching', 'Lancement...')
+                : t('table.games.launch')}
+            </ArcadeButton>
+            {!step2Valid && !launching && (
+              <div className="mt-2 flex items-center justify-center gap-2 text-center text-xs text-table-red">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Branche une manette USB pour pouvoir lancer le jeu.
+              </div>
+            )}
+          </div>
+        </div>
+      </ArcadeModal>
+    );
+  }
+
+  // ----- Vue "details" (defaut) -----
   return (
-    <ArcadeModal open={open} onClose={onClose} size="xl" title={game.name.toUpperCase()}>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr,1.4fr]">
+    <ArcadeModal open={open} onClose={onClose} size="2xl" title={game.name.toUpperCase()}>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.2fr,1fr]">
         <div>
-          {game.images?.[0] && (
+          {game.youtubeVideoId ? (
+            <YouTubeFadePreview
+              videoId={game.youtubeVideoId}
+              startSec={game.youtubeStartSec ?? 0}
+              durationSec={game.youtubeDurationSec ?? null}
+              fallbackImageUrl={game.images?.[0] ?? null}
+              alt={game.name}
+            />
+          ) : game.images?.[0] ? (
             <div className="relative overflow-hidden rounded-2xl border border-white/15 shadow-glass">
               <img
                 src={game.images[0]}
@@ -199,38 +309,38 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
               />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
             </div>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            {cleanConsoleName(game.consoleName) && (
-              <span className="rounded-full border border-white/15 bg-white/8 px-3 py-1 font-display uppercase tracking-widest text-table-ink-soft">
-                {cleanConsoleName(game.consoleName)}
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2 text-sm">
+            {cleanConsoleName(game.consoleDisplayName ?? game.consoleName) && (
+              <span className="rounded-full border border-white/15 bg-white/8 px-3.5 py-1.5 font-display uppercase tracking-widest text-table-ink-soft">
+                {cleanConsoleName(game.consoleDisplayName ?? game.consoleName)}
               </span>
             )}
             {game.categories.map((c) => (
               <span
                 key={c}
-                className="rounded-full border border-table-magenta/40 bg-table-magenta/15 px-3 py-1 font-display uppercase tracking-widest text-table-ink"
+                className="rounded-full border border-table-magenta/40 bg-table-magenta/15 px-3.5 py-1.5 font-display uppercase tracking-widest text-table-ink"
               >
                 {c}
               </span>
             ))}
           </div>
           {game.subtitle && (
-            <div className="mt-3 text-sm text-table-ink-soft">{game.subtitle}</div>
+            <div className="mt-4 text-base text-table-ink-soft">{game.subtitle}</div>
           )}
           {game.description && (
-            <p className="mt-2 text-xs leading-relaxed text-table-ink-muted">
+            <p className="mt-2 text-sm leading-relaxed text-table-ink-muted">
               {game.description}
             </p>
           )}
         </div>
 
         <div className="flex flex-col">
-          <div className="font-retro text-[10px] uppercase tracking-[0.3em] text-table-cyan">
+          <div className="font-retro text-xs uppercase tracking-[0.3em] text-table-cyan">
             {t('table.games.before', 'Avant de lancer')}
           </div>
 
-          <ul className="mt-3 space-y-2.5">
+          <ul className="mt-4 space-y-3">
             <StepCard
               index={1}
               icon={Coffee}
@@ -247,8 +357,8 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
                 body="Ce jeu se joue directement sur l'ecran tactile."
                 tone="success"
                 badge={
-                  <span className="inline-flex items-center gap-1 rounded-full border border-table-mint/40 bg-table-mint/15 px-2 py-0.5 font-display text-[10px] uppercase tracking-widest text-table-mint">
-                    <CheckCircle2 className="h-3 w-3" /> OK
+                  <span className="inline-flex items-center gap-1 rounded-full border border-table-mint/40 bg-table-mint/15 px-2.5 py-1 font-display text-xs uppercase tracking-widest text-table-mint">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> OK
                   </span>
                 }
               />
@@ -265,12 +375,12 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
                 tone={step2Tone}
                 badge={
                   hasController ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-table-mint/40 bg-table-mint/15 px-2 py-0.5 font-display text-[10px] uppercase tracking-widest text-table-mint tabular-nums">
-                      <CheckCircle2 className="h-3 w-3" /> {gamepadCount}/4
+                    <span className="inline-flex items-center gap-1 rounded-full border border-table-mint/40 bg-table-mint/15 px-2.5 py-1 font-display text-xs uppercase tracking-widest text-table-mint tabular-nums">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {gamepadCount}/4
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-table-red/50 bg-table-red/15 px-2 py-0.5 font-display text-[10px] uppercase tracking-widest text-table-red tabular-nums">
-                      <XCircle className="h-3 w-3" /> 0/4
+                    <span className="inline-flex items-center gap-1 rounded-full border border-table-red/50 bg-table-red/15 px-2.5 py-1 font-display text-xs uppercase tracking-widest text-table-red tabular-nums">
+                      <XCircle className="h-3.5 w-3.5" /> 0/4
                     </span>
                   )
                 }
@@ -284,7 +394,7 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
               body={
                 <span>
                   Maintiens la touche{' '}
-                  <span className="rounded border border-table-yellow/50 bg-table-yellow/15 px-1.5 py-0.5 font-display text-[10px] uppercase tracking-widest text-table-yellow">
+                  <span className="rounded border border-table-yellow/50 bg-table-yellow/15 px-2 py-0.5 font-display text-xs uppercase tracking-widest text-table-yellow">
                     Start
                   </span>{' '}
                   pendant <strong className="text-table-ink">3 secondes</strong>.
@@ -308,7 +418,7 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
                   size="xl"
                   fullWidth
                   disabled={launchDisabled}
-                  onClick={handleLaunch}
+                  onClick={handlePrimaryAction}
                   icon={<Play className="h-6 w-6" />}
                 >
                   {launching

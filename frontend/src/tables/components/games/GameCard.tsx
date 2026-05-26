@@ -4,6 +4,9 @@
  *   - 4 cards par ligne (xl), donc plus large que la version compacte.
  *   - Texte superpose sur l'image dans un degrade pour gagner de la place
  *     verticale.
+ *   - Quand disabled : opacity reduite + grayscale + pointer-events none.
+ *     Le badge "Min X joueurs" est superpose pour expliquer pourquoi.
+ *   - consoleName accepte un fallback display (utilise par GamesPage v2).
  */
 
 import type { Game } from '../../hooks/useGames';
@@ -11,15 +14,26 @@ import type { Game } from '../../hooks/useGames';
 interface Props {
   game: Game;
   onClick: () => void;
+  disabled?: boolean;
+  disabledReason?: string | null;
+  consoleLabel?: string | null;
 }
 
-export default function GameCard({ game, onClick }: Props) {
+export default function GameCard({ game, onClick, disabled = false, disabledReason, consoleLabel }: Props) {
   const cover = game.images?.[0];
+  const console_ = consoleLabel ?? game.consoleName;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group relative block w-full overflow-hidden rounded-2xl border border-white/10 bg-table-bg-elev/85 text-left transition-transform duration-150 active:scale-[0.97]"
+      disabled={disabled}
+      className={[
+        'group relative block w-full overflow-hidden rounded-2xl border border-white/10 bg-table-bg-elev/85 text-left transition-transform duration-150',
+        disabled
+          ? 'opacity-30 grayscale pointer-events-none'
+          : 'active:scale-[0.97]',
+      ].join(' ')}
     >
       <div className="relative aspect-video w-full overflow-hidden">
         {cover ? (
@@ -49,12 +63,18 @@ export default function GameCard({ game, onClick }: Props) {
           <div className="line-clamp-2 font-display text-base uppercase tracking-wider text-white">
             {game.name}
           </div>
-          {game.consoleName && (
+          {console_ && (
             <div className="font-display text-[11px] uppercase tracking-widest text-table-cyan/85">
-              {game.consoleName}
+              {console_}
             </div>
           )}
         </div>
+
+        {disabled && disabledReason && (
+          <div className="pointer-events-none absolute right-2 top-2 z-10 rounded-full border border-white/30 bg-black/70 px-2.5 py-1 font-display text-[10px] uppercase tracking-wider text-white">
+            {disabledReason}
+          </div>
+        )}
       </div>
     </button>
   );

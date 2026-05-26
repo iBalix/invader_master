@@ -25,6 +25,38 @@ export interface HomeFeatured {
   active: boolean;
 }
 
+/** Mise en avant unifiee (table_featured) — peut apparaitre sur home et/ou veille. */
+export interface FeaturedItem {
+  id: string;
+  position: number;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  image_url: string | null;
+  cta_label: string | null;
+  cta_target: string | null;
+  lottie_url: string | null;
+  show_on_home: boolean;
+  show_on_screensaver: boolean;
+  active: boolean;
+}
+
+export interface TablesSettings {
+  id: string;
+  screensaver_timeout_ms: number;
+  home_featured_interval_ms: number;
+  home_button_preview_interval_ms: number;
+  menu_button_image_url: string | null;
+  games_button_image_url: string | null;
+  menu_button_color: string;
+  games_button_color: string;
+}
+
+export interface GameVideoRef {
+  videoId: string;
+  startSec: number;
+}
+
 export interface LiveEventState {
   id?: number;
   is_live: boolean;

@@ -21,11 +21,13 @@ import { useInactivity } from '../../hooks/useInactivity';
 import { useHeartbeat } from '../../hooks/useHeartbeat';
 import { useSlaveGameSync } from '../../hooks/useSlaveGameSync';
 import { usePerfMode } from '../../hooks/usePerfMode';
+import { useTablesSettings } from '../../hooks/useTablesSettings';
+import { useDesignConfig } from '../../hooks/useDesignConfig';
 import ParticlesBackground from '../fx/ParticlesBackground';
 import { EASE_OUT_QUART } from '../../lib/motion';
 
-const IDLE_TIMEOUT_MS = 90_000;
-const BG_IMAGE_URL = '/table-bg.png';
+const DEFAULT_IDLE_TIMEOUT_MS = 90_000;
+const DEFAULT_BG_IMAGE_URL = '/table-bg.png';
 
 type RouteKind = 'screensaver' | 'home' | 'sub' | 'fullscreen' | 'setup';
 
@@ -101,8 +103,13 @@ export default function TableLayout() {
     );
   }, [routeKind]);
 
+  const { settings } = useTablesSettings();
+  const { design } = useDesignConfig();
+  const idleTimeoutMs = settings?.screensaver_timeout_ms ?? DEFAULT_IDLE_TIMEOUT_MS;
+  const bgImageUrl = design.backgroundImageUrl || DEFAULT_BG_IMAGE_URL;
+
   useInactivity({
-    timeoutMs: IDLE_TIMEOUT_MS,
+    timeoutMs: idleTimeoutMs,
     enabled: inactivityEnabled,
     onIdle: () => navigate('/table/screensaver', { replace: true }),
   });
@@ -112,7 +119,9 @@ export default function TableLayout() {
 
   const isShow = routeKind === 'home' || routeKind === 'screensaver';
   const showBgImage = isShow;
-  const showParticles = isShow;
+  // Particules decoratives : uniquement sur la veille. La home a son propre
+  // champ de particules interactif (InteractiveParticles).
+  const showParticles = routeKind === 'screensaver';
 
   return (
     <div
@@ -132,7 +141,7 @@ export default function TableLayout() {
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
-            style={{ backgroundImage: `url(${BG_IMAGE_URL})` }}
+            style={{ backgroundImage: `url(${bgImageUrl})` }}
           />
           <div
             aria-hidden

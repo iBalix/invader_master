@@ -7,8 +7,18 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { triggerSafe } from '../config/pusher.js';
 import { requireOrderingEnabled } from '../middleware/requireOrderingEnabled.js';
+import { resolveEffectiveDesign } from '../lib/designResolver.js';
 
 export const tablesRoutes = Router();
+
+function toCamelDesign(row: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!row) return null;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())] = v;
+  }
+  return out;
+}
 
 const HOSTNAME_RE = /^TABLE\d{2}-[12]$/;
 const PUSHER_CHANNEL_WHITELIST = /^(TABLE\d{2}-[12]|TABLES)$/;
@@ -76,6 +86,34 @@ tablesRoutes.post('/heartbeat', async (req, res) => {
 });
 
 // ------------------------------------------------------------
+// GET /public/tables/settings
+// Reglages globaux (singleton) — declaree AVANT les routes :hostname pour
+// ne pas etre captee par le param.
+// ------------------------------------------------------------
+tablesRoutes.get('/settings', async (_req, res) => {
+  try {
+    const { data } = await supabaseAdmin.from('tables_settings').select('*').limit(1).maybeSingle();
+    res.json({ status: 'success', settings: data ?? null });
+  } catch (err) {
+    console.error('[tables/settings] error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// ------------------------------------------------------------
+// GET /public/tables/design — config design effective (resolue selon planif)
+// ------------------------------------------------------------
+tablesRoutes.get('/design', async (_req, res) => {
+  try {
+    const design = await resolveEffectiveDesign();
+    res.json({ status: 'success', design: toCamelDesign(design as Record<string, unknown> | null) });
+  } catch (err) {
+    console.error('[tables/design] error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// ------------------------------------------------------------
 // GET /public/tables/:hostname/state
 // Etat global pour le boot d'une table : config + live event + featured + next event
 // ------------------------------------------------------------
@@ -88,16 +126,11 @@ tablesRoutes.get('/:hostname/state', async (req, res) => {
   try {
     await upsertDevice(parsed);
 
-    const [deviceQ, liveQ, screenQ, homeQ, nextEventQ] = await Promise.all([
+    const [deviceQ, liveQ, featuredQ, nextEventQ, settingsQ] = await Promise.all([
       supabaseAdmin.from('table_devices').select('*').eq('hostname', parsed.hostname).single(),
       supabaseAdmin.from('live_event_state').select('*').eq('id', 1).maybeSingle(),
       supabaseAdmin
-        .from('table_screensaver_featured')
-        .select('*')
-        .eq('active', true)
-        .order('position', { ascending: true }),
-      supabaseAdmin
-        .from('table_home_featured')
+        .from('table_featured')
         .select('*')
         .eq('active', true)
         .order('position', { ascending: true }),
@@ -109,15 +142,19 @@ tablesRoutes.get('/:hostname/state', async (req, res) => {
         .order('date', { ascending: true })
         .limit(1)
         .maybeSingle(),
+      supabaseAdmin.from('tables_settings').select('*').limit(1).maybeSingle(),
     ]);
+
+    const featured = featuredQ.data ?? [];
 
     res.json({
       status: 'success',
       device: deviceQ.data ?? null,
       liveEvent: liveQ.data ?? { is_live: false },
-      screensaverFeatured: screenQ.data ?? [],
-      homeFeatured: homeQ.data ?? [],
+      screensaverFeatured: featured.filter((f) => f.show_on_screensaver),
+      homeFeatured: featured.filter((f) => f.show_on_home),
       nextEvent: nextEventQ.data ?? null,
+      settings: settingsQ.data ?? null,
     });
   } catch (err) {
     console.error('[tables/state] error:', err);
@@ -136,9 +173,10 @@ tablesRoutes.get('/:hostname/screensaver', async (req, res) => {
   }
   try {
     const { data, error } = await supabaseAdmin
-      .from('table_screensaver_featured')
+      .from('table_featured')
       .select('*')
       .eq('active', true)
+      .eq('show_on_screensaver', true)
       .order('position', { ascending: true });
     if (error) throw error;
     res.json({ status: 'success', items: data ?? [] });
@@ -159,11 +197,12 @@ tablesRoutes.get('/:hostname/home', async (req, res) => {
     return;
   }
   try {
-    const [featuredQ, liveQ, nextEventQ] = await Promise.all([
+    const [featuredQ, liveQ, nextEventQ, settingsQ, menuVideosQ, gameVideosQ] = await Promise.all([
       supabaseAdmin
-        .from('table_home_featured')
+        .from('table_featured')
         .select('*')
         .eq('active', true)
+        .eq('show_on_home', true)
         .order('position', { ascending: true }),
       supabaseAdmin.from('live_event_state').select('*').eq('id', 1).maybeSingle(),
       supabaseAdmin
@@ -174,13 +213,29 @@ tablesRoutes.get('/:hostname/home', async (req, res) => {
         .order('date', { ascending: true })
         .limit(1)
         .maybeSingle(),
+      supabaseAdmin.from('tables_settings').select('*').limit(1).maybeSingle(),
+      supabaseAdmin.from('menu_products_v2').select('video_url').not('video_url', 'is', null),
+      supabaseAdmin
+        .from('games_v2')
+        .select('youtube_video_id, youtube_start_sec')
+        .not('youtube_video_id', 'is', null),
     ]);
+
+    const menuVideos = (menuVideosQ.data ?? [])
+      .map((r) => r.video_url)
+      .filter((u): u is string => !!u);
+    const gameVideos = (gameVideosQ.data ?? [])
+      .filter((r) => !!r.youtube_video_id)
+      .map((r) => ({ videoId: r.youtube_video_id as string, startSec: r.youtube_start_sec ?? 0 }));
 
     res.json({
       status: 'success',
       featured: featuredQ.data ?? [],
       liveEvent: liveQ.data ?? { is_live: false },
       nextEvent: nextEventQ.data ?? null,
+      settings: settingsQ.data ?? null,
+      menuVideos,
+      gameVideos,
     });
   } catch (err) {
     console.error('[tables/home] error:', err);

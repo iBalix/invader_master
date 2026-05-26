@@ -19,6 +19,7 @@ import { Beer } from 'lucide-react';
 import { useHostname } from '../hooks/useHostname';
 import { useCarteV2, type MenuCategoryV2, type MenuProductV2, type MenuConditioningV2, type MenuVariantV2 } from '../hooks/useCarteV2';
 import { useCarteSettings } from '../hooks/useCarteSettings';
+import { useDesignConfig } from '../hooks/useDesignConfig';
 import { useCart, buildCartKey } from '../store/cartStore';
 import { useT } from '../i18n/useT';
 import HeaderBar from '../components/layout/HeaderBar';
@@ -109,6 +110,7 @@ export default function MenuPage() {
   const identity = useHostname();
   const { loading, categories, error } = useCarteV2();
   const { settings, isHappyHourNow } = useCarteSettings();
+  const { design } = useDesignConfig();
   const { items, add, totalQty } = useCart();
   const t = useT();
 
@@ -263,6 +265,7 @@ export default function MenuPage() {
         <LauncherSidebar
           title={t('table.menu.categories', 'Categories')}
           accent="violet"
+          accentColor={design.menuButtonColor}
           entries={sidebarEntries}
           currentId={currentId}
           onSelect={handleSelectCategory}

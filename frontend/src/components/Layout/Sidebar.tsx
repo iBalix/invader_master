@@ -85,6 +85,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', pageKey: 'contenus/carte' },
       { title: 'Carte v2', icon: Sparkles, disabled: false, path: '/contenus/carte-v2', pageKey: 'contenus/carte' },
       { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', pageKey: 'contenus/jeux' },
+      { title: 'Jeux v2', icon: Sparkles, disabled: false, path: '/contenus/jeux-v2', pageKey: 'contenus/jeux' },
       { title: 'Évènements', icon: Calendar, disabled: false, path: '/contenus/evenements', pageKey: 'contenus/evenements' },
       { title: 'Config écrans', icon: Monitor, disabled: false, path: '/contenus/config-ecrans', pageKey: 'contenus/medias' },
       { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions', pageKey: 'contenus/traductions' },

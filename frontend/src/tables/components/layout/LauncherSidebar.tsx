@@ -49,6 +49,12 @@ export interface SidebarEntry {
    * Couleur hex (#RRGGBB) appliquee en background subtil sur l'item (carte v2).
    */
   color?: string | null;
+  /**
+   * URL d'une texture image (paysage 16:9) appliquee en background du bouton
+   * (jeux v2). Un degrade noir gauche -> transparent droit garantit la lisibilite
+   * du libelle. Si absente, fallback sur color.
+   */
+  textureUrl?: string | null;
 }
 
 interface Props {
@@ -69,6 +75,11 @@ interface Props {
    * Utilise pour le bloc Happy Hour fixe sur la carte v2.
    */
   bottomSlot?: ReactNode;
+  /**
+   * Couleur d'accent personnalisee (hex). Si fournie, override `accent`
+   * pour la pill active + la barre (couleur de la config design).
+   */
+  accentColor?: string | null;
 }
 
 const ACCENT_BAR: Record<NonNullable<Props['accent']>, string> = {
@@ -98,6 +109,7 @@ export default function LauncherSidebar({
   showCount = true,
   showCategoryDividers = false,
   bottomSlot,
+  accentColor,
 }: Props) {
   const perf = usePerfMode();
   const reactId = useId();
@@ -150,12 +162,25 @@ export default function LauncherSidebar({
           }
 
           const colorBg = e.color && !active ? `${e.color}22` : undefined;
+          // Texture (jeux v2) : background image avec degrade noir gauche -> transparent droit.
+          // Le degrade garantit la lisibilite du libelle (place a gauche).
+          const textureStyle: React.CSSProperties | undefined = e.textureUrl
+            ? {
+                backgroundImage: `linear-gradient(to right, rgba(10,6,18,1) 0%, rgba(10,6,18,0.95) 45%, rgba(10,6,18,0.55) 70%, rgba(10,6,18,0) 100%), url(${e.textureUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }
+            : undefined;
           nodes.push(
             <button
               key={e.id}
               type="button"
               onClick={() => onSelect(e.id)}
-              style={{ maxHeight: maxH, minHeight: minH, backgroundColor: colorBg }}
+              style={{
+                maxHeight: maxH,
+                minHeight: minH,
+                ...(textureStyle ?? { backgroundColor: colorBg }),
+              }}
               className={[
                 'group relative flex flex-1 items-center gap-3 rounded-xl px-4 text-left transition-colors duration-150 active:scale-[0.98]',
                 e.depth && e.depth > 0 ? 'ml-3' : '',
@@ -170,8 +195,13 @@ export default function LauncherSidebar({
                   aria-hidden
                   className={[
                     'pointer-events-none absolute inset-0 rounded-xl border',
-                    ACCENT_PILL_BG[accent],
+                    accentColor ? '' : ACCENT_PILL_BG[accent],
                   ].join(' ')}
+                  style={
+                    accentColor
+                      ? { backgroundColor: `${accentColor}33`, borderColor: `${accentColor}66` }
+                      : undefined
+                  }
                   transition={
                     perf.reduced
                       ? { duration: 0 }
@@ -182,9 +212,12 @@ export default function LauncherSidebar({
                     aria-hidden
                     className={[
                       'absolute left-0 top-1/2 h-3/5 w-1 rounded-r-full',
-                      ACCENT_BAR[accent],
+                      accentColor ? '' : ACCENT_BAR[accent],
                     ].join(' ')}
-                    style={{ transform: 'translate(-3px, -50%)' }}
+                    style={{
+                      transform: 'translate(-3px, -50%)',
+                      ...(accentColor ? { backgroundColor: accentColor } : {}),
+                    }}
                   />
                 </motion.span>
               )}

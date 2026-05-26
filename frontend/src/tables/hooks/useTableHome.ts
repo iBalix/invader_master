@@ -8,16 +8,26 @@
 
 import { useEffect, useState } from 'react';
 import { tablesApi } from '../lib/tablesApi';
-import type { HomeFeatured, UpcomingEvent } from '../types';
+import type { FeaturedItem, GameVideoRef, TablesSettings, UpcomingEvent } from '../types';
 
 interface State {
   loading: boolean;
-  featured: HomeFeatured[];
+  featured: FeaturedItem[];
   nextEvent: UpcomingEvent | null;
+  settings: TablesSettings | null;
+  menuVideos: string[];
+  gameVideos: GameVideoRef[];
 }
 
 export function useTableHome(hostname: string | undefined | null): State {
-  const [state, setState] = useState<State>({ loading: true, featured: [], nextEvent: null });
+  const [state, setState] = useState<State>({
+    loading: true,
+    featured: [],
+    nextEvent: null,
+    settings: null,
+    menuVideos: [],
+    gameVideos: [],
+  });
 
   useEffect(() => {
     if (!hostname) return;
@@ -31,11 +41,21 @@ export function useTableHome(hostname: string | undefined | null): State {
           loading: false,
           featured: res.data?.featured ?? [],
           nextEvent: res.data?.nextEvent ?? null,
+          settings: res.data?.settings ?? null,
+          menuVideos: res.data?.menuVideos ?? [],
+          gameVideos: res.data?.gameVideos ?? [],
         });
       })
       .catch(() => {
         if (cancelled) return;
-        setState({ loading: false, featured: [], nextEvent: null });
+        setState({
+          loading: false,
+          featured: [],
+          nextEvent: null,
+          settings: null,
+          menuVideos: [],
+          gameVideos: [],
+        });
       });
     return () => {
       cancelled = true;

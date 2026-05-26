@@ -2,10 +2,13 @@
  * Ecran d'accueil "launcher" V3.
  *
  * Layout :
- *   - Image de fond + particules : geres par TableLayout
+ *   - Image de fond : geree par TableLayout
+ *   - Top : bandeau evenement (permanent) + apparitions de mises en avant
+ *   - Centre : titre INVADER centre + 2 boutons CTA (picto + nom + sous-titre)
  *   - Top-right : locale switcher + bouton power (vers screensaver)
- *   - Gauche-haut : titre INVADER tres gros + sous-titre + 2 boutons CTA
- *   - Bas-droite : event live/upcoming + grille de cards "mises en avant"
+ *
+ * Chaque bouton emet des particules vers l'exterieur (gauche pour Carte,
+ * droite pour Jeux), de la couleur configuree en reglages globaux.
  *
  * Aucun scroll, layout fixe en 1920x1080.
  */
@@ -16,25 +19,49 @@ import { Utensils, Gamepad2, Power, ArrowRight } from 'lucide-react';
 import { useHostname } from '../hooks/useHostname';
 import { useTableHome } from '../hooks/useTableHome';
 import { useLiveEvent } from '../hooks/useLiveEvent';
+import { useDesignConfig } from '../hooks/useDesignConfig';
 import { useT } from '../i18n/useT';
-import EventBanner from '../components/home/EventBanner';
-import FeaturedCards from '../components/home/FeaturedCards';
+import HomeTopBanner from '../components/home/HomeTopBanner';
+import ButtonParticles from '../components/home/ButtonParticles';
 import LocaleSwitcher from '../components/layout/LocaleSwitcher';
 import { EASE_OUT_QUART } from '../lib/motion';
 
+/** Eclaircit/assombrit un hex de `amt` (-255..255). */
+function shade(hex: string, amt: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  const r = clamp(((n >> 16) & 255) + amt);
+  const g = clamp(((n >> 8) & 255) + amt);
+  const b = clamp((n & 255) + amt);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
 export default function HomePage() {
   const identity = useHostname();
-  const { featured, nextEvent } = useTableHome(identity?.hostname);
+  const { featured, nextEvent, settings } = useTableHome(identity?.hostname);
   const liveEvent = useLiveEvent();
+  const { design } = useDesignConfig();
   const t = useT();
   const navigate = useNavigate();
 
+  const menuColor = design.menuButtonColor;
+  const gamesColor = design.gamesButtonColor;
+
   return (
     <div className="relative flex h-full w-full flex-col px-12 py-8">
-      {/* === Top bar minimale === */}
-      <header className="flex shrink-0 items-center justify-between gap-4">
-        <div />
-        <div className="flex items-center gap-3">
+      {/* === Top bar : bandeau central + actions a droite === */}
+      <header className="relative z-10 flex shrink-0 items-start">
+        <div className="flex-1">
+          <HomeTopBanner
+            liveEvent={liveEvent}
+            nextEvent={nextEvent}
+            featured={featured}
+            featuredIntervalMs={settings?.home_featured_interval_ms}
+          />
+        </div>
+        <div className="absolute right-0 top-0 flex items-center gap-3">
           <LocaleSwitcher />
           <button
             type="button"
@@ -48,124 +75,96 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* === Bloc principal : titre + CTA a gauche === */}
-      <div className="grid flex-1 min-h-0 grid-cols-12 gap-8">
-        <div className="col-span-7 flex flex-col justify-center">
-          <motion.h1
-            initial={{ y: 30, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.7, delay: 0.1, ease: EASE_OUT_QUART }}
-            className="font-display text-[12rem] leading-[0.85] tracking-tight text-table-ink"
-            style={{
-              textShadow:
-                '0 0 30px rgba(123, 43, 255, 0.6), 0 0 60px rgba(123, 43, 255, 0.3)',
-            }}
-          >
-            INVADER
-          </motion.h1>
+      {/* === Centre : titre INVADER + boutons CTA centres === */}
+      <div className="relative z-10 flex flex-1 min-h-0 flex-col items-center justify-center">
+        <motion.h1
+          initial={{ y: 24, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.7, delay: 0.1, ease: EASE_OUT_QUART }}
+          className="text-center font-display text-[12rem] leading-[0.85] tracking-tight text-table-ink"
+          style={{
+            textShadow: '0 0 30px rgba(123, 43, 255, 0.6), 0 0 60px rgba(123, 43, 255, 0.3)',
+          }}
+        >
+          INVADER
+        </motion.h1>
 
-          <motion.p
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.25 }}
-            className="mt-4 max-w-xl font-body text-xl text-table-ink-soft"
-            style={{ textShadow: '0 2px 12px rgba(0,0,0,0.55)' }}
-          >
-            {t(
-              'table.home.subtitle',
-              'Choisis ton terrain de jeu : commande tes boissons ou lance une partie retro depuis cette table.',
-            )}
-          </motion.p>
-
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.35 }}
-            className="mt-10 flex flex-wrap items-center gap-5"
-          >
-            <CTAButton
-              to="/table/menu"
-              variant="violet"
-              icon={<Utensils className="h-7 w-7" />}
-              label={t('table.home.cta.menu', 'Voir la carte')}
-              hint={t('table.home.cta.menu.subtitle', 'Boissons & nourriture')}
-            />
-            <CTAButton
-              to="/table/games"
-              variant="magenta"
-              icon={<Gamepad2 className="h-7 w-7" />}
-              label={t('table.home.cta.games', 'Voir les jeux')}
-              hint={t('table.home.cta.games.subtitle', 'Lance ta partie')}
-            />
-          </motion.div>
-        </div>
-
-        {/* === colonne droite : reservee aux featured (positionnes en bas) === */}
-        <div className="col-span-5" />
+        <motion.div
+          initial={{ y: 24, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="mt-12 flex flex-wrap items-center justify-center gap-6"
+        >
+          <CTAButton
+            to="/table/menu"
+            emitDirection="left"
+            color={menuColor}
+            icon={<Utensils className="h-9 w-9" />}
+            label={t('table.home.cta.menu', 'Voir la carte')}
+            hint={t('table.home.cta.menu.subtitle', 'Boissons & nourriture')}
+          />
+          <CTAButton
+            to="/table/games"
+            emitDirection="right"
+            color={gamesColor}
+            icon={<Gamepad2 className="h-9 w-9" />}
+            label={t('table.home.cta.games', 'Voir les jeux')}
+            hint={t('table.home.cta.games.subtitle', 'Lance ta partie')}
+          />
+        </motion.div>
       </div>
-
-      {/* === Bas-droite : event banner + featured cards === */}
-      <motion.div
-        initial={{ y: 30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.6, delay: 0.5 }}
-        className="absolute bottom-8 right-12 flex w-[52rem] flex-col gap-4"
-      >
-        <div className="flex items-center gap-3 px-1">
-          <span className="h-px flex-1 bg-gradient-to-r from-transparent to-white/15" />
-          <span className="font-retro text-[11px] uppercase tracking-[0.3em] text-table-ink-muted">
-            {t('table.home.featured.title', 'A l\'affiche')}
-          </span>
-          <span className="h-px w-12 bg-white/15" />
-        </div>
-        <EventBanner liveEvent={liveEvent} nextEvent={nextEvent} />
-        <FeaturedCards items={featured} />
-      </motion.div>
     </div>
   );
 }
 
 interface CTAButtonProps {
   to: string;
-  variant: 'violet' | 'magenta';
+  emitDirection: 'left' | 'right';
+  color: string;
   icon: React.ReactNode;
   label: string;
   hint: string;
 }
 
-function CTAButton({ to, variant, icon, label, hint }: CTAButtonProps) {
-  const palette =
-    variant === 'violet'
-      ? {
-          bg: 'from-table-violet via-table-violet to-table-violet-deep',
-          glow: 'shadow-neon-violet',
-        }
-      : {
-          bg: 'from-table-magenta via-[#D724B5] to-[#7A0F73]',
-          glow: 'shadow-neon-magenta',
-        };
+function CTAButton({ to, emitDirection, color, icon, label, hint }: CTAButtonProps) {
+  const gradient = `linear-gradient(135deg, ${shade(color, 18)} 0%, ${color} 50%, ${shade(color, -48)} 140%)`;
 
   return (
     <Link
       to={to}
-      className={[
-        'relative flex min-w-[20rem] items-center gap-5 rounded-2xl bg-gradient-to-br p-5 pr-7',
-        'border border-white/15 transition-transform duration-150 active:scale-[0.98]',
-        palette.bg,
-        palette.glow,
-      ].join(' ')}
+      className="relative flex min-w-[26rem] items-center gap-6 rounded-2xl border border-white/15 p-6 pr-8 transition-transform duration-150 active:scale-[0.98]"
     >
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white">
+      {/* Particules : jaillissent de l'extremite du bouton vers l'exterieur.
+          Le canvas est colle au bord (avec un leger chevauchement de 1.5rem
+          masque par le fond du bouton) et s'etend vers l'exterieur. */}
+      <div
+        className="pointer-events-none absolute top-[-2rem] bottom-[-2rem] z-0"
+        style={
+          emitDirection === 'left'
+            ? { right: 'calc(100% - 1.5rem)', width: '14rem' }
+            : { left: 'calc(100% - 1.5rem)', width: '14rem' }
+        }
+      >
+        <ButtonParticles direction={emitDirection} color={color} />
+      </div>
+
+      {/* Fond colore (au-dessus des particules, masque celles "sous" le bouton) */}
+      <div
+        className="absolute inset-0 z-[1] rounded-2xl"
+        style={{ background: gradient, boxShadow: `0 0 26px ${color}66` }}
+      />
+
+      <div className="relative z-[2] flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white">
         {icon}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="font-display text-3xl uppercase leading-none tracking-wider text-white">
+      <div className="relative z-[2] min-w-0 flex-1">
+        <div className="font-display text-4xl uppercase leading-none tracking-wider text-white">
           {label}
         </div>
-        <div className="mt-1.5 text-sm text-white/75">{hint}</div>
+        <div className="mt-2 text-lg text-white/80">{hint}</div>
       </div>
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white">
-        <ArrowRight className="h-5 w-5" />
+      <div className="relative z-[2] flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white">
+        <ArrowRight className="h-6 w-6" />
       </div>
     </Link>
   );
