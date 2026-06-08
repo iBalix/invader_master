@@ -323,6 +323,27 @@ publicRoutes.get('/carte-settings', async (_req, res) => {
   }
 });
 
+// Website settings (singleton) — public pour le site vitrine (messages du bandeau)
+publicRoutes.get('/website-settings', async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('website_settings')
+      .select('*')
+      .limit(1)
+      .single();
+
+    if (error || !data) {
+      res.status(404).json({ error: 'Configuration introuvable' });
+      return;
+    }
+
+    res.json(toCamel(data));
+  } catch (err) {
+    console.error('Public website settings error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Full games: categories, consoles, games with relations
 publicRoutes.get('/games', async (req, res) => {
   try {

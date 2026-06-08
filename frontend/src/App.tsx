@@ -16,6 +16,7 @@ import CategoryFormPage from './pages/CategoryFormPage';
 import CarteV2ListPage from './pages/CarteV2ListPage';
 import CategoryFormV2Page from './pages/CategoryFormV2Page';
 import CarteSettingsPage from './pages/CarteSettingsPage';
+import WebsiteSettingsPage from './pages/WebsiteSettingsPage';
 import GamesListPage from './pages/GamesListPage';
 import GameFormPage from './pages/GameFormPage';
 import GamesV2ListPage from './pages/GamesV2ListPage';
@@ -83,6 +84,7 @@ export default function App() {
                     <Route path="contenus/medias" element={<Navigate to="/contenus/config-ecrans" replace />} />
                     <Route path="contenus/evenements" element={<EventsPage />} />
                     <Route path="contenus/traductions" element={<TranslationsPage />} />
+                    <Route path="site-web/parametres" element={<WebsiteSettingsPage />} />
                     <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
                     <Route path="utilitaires/comptabilite" element={<CashManagementPage />} />
                     <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />

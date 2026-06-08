@@ -16,6 +16,7 @@ export const ALL_PAGES: PageDef[] = [
   { key: 'contenus/evenements', label: 'Evenements' },
   { key: 'contenus/medias', label: 'Config ecrans' },
   { key: 'contenus/traductions', label: 'Traductions' },
+  { key: 'site-web/parametres', label: 'Site web - Paramètres' },
   { key: 'contenus/quiz', label: 'Quiz' },
   { key: 'evenements/battle-questions', label: 'Battle Royal' },
   { key: 'utilitaires/import-finances', label: 'Import finances' },

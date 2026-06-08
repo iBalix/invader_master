@@ -24,6 +24,7 @@ import {
   ShoppingBag,
   ExternalLink,
   Sparkles,
+  Globe,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -108,6 +109,14 @@ const SIDEBAR_MENU: SidebarItem[] = [
       { title: 'Codes promo', icon: Tag, disabled: false, path: '/tables-tactiles/coupons', pageKey: 'tables-tactiles/coupons' },
       { title: 'Commandes', icon: ShoppingBag, disabled: false, path: '/tables-tactiles/orders', pageKey: 'tables-tactiles/orders' },
       { title: 'Apercu interface', icon: Tablet, disabled: false, path: '/table/home?hostname=TABLE01-1', pageKey: 'tables-tactiles/preview', external: true },
+    ],
+  },
+  {
+    kind: 'accordion',
+    title: 'Site web',
+    defaultOpen: false,
+    items: [
+      { title: 'Paramètres', icon: Globe, disabled: false, path: '/site-web/parametres', pageKey: 'site-web/parametres' },
     ],
   },
   {
