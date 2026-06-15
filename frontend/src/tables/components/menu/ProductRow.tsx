@@ -152,6 +152,7 @@ export default function ProductRow({
               const cPrice = num(c.price) ?? 0;
               const cPriceHh = num(c.priceHh);
               const cHhActive = happyHour && cPriceHh != null && cPriceHh > 0 && cPriceHh < cPrice;
+              const cHasHhVisible = cPriceHh != null && cPriceHh > 0 && cPriceHh < cPrice;
               return (
                 <div
                   key={c.id}
@@ -171,9 +172,16 @@ export default function ProductRow({
                         </span>
                       </>
                     ) : (
-                      <span className="font-display text-2xl text-table-ink">
-                        {formatPrice(cPrice)}
-                      </span>
+                      <>
+                        <span className="font-display text-2xl text-table-ink">
+                          {formatPrice(cPrice)}
+                        </span>
+                        {cHasHhVisible && (
+                          <span className="mt-0.5 text-[10px] text-table-yellow/80">
+                            HH&nbsp;{formatPrice(cPriceHh!)}
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                   {showAddButton && onAddConditioning && (

@@ -87,18 +87,24 @@ export default function HomeTopBanner({
   featured,
   featuredIntervalMs = DEFAULT_INTERVAL_MS,
 }: Props) {
-  const baseSlide: Slide = liveEvent.is_live
-    ? { kind: 'live' }
-    : nextEvent
-      ? { kind: 'event' }
-      : { kind: 'empty' };
+  // [TEMP] Events desactives sur retour de l'associe (mai 2026) : on ignore
+  // liveEvent + nextEvent et on force le bandeau a son etat neutre. Les
+  // mises en avant ('featured') continuent de tourner par dessus. Pour
+  // reactiver : decommenter le bloc ci-dessous et supprimer la ligne forcee.
+  // const baseSlide: Slide = liveEvent.is_live
+  //   ? { kind: 'live' }
+  //   : nextEvent
+  //     ? { kind: 'event' }
+  //     : { kind: 'empty' };
+  const baseSlide: Slide = { kind: 'empty' };
 
   const [featuredIndex, setFeaturedIndex] = useState<number | null>(null);
   const cursorRef = useRef(0);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (liveEvent.is_live || featured.length === 0) {
+    // [TEMP] On ignore liveEvent.is_live ici aussi (cf. baseSlide ci-dessus).
+    if (featured.length === 0) {
       setFeaturedIndex(null);
       return;
     }
@@ -125,7 +131,7 @@ export default function HomeTopBanner({
       mounted = false;
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
-  }, [liveEvent.is_live, featured, featuredIntervalMs]);
+  }, [featured, featuredIntervalMs]);
 
   const activeFeatured = featuredIndex != null ? featured[featuredIndex] ?? null : null;
   const slide: Slide = activeFeatured ? { kind: 'featured', item: activeFeatured } : baseSlide;

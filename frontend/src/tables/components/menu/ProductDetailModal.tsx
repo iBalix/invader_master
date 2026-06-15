@@ -18,9 +18,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Minus, Plus, ShoppingCart } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import ArcadeButton from '../ui/ArcadeButton';
-import type { MenuProduct } from '../../hooks/useCarte';
+import type { MenuProductV2 } from '../../hooks/useCarteV2';
 import { formatPrice } from '../../lib/format';
 import { useT } from '../../i18n/useT';
+
+function num(v: number | string | null | undefined): number | null {
+  if (v == null) return null;
+  const n = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 // Duree (en secondes) avant la fin de la video a partir de laquelle on
 // declenche le fondu vers l'image du produit.
@@ -31,7 +37,7 @@ const FADE_DURATION_MS = 500;
 
 interface Props {
   open: boolean;
-  product: MenuProduct | null;
+  product: MenuProductV2 | null;
   happyHour: boolean;
   qtyInCart: number;
   onClose: () => void;
@@ -103,11 +109,21 @@ export default function ProductDetailModal({
     setVideoEnded(true);
   }
 
-  const price = Number(product.price ?? 0);
-  const priceHh = product.priceHh != null ? Number(product.priceHh) : null;
+  const price = num(product.price) ?? 0;
+  const priceHh = num(product.priceHh);
   const hhActive = happyHour && priceHh != null && priceHh > 0 && priceHh < price;
+  const hasHhVisible = priceHh != null && price > 0 && priceHh > 0 && priceHh < price;
   const unit = hhActive ? priceHh! : price;
   const total = unit * qty;
+
+  const conditionings = product.conditionings ?? [];
+  const variants = product.variants ?? [];
+  const hasConditionings = conditionings.length > 0;
+  const hasVariants = variants.length > 0;
+  // Quand un picking est requis (conditionings/variants), l'ajout direct depuis
+  // la modale est masque : l'utilisateur doit choisir via les boutons inline
+  // (ProductRow) ou le VariantPicker.
+  const requiresPicking = hasConditionings || hasVariants;
 
   function handleAdd() {
     onAdd(qty);
@@ -191,28 +207,96 @@ export default function ProductDetailModal({
             </p>
           )}
 
-          <div className="mt-auto pt-6">
-            <div className="flex items-baseline gap-3">
-              {hhActive ? (
-                <>
-                  <span className="font-display text-4xl text-table-yellow">
-                    {formatPrice(priceHh)}
-                  </span>
-                  <span className="font-display text-lg text-table-ink-muted line-through">
-                    {formatPrice(price)}
-                  </span>
-                </>
-              ) : (
-                <span className="font-display text-4xl text-table-ink">
-                  {formatPrice(price)}
+          {hasVariants && (
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {variants.map((v) => (
+                <span
+                  key={v.id}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs uppercase tracking-wider text-table-ink-soft"
+                >
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-white/30"
+                    style={{ backgroundColor: v.color ?? '#cccccc' }}
+                  />
+                  {v.label}
                 </span>
-              )}
-              <span className="ml-auto font-display text-xs uppercase tracking-widest text-table-ink-muted">
-                {t('table.menu.unit', 'Prix unitaire')}
-              </span>
+              ))}
             </div>
+          )}
 
-            {showAddControls && (
+          <div className="mt-auto pt-6">
+            {hasConditionings ? (
+              <div className="flex flex-wrap gap-3">
+                {conditionings.map((c) => {
+                  const cPrice = num(c.price) ?? 0;
+                  const cPriceHh = num(c.priceHh);
+                  const cHhActive =
+                    happyHour && cPriceHh != null && cPriceHh > 0 && cPriceHh < cPrice;
+                  const cHasHhVisible =
+                    cPriceHh != null && cPrice > 0 && cPriceHh > 0 && cPriceHh < cPrice;
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex min-w-[6.5rem] flex-col items-center gap-1 rounded-xl border border-white/15 bg-white/5 px-3 py-3"
+                    >
+                      <span className="font-display text-xs uppercase tracking-wider text-table-ink-soft">
+                        {c.label}
+                      </span>
+                      {cHhActive ? (
+                        <>
+                          <span className="font-display text-2xl text-table-yellow">
+                            {formatPrice(cPriceHh!)}
+                          </span>
+                          <span className="text-[11px] text-table-ink-muted line-through">
+                            {formatPrice(cPrice)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-display text-2xl text-table-ink">
+                            {formatPrice(cPrice)}
+                          </span>
+                          {cHasHhVisible && (
+                            <span className="text-[10px] text-table-yellow/80">
+                              HH&nbsp;{formatPrice(cPriceHh!)}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-3">
+                {hhActive ? (
+                  <>
+                    <span className="font-display text-4xl text-table-yellow">
+                      {formatPrice(priceHh!)}
+                    </span>
+                    <span className="font-display text-lg text-table-ink-muted line-through">
+                      {formatPrice(price)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-display text-4xl text-table-ink">
+                      {formatPrice(price)}
+                    </span>
+                    {hasHhVisible && (
+                      <span className="font-display text-base text-table-yellow/85">
+                        Happy Hour&nbsp;: {formatPrice(priceHh!)}
+                      </span>
+                    )}
+                  </>
+                )}
+                <span className="ml-auto font-display text-xs uppercase tracking-widest text-table-ink-muted">
+                  {t('table.menu.unit', 'Prix unitaire')}
+                </span>
+              </div>
+            )}
+
+            {showAddControls && !requiresPicking && (
               <>
                 <div className="mt-5 flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-3">
                   <span className="font-display text-xs uppercase tracking-widest text-table-ink-muted">
@@ -255,6 +339,9 @@ export default function ProductDetailModal({
             )}
           </div>
         </div>
+      </div>
+      <div className="mt-4 text-center text-[11px] uppercase tracking-widest text-table-ink-muted/60">
+        Visuel non contractuel
       </div>
     </ArcadeModal>
   );

@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import ProductModalV2, { type ProductV2Data } from '../components/CarteV2/ProductModalV2';
 import LucideIconPicker from '../components/CarteV2/LucideIconPicker';
+import FileUpload from '../components/Quiz/FileUpload';
 
 interface CategoryForm {
   name: string;
@@ -24,6 +25,7 @@ interface CategoryForm {
   weight: number;
   icon_name: string | null;
   color: string | null;
+  texture_url: string | null;
 }
 
 interface CategoryOption {
@@ -39,6 +41,7 @@ const EMPTY: CategoryForm = {
   weight: 0,
   icon_name: null,
   color: null,
+  texture_url: null,
 };
 
 export default function CategoryFormV2Page() {
@@ -82,6 +85,7 @@ export default function CategoryFormV2Page() {
         weight: c.weight ?? 0,
         icon_name: c.icon_name ?? null,
         color: c.color ?? null,
+        texture_url: c.texture_url ?? null,
       });
       setProducts(c.products ?? []);
     } catch {
@@ -123,6 +127,7 @@ export default function CategoryFormV2Page() {
         parent_id: form.parent_id || null,
         icon_name: form.icon_name || null,
         color: form.color || null,
+        texture_url: form.texture_url || null,
         product_ids: products.map((p) => p.id).filter(Boolean),
       };
 
@@ -310,6 +315,19 @@ export default function CategoryFormV2Page() {
                 Background subtle dans la sidebar des tables tactiles.
               </p>
             </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <FileUpload
+              label="Texture (fond du bouton sidebar)"
+              accept="image/*"
+              value={form.texture_url}
+              onChange={(url) => set('texture_url', url)}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Recommandé : paysage 16:9 (ex 800×450). Affichée en fond du bouton sidebar côté bornes,
+              avec un dégradé noir à gauche pour la lisibilité du libellé.
+            </p>
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">

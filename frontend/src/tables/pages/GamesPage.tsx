@@ -9,7 +9,7 @@
  * - Plus de catégorie "Nos préférés" ni "4 joueurs" (filtrees au seed v2)
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useHostname } from '../hooks/useHostname';
 import { useGamesV2, type GameV2 } from '../hooks/useGamesV2';
 import { useDesignConfig } from '../hooks/useDesignConfig';
@@ -22,6 +22,7 @@ import GameCard from '../components/games/GameCard';
 import LaunchGameModal from '../components/games/LaunchGameModal';
 import RetroLoader from '../components/ui/RetroLoader';
 import AnimatedGrid, { AnimatedGridItem } from '../components/ui/AnimatedGrid';
+import ScrollIndicator from '../components/menu/ScrollIndicator';
 
 const PLAYER_FILTERS = [1, 2, 3, 4] as const;
 
@@ -34,6 +35,7 @@ export default function GamesPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selected, setSelected] = useState<GameV2 | null>(null);
   const [playerFilter, setPlayerFilter] = useState<1 | 2 | 3 | 4>(1);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-selection de la premiere categorie au load
   useEffect(() => {
@@ -93,7 +95,7 @@ export default function GamesPage() {
           showCategoryDividers
         />
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-table-bg-soft/85">
+        <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-table-bg-soft/85">
           <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-6 py-4">
             <span className="font-display text-xs uppercase tracking-[0.3em] text-table-cyan/85">
               Filtre joueurs
@@ -132,7 +134,7 @@ export default function GamesPage() {
             </div>
           </div>
 
-          <div className="tables-scroll relative flex-1 overflow-y-auto p-5">
+          <div ref={scrollRef} className="tables-scroll relative flex-1 overflow-y-auto p-5">
             {loading && (
               <div className="flex h-full items-center justify-center">
                 <RetroLoader label={t('table.common.loading', 'LOADING')} accent="magenta" />
@@ -182,6 +184,7 @@ export default function GamesPage() {
                 </AnimatedGrid>
               ))}
           </div>
+          <ScrollIndicator scrollRef={scrollRef} />
         </section>
       </div>
 

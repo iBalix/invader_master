@@ -33,9 +33,9 @@ import HappyHourSidebarBlock from '../components/menu/HappyHourSidebarBlock';
 import ScrollIndicator from '../components/menu/ScrollIndicator';
 import VariantPicker from '../components/menu/VariantPicker';
 import GoogleReviewCTA from '../components/menu/GoogleReviewCTA';
+import GoogleReviewModal from '../components/menu/GoogleReviewModal';
 import RetroLoader from '../components/ui/RetroLoader';
 import { EASE_OUT_QUART } from '../lib/motion';
-import type { MenuProduct } from '../hooks/useCarte';
 import type { PricedCart } from '../types';
 
 function findCategory(cats: MenuCategoryV2[], id: string): MenuCategoryV2 | null {
@@ -86,6 +86,7 @@ function flattenCategories(
       count: c.products?.length ?? 0,
       iconName: c.iconName,
       color: c.color,
+      textureUrl: c.textureUrl,
       depth: 0,
       hasChildren,
       expanded,
@@ -98,6 +99,7 @@ function flattenCategories(
           count: sc.products?.length ?? 0,
           iconName: sc.iconName,
           color: sc.color,
+          textureUrl: sc.textureUrl,
           depth: 1,
         });
       }
@@ -123,10 +125,12 @@ export default function MenuPage() {
     product: MenuProductV2;
     conditioning: MenuConditioningV2 | null;
   } | null>(null);
+  const [googleReviewOpen, setGoogleReviewOpen] = useState(false);
 
   const orderingEnabled = settings?.orderingEnabled ?? true;
-  const googleReviewUrl = settings?.googleReviewUrl ?? null;
-  const showGoogleCta = !orderingEnabled && !!googleReviewUrl;
+  // Quand le module commande est desactive, on remplace le bouton Commander par
+  // un CTA "10% offerts avec un avis Google" qui ouvre la modale dediee.
+  const showGoogleCta = !orderingEnabled;
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -241,10 +245,8 @@ export default function MenuPage() {
     addToCart(p, { conditioning });
   }
 
-  // Adapter pour passer au ProductDetailModal qui type MenuProduct (v1).
-  // Les champs communs (id, name, price, priceHh, imageUrl, videoUrl, ...)
-  // sont identiques entre v1 et v2.
-  const detailProductV1 = detailProduct as unknown as MenuProduct | null;
+  // ProductDetailModal accepte directement MenuProductV2 (conditionings + variants
+  // pour affichage).
 
   return (
     <div className="relative flex h-full w-full flex-col px-8 py-6">
@@ -321,6 +323,9 @@ export default function MenuPage() {
             )}
           </div>
           <ScrollIndicator scrollRef={scrollRef} />
+          <div className="border-t border-white/5 px-5 py-2 text-center text-[11px] uppercase tracking-widest text-table-ink-muted/60">
+            Visuel non contractuel
+          </div>
         </section>
       </div>
 
@@ -359,11 +364,16 @@ export default function MenuPage() {
         </motion.button>
       )}
 
-      {showGoogleCta && <GoogleReviewCTA url={googleReviewUrl!} />}
+      {showGoogleCta && <GoogleReviewCTA onClick={() => setGoogleReviewOpen(true)} />}
+
+      <GoogleReviewModal
+        open={googleReviewOpen}
+        onClose={() => setGoogleReviewOpen(false)}
+      />
 
       <ProductDetailModal
         open={!!detailProduct}
-        product={detailProductV1}
+        product={detailProduct}
         happyHour={happyHour}
         qtyInCart={detailProduct ? qtyByProduct.get(String(detailProduct.id)) ?? 0 : 0}
         onClose={() => setDetailProduct(null)}

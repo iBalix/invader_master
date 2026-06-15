@@ -54,6 +54,7 @@ export interface MenuCategoryV2 {
   parentId?: string | null;
   iconName?: string | null;
   color?: string | null;
+  textureUrl?: string | null;
   products: MenuProductV2[];
   subCategories?: MenuCategoryV2[];
 }

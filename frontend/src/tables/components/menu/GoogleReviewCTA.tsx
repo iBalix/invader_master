@@ -1,6 +1,6 @@
 /**
  * CTA bas de page affiche sur la borne quand le module commande est desactive.
- * Invite a laisser un avis Google. Click = ouvre l'URL dans un nouvel onglet.
+ * Click = ouvre la modale "10% offerts contre un avis Google" (QR + explications).
  */
 
 import { motion } from 'framer-motion';
@@ -8,15 +8,14 @@ import { Star } from 'lucide-react';
 import { EASE_OUT_QUART } from '../../lib/motion';
 
 interface Props {
-  url: string;
+  onClick: () => void;
 }
 
-export default function GoogleReviewCTA({ url }: Props) {
+export default function GoogleReviewCTA({ onClick }: Props) {
   return (
-    <motion.a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
+    <motion.button
+      type="button"
+      onClick={onClick}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: EASE_OUT_QUART, delay: 0.2 }}
@@ -25,7 +24,7 @@ export default function GoogleReviewCTA({ url }: Props) {
       style={{ boxShadow: '0 0 28px 0 rgba(250, 204, 21, 0.45)' }}
     >
       <Star className="h-7 w-7 fill-black" />
-      Laissez-nous un avis
-    </motion.a>
+      Obtenez 10% sur votre commande
+    </motion.button>
   );
 }
