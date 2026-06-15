@@ -198,13 +198,25 @@ gameV2Routes.put('/:id', async (req, res) => {
     const { category_ids, images } = req.body;
     const fields = pick(req.body);
 
-    const { error } = await supabaseAdmin
+    // On selectionne la ligne mise a jour pour detecter un update silencieux
+    // (RLS qui filtre, ID invalide). Sans ca, PostgREST renvoie 204 meme si 0
+    // ligne touchee et le client pense que ca a marche.
+    const { data: updated, error } = await supabaseAdmin
       .from('games_v2')
       .update(fields)
-      .eq('id', req.params.id);
+      .eq('id', req.params.id)
+      .select('id');
 
     if (error) {
       res.status(400).json({ status: 'error', message: error.message });
+      return;
+    }
+    if (!updated || updated.length === 0) {
+      res.status(409).json({
+        status: 'error',
+        message:
+          "Aucune ligne modifiee (ID introuvable ou RLS bloque l'update). Verifier la cle SUPABASE_SERVICE_ROLE_KEY du backend.",
+      });
       return;
     }
 

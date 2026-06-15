@@ -43,9 +43,14 @@ function decodeJwtRole(jwt: string): string | null {
 
 const detectedRole = decodeJwtRole(serviceRoleKey);
 if (detectedRole !== 'service_role') {
-  console.warn(
-    `[supabase] WARNING: SUPABASE_SERVICE_ROLE_KEY ne semble pas etre une service_role key (role detecte = "${detectedRole ?? 'inconnu'}"). RLS NE SERA PAS BYPASSE et les INSERT/UPDATE echoueront. Recopier la "service_role" key depuis Supabase Dashboard > Project Settings > API.`
-  );
+  const msg = `[supabase] SUPABASE_SERVICE_ROLE_KEY ne semble pas etre une service_role key (role detecte = "${detectedRole ?? 'inconnu'}"). RLS ne sera pas bypasse et les INSERT/UPDATE echoueront silencieusement. Recopier la "service_role" key depuis Supabase Dashboard > Project Settings > API.`;
+  // En production, on refuse de demarrer : un mauvais deploiement doit etre
+  // detecte immediatement (Railway logue l'erreur + retry) plutot que de
+  // laisser les ecritures admin echouer en silence.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(msg);
+  }
+  console.warn('[supabase] WARNING: ' + msg);
 } else {
   console.log('[supabase] service_role key OK (RLS bypass actif)');
 }
