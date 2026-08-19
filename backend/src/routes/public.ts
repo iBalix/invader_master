@@ -4,7 +4,6 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
-import { getMysqlPool } from '../config/mysql.js';
 
 export const publicRoutes = Router();
 
@@ -573,20 +572,34 @@ publicRoutes.get('/translations', async (req, res) => {
 });
 
 // Battle questions (replaces apiv2.nationsglory.fr/.../data_battle_questions.json)
+// CONTRAT LEGACY : consommé par invader_admin/battle.php (import). Shape figé :
+// { questions: { Facile: [...], Moyen: [...], Difficile: [...] } } avec le
+// marqueur " (OK)" sur la bonne réponse dans answers. Source : Postgres
+// (migration 041), le MySQL OVH n'est plus lu.
 publicRoutes.get('/battle-questions', async (_req, res) => {
   try {
-    const pool = getMysqlPool();
-    const [rows] = await pool.query(
-      'SELECT id, question, difficulty, theme, answers, help_story FROM battle_questions ORDER BY id ASC',
-    );
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .select('id, legacy_id, question, difficulty, theme, answers, help_story, correct_answer_index')
+      .order('created_at', { ascending: true });
+    if (error) throw error;
 
     const questions: Record<string, unknown[]> = { Facile: [], Moyen: [], Difficile: [] };
-    for (const row of rows as any[]) {
+    for (const row of (data ?? []) as Array<{
+      id: string;
+      legacy_id: number | null;
+      question: string;
+      difficulty: string;
+      theme: string;
+      answers: string[];
+      help_story: string;
+      correct_answer_index: number;
+    }>) {
       const parsed = {
-        id: row.id,
+        id: row.legacy_id ?? row.id,
         question: row.question,
         theme: row.theme,
-        answers: typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers,
+        answers: row.answers.map((a, i) => (i === row.correct_answer_index ? `${a} (OK)` : a)),
         help_story: row.help_story,
       };
       if (questions[row.difficulty]) {

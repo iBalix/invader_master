@@ -8,7 +8,7 @@ import { api } from '../lib/api';
 import BattleQuestionModal, { type BattleQuestionData } from '../components/Battle/BattleQuestionModal';
 
 interface Question {
-  id: number;
+  id: string;
   question: string;
   difficulty: string;
   theme: string;
@@ -85,7 +85,7 @@ export default function BattleQuestionsPage() {
     loadStats();
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Supprimer cette question ?')) return;
     try {
       await api.delete(`/api/battle-questions/${id}`);
@@ -174,9 +174,7 @@ export default function BattleQuestionsPage() {
         <h1 className="text-2xl font-bold">Questions Battle Royal</h1>
         <div className="flex items-center gap-3">
           <a
-            href="http://gestion.invader.bar/battle.php"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/evenements/battle-live"
             className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition"
           >
             <Play className="w-4 h-4" />
@@ -375,7 +373,7 @@ export default function BattleQuestionsPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs font-mono text-gray-400">#{q.id}</span>
+                          <span className="text-xs font-mono text-gray-400">#{q.id.slice(0, 8)}</span>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700">
                             {q.theme}
                           </span>

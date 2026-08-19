@@ -1,27 +1,86 @@
 /**
- * Battle Questions routes — CRUD + AI generation + import
- * Uses MySQL (legacy invader database) for the battle_questions table.
+ * Battle Questions — CRUD + génération IA + import + gestion d'usage.
+ *
+ * Source de vérité : Postgres (table battle_questions, migration 041).
+ * Le stockage est PROPRE (answers sans marqueur + correct_answer_index) mais
+ * l'API re-sérialise le marqueur legacy " (OK)" dans answers : c'est le
+ * contrat attendu par BattleQuestionsPage et par les consommateurs legacy
+ * de /public/battle-questions. Ne pas le casser.
  */
 
 import { Router, type Request, type Response } from 'express';
-import { getMysqlPool } from '../config/mysql.js';
+import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
+import {
+  BATTLE_DIFFICULTIES,
+  DEFAULT_CATEGORIES,
+  generateBattleQuestions,
+  isBattleDifficulty,
+  type BattleQuestionRow,
+} from '../services/battleQuestionGen.js';
 
 export const battleQuestionRoutes = Router();
 battleQuestionRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
 
-const DEFAULT_CATEGORIES = [
-  'Actualités', 'Célébrités', 'Cinéma', 'Culture', 'Culture Pop',
-  'France', 'Géographie', 'Histoire', 'Jeux-vidéos', 'Mathématiques',
-  'Montpellier', 'Musique', 'Séries TV', 'Sport',
-];
+/** re-sérialise le marqueur legacy " (OK)" sur la bonne réponse */
+export function markAnswers(row: Pick<BattleQuestionRow, 'answers' | 'correct_answer_index'>): string[] {
+  return row.answers.map((a, i) => (i === row.correct_answer_index ? `${a} (OK)` : a));
+}
 
-const VALID_DIFFICULTIES = ['Facile', 'Moyen', 'Difficile'] as const;
-type Difficulty = (typeof VALID_DIFFICULTIES)[number];
+function serialize(row: BattleQuestionRow) {
+  return {
+    id: row.id,
+    question: row.question,
+    difficulty: row.difficulty,
+    theme: row.theme,
+    answers: markAnswers(row),
+    help_story: row.help_story,
+    created_at: row.created_at,
+    used_at: row.used_at,
+  };
+}
 
-function isDifficulty(v: string): v is Difficulty {
-  return (VALID_DIFFICULTIES as readonly string[]).includes(v);
+/** valide le body d'un POST/PUT ; retourne les champs propres ou null */
+function parseQuestionBody(body: Record<string, unknown>): {
+  question: string;
+  difficulty: string;
+  theme: string;
+  answers: string[];
+  correctIndex: number;
+  helpStory: string;
+} | null {
+  const { question, difficulty, theme, answers, correctAnswer, help_story } = body as {
+    question?: string;
+    difficulty?: string;
+    theme?: string;
+    answers?: unknown;
+    correctAnswer?: unknown;
+    help_story?: string;
+  };
+  if (!question || !theme || !difficulty || !isBattleDifficulty(difficulty)) return null;
+  if (!Array.isArray(answers) || answers.length !== 4) return null;
+  if (!answers.every((a): a is string => typeof a === 'string' && a.trim().length > 0)) return null;
+  const correctIndex = Number(correctAnswer);
+  if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3) return null;
+  // retire un éventuel marqueur déjà présent dans le texte fourni
+  const cleaned = answers.map((a) => a.replace(' (OK)', '').replace('(OK)', '').trim());
+  if (cleaned.some((a) => a.length === 0)) return null;
+  return {
+    question: question.trim(),
+    difficulty,
+    theme: theme.trim(),
+    answers: cleaned,
+    correctIndex,
+    helpStory: help_story ?? '',
+  };
+}
+
+function serverError(res: Response, tag: string, err: unknown): void {
+  console.error(`[battle-questions] ${tag} error:`, err);
+  const status = (err as { httpStatus?: number }).httpStatus ?? 500;
+  const message = status < 500 && err instanceof Error ? err.message : 'Erreur serveur';
+  res.status(status).json({ status: 'error', message });
 }
 
 // ─── GET / — list questions by difficulty ───────────────────────────────────
@@ -29,49 +88,46 @@ function isDifficulty(v: string): v is Difficulty {
 battleQuestionRoutes.get('/', async (req: Request, res: Response) => {
   try {
     const difficulty = (req.query.difficulty as string) ?? 'Facile';
-    if (!isDifficulty(difficulty)) {
+    if (!isBattleDifficulty(difficulty)) {
       res.status(400).json({ status: 'error', message: 'Difficulté invalide' });
       return;
     }
-
-    const pool = getMysqlPool();
-    const [rows] = await pool.query(
-      'SELECT id, question, difficulty, theme, answers, help_story, created_at FROM battle_questions WHERE difficulty = ? ORDER BY id ASC',
-      [difficulty],
-    );
-
-    const questions = (rows as any[]).map((r) => ({
-      ...r,
-      answers: typeof r.answers === 'string' ? JSON.parse(r.answers) : r.answers,
-    }));
-
-    res.json({ status: 'success', questions });
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .select('*')
+      .eq('difficulty', difficulty)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    res.json({ status: 'success', questions: (data as BattleQuestionRow[]).map(serialize) });
   } catch (err) {
-    console.error('[battle-questions] GET / error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'GET /', err);
   }
 });
 
-// ─── GET /stats — counts per difficulty ─────────────────────────────────────
+// ─── GET /stats — counts per difficulty (+ disponibles/consommées) ──────────
 
 battleQuestionRoutes.get('/stats', async (_req: Request, res: Response) => {
   try {
-    const pool = getMysqlPool();
-    const [rows] = await pool.query(
-      'SELECT difficulty, COUNT(*) as count FROM battle_questions GROUP BY difficulty',
-    );
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .select('difficulty, used_at');
+    if (error) throw error;
 
     const stats: Record<string, number> = { Facile: 0, Moyen: 0, Difficile: 0 };
+    const available: Record<string, number> = { Facile: 0, Moyen: 0, Difficile: 0 };
+    const used: Record<string, number> = { Facile: 0, Moyen: 0, Difficile: 0 };
     let total = 0;
-    for (const row of rows as any[]) {
-      stats[row.difficulty] = Number(row.count);
-      total += Number(row.count);
+    for (const row of (data ?? []) as Array<{ difficulty: string; used_at: string | null }>) {
+      if (stats[row.difficulty] === undefined) continue;
+      stats[row.difficulty] += 1;
+      total += 1;
+      if (row.used_at) used[row.difficulty] += 1;
+      else available[row.difficulty] += 1;
     }
-
-    res.json({ status: 'success', stats: { ...stats, total } });
+    // shape historique {Facile, Moyen, Difficile, total} + champs additifs
+    res.json({ status: 'success', stats: { ...stats, total, available, used } });
   } catch (err) {
-    console.error('[battle-questions] GET /stats error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'GET /stats', err);
   }
 });
 
@@ -79,17 +135,13 @@ battleQuestionRoutes.get('/stats', async (_req: Request, res: Response) => {
 
 battleQuestionRoutes.get('/categories', async (_req: Request, res: Response) => {
   try {
-    const pool = getMysqlPool();
-    const [rows] = await pool.query(
-      'SELECT DISTINCT theme FROM battle_questions ORDER BY theme',
-    );
-
-    const dbCategories = (rows as any[]).map((r) => r.theme as string);
+    const { data, error } = await supabaseAdmin.from('battle_questions').select('theme');
+    if (error) throw error;
+    const dbCategories = (data ?? []).map((r) => r.theme as string).filter(Boolean);
     const merged = [...new Set([...DEFAULT_CATEGORIES, ...dbCategories])].sort();
     res.json({ status: 'success', categories: merged });
   } catch (err) {
-    console.error('[battle-questions] GET /categories error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'GET /categories', err);
   }
 });
 
@@ -97,31 +149,27 @@ battleQuestionRoutes.get('/categories', async (_req: Request, res: Response) => 
 
 battleQuestionRoutes.post('/', async (req: Request, res: Response) => {
   try {
-    const { question, difficulty, theme, answers, correctAnswer, help_story } = req.body;
-
-    if (!question || !theme || !Array.isArray(answers) || answers.length !== 4 || !isDifficulty(difficulty)) {
+    const parsed = parseQuestionBody(req.body);
+    if (!parsed) {
       res.status(400).json({ status: 'error', message: 'Données invalides' });
       return;
     }
-
-    const markedAnswers = answers.map((a: string, i: number) =>
-      i === Number(correctAnswer) ? `${a} (OK)` : a,
-    );
-
-    const pool = getMysqlPool();
-    const [result] = await pool.query(
-      'INSERT INTO battle_questions (question, difficulty, theme, answers, help_story) VALUES (?, ?, ?, ?, ?)',
-      [question, difficulty, theme, JSON.stringify(markedAnswers), help_story ?? ''],
-    );
-
-    res.status(201).json({
-      status: 'success',
-      message: 'Question ajoutée avec succès',
-      id: (result as any).insertId,
-    });
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .insert({
+        question: parsed.question,
+        difficulty: parsed.difficulty,
+        theme: parsed.theme,
+        answers: parsed.answers,
+        correct_answer_index: parsed.correctIndex,
+        help_story: parsed.helpStory,
+      })
+      .select('id')
+      .single();
+    if (error) throw error;
+    res.status(201).json({ status: 'success', message: 'Question ajoutée avec succès', id: data.id });
   } catch (err) {
-    console.error('[battle-questions] POST / error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'POST /', err);
   }
 });
 
@@ -129,32 +177,32 @@ battleQuestionRoutes.post('/', async (req: Request, res: Response) => {
 
 battleQuestionRoutes.put('/:id', async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    const { question, difficulty, theme, answers, correctAnswer, help_story } = req.body;
-
-    if (!question || !theme || !Array.isArray(answers) || answers.length !== 4 || !isDifficulty(difficulty)) {
+    const parsed = parseQuestionBody(req.body);
+    if (!parsed) {
       res.status(400).json({ status: 'error', message: 'Données invalides' });
       return;
     }
-
-    const cleaned = answers.map((a: string) => a.replace(' (OK)', ''));
-    cleaned[Number(correctAnswer)] = `${cleaned[Number(correctAnswer)]} (OK)`;
-
-    const pool = getMysqlPool();
-    const [result] = await pool.query(
-      'UPDATE battle_questions SET question = ?, difficulty = ?, theme = ?, answers = ?, help_story = ? WHERE id = ?',
-      [question, difficulty, theme, JSON.stringify(cleaned), help_story ?? '', id],
-    );
-
-    if ((result as any).affectedRows === 0) {
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .update({
+        question: parsed.question,
+        difficulty: parsed.difficulty,
+        theme: parsed.theme,
+        answers: parsed.answers,
+        correct_answer_index: parsed.correctIndex,
+        help_story: parsed.helpStory,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', req.params.id)
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
       res.status(404).json({ status: 'error', message: 'Question non trouvée' });
       return;
     }
-
     res.json({ status: 'success', message: 'Question modifiée avec succès' });
   } catch (err) {
-    console.error('[battle-questions] PUT /:id error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'PUT /:id', err);
   }
 });
 
@@ -162,19 +210,19 @@ battleQuestionRoutes.put('/:id', async (req: Request, res: Response) => {
 
 battleQuestionRoutes.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    const pool = getMysqlPool();
-    const [result] = await pool.query('DELETE FROM battle_questions WHERE id = ?', [id]);
-
-    if ((result as any).affectedRows === 0) {
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .delete()
+      .eq('id', req.params.id)
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
       res.status(404).json({ status: 'error', message: 'Question non trouvée' });
       return;
     }
-
     res.json({ status: 'success', message: 'Question supprimée' });
   } catch (err) {
-    console.error('[battle-questions] DELETE /:id error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'DELETE /:id', err);
   }
 });
 
@@ -182,29 +230,24 @@ battleQuestionRoutes.delete('/:id', async (req: Request, res: Response) => {
 
 battleQuestionRoutes.patch('/:id/difficulty', async (req: Request, res: Response) => {
   try {
-    const id = Number(req.params.id);
-    const { difficulty } = req.body;
-
-    if (!isDifficulty(difficulty)) {
+    const { difficulty } = req.body as { difficulty?: string };
+    if (!difficulty || !isBattleDifficulty(difficulty)) {
       res.status(400).json({ status: 'error', message: 'Difficulté invalide' });
       return;
     }
-
-    const pool = getMysqlPool();
-    const [result] = await pool.query(
-      'UPDATE battle_questions SET difficulty = ? WHERE id = ?',
-      [difficulty, id],
-    );
-
-    if ((result as any).affectedRows === 0) {
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .update({ difficulty, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
       res.status(404).json({ status: 'error', message: 'Question non trouvée' });
       return;
     }
-
     res.json({ status: 'success', message: `Question déplacée vers ${difficulty}` });
   } catch (err) {
-    console.error('[battle-questions] PATCH /:id/difficulty error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'PATCH /:id/difficulty', err);
   }
 });
 
@@ -213,18 +256,18 @@ battleQuestionRoutes.patch('/:id/difficulty', async (req: Request, res: Response
 battleQuestionRoutes.delete('/clear/:difficulty', async (req: Request, res: Response) => {
   try {
     const { difficulty } = req.params;
-    if (!isDifficulty(difficulty)) {
+    if (!isBattleDifficulty(difficulty)) {
       res.status(400).json({ status: 'error', message: 'Difficulté invalide' });
       return;
     }
-
-    const pool = getMysqlPool();
-    await pool.query('DELETE FROM battle_questions WHERE difficulty = ?', [difficulty]);
-
+    const { error } = await supabaseAdmin
+      .from('battle_questions')
+      .delete()
+      .eq('difficulty', difficulty);
+    if (error) throw error;
     res.json({ status: 'success', message: `Toutes les questions ${difficulty} supprimées` });
   } catch (err) {
-    console.error('[battle-questions] DELETE /clear/:difficulty error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'DELETE /clear/:difficulty', err);
   }
 });
 
@@ -232,226 +275,122 @@ battleQuestionRoutes.delete('/clear/:difficulty', async (req: Request, res: Resp
 
 battleQuestionRoutes.post('/generate', async (req: Request, res: Response) => {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      res.status(500).json({ status: 'error', message: 'OPENAI_API_KEY non configurée' });
-      return;
-    }
-
     const difficulty: string = req.body.difficulty ?? 'Facile';
-    const count = Math.min(10, Math.max(1, Number(req.body.count ?? 1)));
-    const category: string = req.body.category ?? 'random';
-    const hint: string = (req.body.hint ?? '').trim();
-
-    if (!isDifficulty(difficulty)) {
+    if (!isBattleDifficulty(difficulty)) {
       res.status(400).json({ status: 'error', message: 'Difficulté invalide' });
       return;
     }
-
-    const pool = getMysqlPool();
-
-    const [catRows] = await pool.query('SELECT DISTINCT theme FROM battle_questions ORDER BY theme');
-    const dbCategories = (catRows as any[]).map((r) => r.theme as string);
-    const categories = dbCategories.length > 0 ? dbCategories : DEFAULT_CATEGORIES;
-
-    const [existingRows] = await pool.query(
-      'SELECT question FROM battle_questions ORDER BY id DESC LIMIT 20',
-    );
-    const existingTexts = (existingRows as any[]).map((r) => r.question as string);
-    const avoidString = existingTexts.length > 0
-      ? `\n\nIMPORTANT: NE PAS générer des questions similaires à celles-ci:\n- ${existingTexts.slice(0, 5).join('\n- ')}`
-      : '';
-
-    const allGenerated: any[] = [];
-
-    const batchCount = category === 'random' ? count : 1;
-    const batchIterations = category === 'random' ? count : 1;
-    const questionsPerBatch = category === 'random' ? 1 : count;
-
-    for (let i = 0; i < batchIterations; i++) {
-      const selectedCategory = category === 'random'
-        ? categories[Math.floor(Math.random() * categories.length)]
-        : category;
-
-      const periods = ['années 2020', 'années 2010', 'années 2000', 'années 90', 'années 80', 'de tous les temps', 'récents', 'classiques', 'cultes', 'modernes'];
-      const randomPeriod = periods[Math.floor(Math.random() * periods.length)];
-      const randomSeed = Math.floor(Math.random() * 1000);
-
-      const hintString = hint
-        ? `\n\n⭐ INDICATION SPÉCIALE: Les questions doivent porter sur: "${hint}". Consigne PRIORITAIRE.`
-        : '';
-
-      const difficultyInstructions = difficulty === 'Difficile'
-        ? `Questions pour CONNAISSEURS et EXPERTS. Détails techniques, anecdotes peu connues, références obscures. Les réponses doivent être proches et difficiles à différencier.`
-        : `Questions ACCESSIBLES et GRAND PUBLIC que la plupart des gens peuvent connaître. Privilégie les œuvres/personnages/événements populaires.`;
-
-      const systemPrompt = `Tu es un expert en création de quiz divertissants pour un bar gaming, ciblant un PUBLIC de 20-40 ANS. Génère ${questionsPerBatch} question(s) de niveau ${difficulty} sur le sous-thème '${selectedCategory}'.
-
-CONSIGNES:
-- ${difficultyInstructions}
-- Mélange différentes époques, en particulier les ${randomPeriod}
-- Réponses: MAX 40 caractères, ajouter ' (OK)' sur la bonne
-- Chaque réponse doit être UNIQUE et différente des autres
-- Seed aléatoire pour variété: ${randomSeed}
-
-TON ET STYLE:
-- Ajoute du FUN et de l'ORIGINALITÉ dans la formulation
-- Intègre des références pop culture, memes, ou jeux de mots quand approprié
-- Évite le ton encyclopédique et scolaire
-- Les anecdotes doivent être SURPRENANTES et ENGAGEANTES
-${avoidString}${hintString}
-
-Format JSON STRICT (GUILLEMETS DOUBLES obligatoires):
-[{
-  "question": "...",
-  "difficulty": "${difficulty}",
-  "theme": "${selectedCategory}",
-  "answers": ["Réponse 1", "Réponse 2 (OK)", "Réponse 3", "Réponse 4"],
-  "help_story": "Anecdote surprenante"
-}]
-
-Retourne UNIQUEMENT le JSON, sans markdown ni commentaire.`;
-
-      try {
-        const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o',
-            temperature: 0.9,
-            max_tokens: 1500,
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: 'Génère des questions créatives et variées, en évitant les sujets trop rebattus.' },
-            ],
-          }),
-        });
-
-        if (!openaiRes.ok) {
-          const errBody = await openaiRes.text().catch(() => '');
-          console.error(`[battle-questions] OpenAI HTTP ${openaiRes.status}: ${errBody.slice(0, 300)}`);
-          continue;
-        }
-
-        const openaiData = await openaiRes.json();
-        const content = openaiData.choices?.[0]?.message?.content ?? '';
-        const cleaned = content.replace(/```json\s*/g, '').replace(/```/g, '').trim();
-
-        let parsed: any[] | null = null;
-        try {
-          parsed = JSON.parse(cleaned);
-        } catch {
-          const repaired = cleaned.replace(/(?<!\\)'([^']*?)(?<!\\)'(?=\s*[:,\]\}])/g, '"$1"');
-          try { parsed = JSON.parse(repaired); } catch { /* skip */ }
-        }
-
-        if (Array.isArray(parsed)) {
-          for (const q of parsed) {
-            if (q.question && q.theme && Array.isArray(q.answers) && q.answers.length === 4) {
-              allGenerated.push(q);
-            }
-          }
-        }
-      } catch (genErr) {
-        console.error(`[battle-questions] Generation batch ${i} error:`, genErr);
-      }
-    }
-
-    if (allGenerated.length === 0) {
+    const inserted = await generateBattleQuestions({
+      difficulty,
+      count: Math.min(10, Math.max(1, Number(req.body.count ?? 1))),
+      category: req.body.category ?? 'random',
+      hint: req.body.hint ?? '',
+    });
+    if (inserted === 0) {
       res.status(500).json({ status: 'error', message: "Aucune question générée par l'IA" });
       return;
     }
-
-    let insertedCount = 0;
-    for (const q of allGenerated) {
-      try {
-        await pool.query(
-          'INSERT INTO battle_questions (question, difficulty, theme, answers, help_story) VALUES (?, ?, ?, ?, ?)',
-          [q.question, difficulty, q.theme, JSON.stringify(q.answers), q.help_story ?? ''],
-        );
-        insertedCount++;
-      } catch (insertErr) {
-        console.error('[battle-questions] Insert generated question error:', insertErr);
-      }
-    }
-
     res.json({
       status: 'success',
-      message: `${insertedCount} question(s) générée(s) avec succès`,
-      inserted: insertedCount,
+      message: `${inserted} question(s) générée(s) avec succès`,
+      inserted,
     });
   } catch (err) {
-    console.error('[battle-questions] POST /generate error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'POST /generate', err);
   }
 });
 
-// ─── POST /import — import from external URL ────────────────────────────────
+// ─── POST /reset-usage — remet toutes les questions en circulation ──────────
+
+battleQuestionRoutes.post('/reset-usage', async (_req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .update({ used_at: null })
+      .not('used_at', 'is', null)
+      .select('id');
+    if (error) throw error;
+    res.json({
+      status: 'success',
+      message: `${data?.length ?? 0} question(s) remise(s) en circulation`,
+      reset: data?.length ?? 0,
+    });
+  } catch (err) {
+    serverError(res, 'POST /reset-usage', err);
+  }
+});
+
+// ─── POST /import — import from external URL (format legacy " (OK)") ────────
 
 battleQuestionRoutes.post('/import', async (_req: Request, res: Response) => {
   try {
-    const importUrl = process.env.BATTLE_IMPORT_URL
-      ?? 'https://invadermaster-backend-production.up.railway.app/public/battle-questions';
-
-    console.log(`[battle-questions] Import from: ${importUrl}`);
-
+    const importUrl = process.env.BATTLE_IMPORT_URL;
+    if (!importUrl) {
+      res.status(400).json({
+        status: 'error',
+        message: 'BATTLE_IMPORT_URL non configurée (l\'import par défaut pointait sur ce backend lui-même)',
+      });
+      return;
+    }
     const fetchRes = await fetch(importUrl);
     if (!fetchRes.ok) {
       res.status(500).json({ status: 'error', message: `Impossible de récupérer les données (HTTP ${fetchRes.status})` });
       return;
     }
-
-    const externalData = await fetchRes.json();
+    const externalData = (await fetchRes.json()) as {
+      questions?: Record<string, Array<{ question?: string; theme?: string; answers?: unknown; help_story?: string }>>;
+    };
     if (!externalData.questions) {
       res.status(400).json({ status: 'error', message: 'Structure de données invalide: clé "questions" manquante' });
       return;
     }
 
-    const pool = getMysqlPool();
-
-    const [existingRows] = await pool.query('SELECT question, difficulty FROM battle_questions');
+    const { data: existingRows, error: existingError } = await supabaseAdmin
+      .from('battle_questions')
+      .select('question, difficulty');
+    if (existingError) throw existingError;
     const existingKeys = new Set(
-      (existingRows as any[]).map((r) => `${r.question}_${r.difficulty}`),
+      (existingRows ?? []).map((r) => `${r.question}_${r.difficulty}`),
     );
 
     let addedCount = 0;
-
-    for (const difficulty of VALID_DIFFICULTIES) {
+    for (const difficulty of BATTLE_DIFFICULTIES) {
       const questions = externalData.questions[difficulty];
       if (!Array.isArray(questions)) continue;
-
       for (const q of questions) {
+        if (!q.question) continue;
         const key = `${q.question}_${difficulty}`;
         if (existingKeys.has(key)) continue;
-
-        try {
-          await pool.query(
-            'INSERT INTO battle_questions (question, difficulty, theme, answers, help_story) VALUES (?, ?, ?, ?, ?)',
-            [
-              q.question,
-              difficulty,
-              q.theme ?? '',
-              typeof q.answers === 'string' ? q.answers : JSON.stringify(q.answers),
-              q.help_story ?? '',
-            ],
-          );
-          addedCount++;
-          existingKeys.add(key);
-        } catch (insertErr) {
-          console.error('[battle-questions] Import insert error:', insertErr);
+        let rawAnswers: unknown = q.answers;
+        if (typeof rawAnswers === 'string') {
+          try { rawAnswers = JSON.parse(rawAnswers); } catch { continue; }
         }
+        if (!Array.isArray(rawAnswers) || rawAnswers.length !== 4) continue;
+        if (!rawAnswers.every((a): a is string => typeof a === 'string')) continue;
+        const correctIndex = rawAnswers.findIndex((a) => a.includes('(OK)'));
+        if (correctIndex === -1) continue;
+        const cleaned = rawAnswers.map((a) => a.replace(' (OK)', '').replace('(OK)', '').trim());
+        const { error: insertError } = await supabaseAdmin.from('battle_questions').insert({
+          question: q.question,
+          difficulty,
+          theme: q.theme ?? '',
+          answers: cleaned,
+          correct_answer_index: correctIndex,
+          help_story: q.help_story ?? '',
+        });
+        if (insertError) {
+          console.error('[battle-questions] Import insert error:', insertError.message);
+          continue;
+        }
+        addedCount++;
+        existingKeys.add(key);
       }
     }
 
-    const [statsRows] = await pool.query(
-      'SELECT difficulty, COUNT(*) as count FROM battle_questions GROUP BY difficulty',
-    );
+    const { data: statsRows } = await supabaseAdmin.from('battle_questions').select('difficulty');
     const stats: Record<string, number> = { Facile: 0, Moyen: 0, Difficile: 0 };
-    for (const row of statsRows as any[]) {
-      stats[row.difficulty] = Number(row.count);
+    for (const row of statsRows ?? []) {
+      if (stats[row.difficulty] !== undefined) stats[row.difficulty] += 1;
     }
 
     res.json({
@@ -460,7 +399,6 @@ battleQuestionRoutes.post('/import', async (_req: Request, res: Response) => {
       stats,
     });
   } catch (err) {
-    console.error('[battle-questions] POST /import error:', err);
-    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+    serverError(res, 'POST /import', err);
   }
 });
