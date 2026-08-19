@@ -32,6 +32,8 @@ import { translationRoutes } from './routes/translations.js';
 import { financeImportRoutes } from './routes/financeImport.js';
 import { battleQuestionRoutes } from './routes/battleQuestions.js';
 import { publicRoutes } from './routes/public.js';
+import { gamePublicRoutes } from './routes/gamePublic.js';
+import { gameSessionRoutes } from './routes/game.js';
 import { tablesRoutes } from './routes/tables.js';
 import { liveEventStateAuthRoutes, liveEventStatePublicRoutes } from './routes/liveEventState.js';
 import { tableDevicesRoutes } from './routes/tableDevices.js';
@@ -68,6 +70,7 @@ const corsOrigins = process.env.CORS_ORIGINS
 
 app.use(express.json());
 
+app.use('/public/game', cors(), gamePublicRoutes);
 app.use('/public', cors(), publicRoutes);
 app.use('/public/tables', cors(), tablesRoutes);
 app.use('/public/live-event', cors(), liveEventStatePublicRoutes);
@@ -105,6 +108,7 @@ app.use('/api/tv-configs', tvConfigRoutes);
 app.use('/api/translations', translationRoutes);
 app.use('/api/finance-import', financeImportRoutes);
 app.use('/api/battle-questions', battleQuestionRoutes);
+app.use('/api/game', gameSessionRoutes);
 app.use('/api/bar', barRoutes);
 app.use('/api/cash', cashRoutes);
 app.use('/api/role-permissions', rolePermissionRoutes);
