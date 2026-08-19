@@ -24,6 +24,7 @@ import {
   ShoppingBag,
   ExternalLink,
   Sparkles,
+  Radio,
   Globe,
   type LucideIcon,
 } from 'lucide-react';
@@ -98,7 +99,9 @@ const SIDEBAR_MENU: SidebarItem[] = [
     defaultOpen: false,
     items: [
       { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', pageKey: 'contenus/quiz' },
+      { title: 'Quiz live', icon: Radio, disabled: false, path: '/evenements/quiz-live', pageKey: 'evenements/quiz-live' },
       { title: 'Battle Royal', icon: Swords, disabled: false, path: '/evenements/battle-questions', pageKey: 'evenements/battle-questions' },
+      { title: 'Battle live', icon: Radio, disabled: false, path: '/evenements/battle-live', pageKey: 'evenements/battle-live' },
     ],
   },
   {

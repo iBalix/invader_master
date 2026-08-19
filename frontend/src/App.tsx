@@ -33,6 +33,10 @@ import ComingSoon from './pages/ComingSoon';
 import BarManagementPage from './pages/BarManagementPage';
 import CashManagementPage from './pages/CashManagementPage';
 import TablesApp from './tables/TablesApp';
+import PlayerApp from './game/player/PlayerApp';
+import ScreenApp from './game/screen/ScreenApp';
+import QuizLivePage from './pages/QuizLivePage';
+import BattleLivePage from './pages/BattleLivePage';
 
 export default function App() {
   return (
@@ -44,6 +48,14 @@ export default function App() {
           s'identifient via leur hostname et non via un compte utilisateur).
         */}
         <Route path="/table/*" element={<TablesApp />} />
+
+        {/*
+          Surfaces de jeu (quiz live) : publiques, sans auth.
+          /play = téléphones joueurs, /screen/:hostname = projecteur + écrans bar.
+        */}
+        <Route path="/play" element={<PlayerApp />} />
+        <Route path="/play/:code" element={<PlayerApp />} />
+        <Route path="/screen/:hostname" element={<ScreenApp />} />
 
         {/* Back-office : authentification + permissions requises */}
         <Route
@@ -88,6 +100,8 @@ export default function App() {
                     <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
                     <Route path="utilitaires/comptabilite" element={<CashManagementPage />} />
                     <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />
+                    <Route path="evenements/quiz-live" element={<QuizLivePage />} />
+                    <Route path="evenements/battle-live" element={<BattleLivePage />} />
                     <Route path="tables-tactiles/coupons" element={<CouponsPage />} />
                     <Route path="tables-tactiles/orders" element={<OrdersPage />} />
                     <Route path="users" element={<UserManagementPage />} />

@@ -16,6 +16,7 @@ import {
   ArrowRight,
   ExternalLink,
   Sparkles,
+  Radio,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -45,7 +46,9 @@ const CONTENUS: DashCard[] = [
 
 const EVENEMENTS: DashCard[] = [
   { title: 'Quiz', icon: BookOpen, path: '/contenus/quiz', description: 'Questions, thèmes et médias', pageKey: 'contenus/quiz' },
+  { title: 'Quiz live', icon: Radio, path: '/evenements/quiz-live', description: 'Lancer et piloter une session de quiz en direct', pageKey: 'evenements/quiz-live' },
   { title: 'Battle Royal', icon: Swords, path: '/evenements/battle-questions', description: 'Questions pour les battles', pageKey: 'evenements/battle-questions' },
+  { title: 'Battle live', icon: Swords, path: '/evenements/battle-live', description: 'Lancer et piloter une battle royale en direct', pageKey: 'evenements/battle-live' },
 ];
 
 const TABLES_TACTILES: DashCard[] = [
