@@ -3,8 +3,20 @@
  */
 
 import { Router, type Request } from 'express';
-import { supabaseAdmin, supabaseClient } from '../config/supabase.js';
+import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
+
+// Client dédié aux opérations d'authentification (signIn / refresh).
+// PIÈGE : appeler signInWithPassword sur supabaseAdmin pose la session
+// utilisateur EN MÉMOIRE sur le singleton ; toutes les requêtes PostgREST
+// suivantes partent alors avec le JWT du user (role authenticated) au lieu
+// de la service_role key => RLS non bypassé, INSERT/UPDATE en 42501.
+const supabaseAuth = createClient(
+  process.env.SUPABASE_URL!.trim().replace(/^(['"])(.*)\1$/s, '$2'),
+  process.env.SUPABASE_ANON_KEY!.trim().replace(/^(['"])(.*)\1$/s, '$2'),
+  { auth: { persistSession: false, autoRefreshToken: false } },
+);
 
 export const authRoutes = Router();
 
@@ -16,7 +28,7 @@ authRoutes.post('/login', async (req, res) => {
       return;
     }
 
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({
       email: String(email).toLowerCase().trim(),
       password: String(password),
     });
@@ -73,7 +85,7 @@ authRoutes.post('/refresh', async (req, res) => {
       return;
     }
 
-    const { data, error } = await supabaseAdmin.auth.refreshSession({
+    const { data, error } = await supabaseAuth.auth.refreshSession({
       refresh_token: String(refresh_token),
     });
 
