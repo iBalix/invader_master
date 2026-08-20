@@ -15,6 +15,9 @@ import {
   createBattleSession,
   type BattleActionParams,
 } from '../games/battleFlow.js';
+// idem : enregistre l'advancer 'chess'
+import { chessGmAction } from '../games/chess/chessFlow.js';
+import { buildChessPublicState } from '../games/chess/chessViews.js';
 import { buildGmState } from '../games/views.js';
 
 export const gameSessionRoutes = Router();
@@ -94,6 +97,11 @@ gameSessionRoutes.get('/:id/state', async (req, res) => {
     if (isAdvanceDue(session)) {
       session = await withSession(session.id, async (s) => s);
     }
+    // échecs : rien de secret, la vue publique suffit au staff
+    if (session.mode === 'chess') {
+      res.json({ status: 'success', data: buildChessPublicState(session) });
+      return;
+    }
     const players = await loadPlayers(session.id);
     res.json({ status: 'success', data: buildGmState(session, players) });
   } catch (err) {
@@ -164,6 +172,12 @@ gameSessionRoutes.post('/:id/action', async (req, res) => {
     const existing = await loadSession(req.params.id);
     if (!existing) {
       res.status(404).json({ status: 'error', message: 'Session introuvable' });
+      return;
+    }
+    if (existing.mode === 'chess') {
+      // seule action staff sur une partie d'échecs : la terminer de force
+      const session = await chessGmAction(existing.id, action);
+      res.json({ status: 'success', data: buildChessPublicState(session) });
       return;
     }
     const session =
