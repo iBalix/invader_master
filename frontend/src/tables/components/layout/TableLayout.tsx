@@ -46,6 +46,10 @@ function getRouteKind(pathname: string): RouteKind {
   if (pathname.startsWith('/table/screensaver')) return 'screensaver';
   if (pathname.startsWith('/table/home')) return 'home';
   if (pathname.startsWith('/table/in-game')) return 'fullscreen';
+  // 'fullscreen' desactive l'inactivite : un joueur qui suit une question sur
+  // le videoprojecteur sans toucher la dalle ne doit pas basculer en veille
+  // au bout de 90 s en pleine partie.
+  if (pathname.startsWith('/table/play')) return 'fullscreen';
   if (pathname.startsWith('/table/setup')) return 'setup';
   return 'sub';
 }

@@ -12,6 +12,7 @@
  *   /table/home         -> menu principal
  *   /table/menu         -> carte (commande)
  *   /table/games        -> liste jeux
+ *   /table/play         -> partie quiz/battle jouee depuis la borne
  *
  * Si aucun hostname n'est connu (URL ni localStorage), on force /table/setup.
  */
@@ -24,6 +25,7 @@ import HomePage from './pages/HomePage';
 import MenuPage from './pages/MenuPage';
 import GamesPage from './pages/GamesPage';
 import InGamePage from './pages/InGamePage';
+import TablePlayPage from './pages/TablePlayPage';
 import { useHostname } from './hooks/useHostname';
 
 function HostnameGuard({ children }: { children: React.ReactNode }) {
@@ -53,6 +55,7 @@ export default function TablesApp() {
         <Route path="menu" element={<MenuPage />} />
         <Route path="games" element={<GamesPage />} />
         <Route path="in-game" element={<InGamePage />} />
+        <Route path="play" element={<TablePlayPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/table/screensaver" replace />} />

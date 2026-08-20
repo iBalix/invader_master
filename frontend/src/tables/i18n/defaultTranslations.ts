@@ -49,6 +49,7 @@ export const DEFAULT_TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'table.home.liveGame.battle': 'Battle Royale en cours',
     'table.home.liveGame.sub': 'Touche ici pour rejoindre la partie depuis cette table',
     'table.home.liveGame.cta': 'Rejoindre',
+    'table.home.liveGame.resume': 'Reprendre',
 
     // carte
     'table.menu.title': 'Carte',
@@ -157,6 +158,7 @@ export const DEFAULT_TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'table.home.liveGame.battle': 'Battle Royale in progress',
     'table.home.liveGame.sub': 'Tap here to join the game from this table',
     'table.home.liveGame.cta': 'Join',
+    'table.home.liveGame.resume': 'Resume',
 
     'table.menu.title': 'Menu',
     'table.menu.cart': 'Cart',

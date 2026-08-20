@@ -284,6 +284,59 @@ export function clearIdentity(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Instant d'affichage d'une question (sessionStorage)
+// ---------------------------------------------------------------------------
+
+const SHOWN_AT_KEY = 'invader_game_shown_at';
+
+interface ShownMark {
+  sessionId: string;
+  questionIndex: number;
+  at: number;
+}
+
+/**
+ * Instant où la question a été affichée pour la première fois, persisté.
+ *
+ * POURQUOI : `elapsedMs` est mesuré côté client, volontairement, pour que le
+ * bonus de rapidité soit insensible à la latence réseau. Mais la référence
+ * vivait dans un `useRef` remis à zéro à chaque montage du composant. Un
+ * joueur qui quitte l'écran et revient produisait donc un `elapsedMs`
+ * minuscule, que le serveur accepte comme plausible (`scoring.ts`, entre
+ * 150 ms et la fenêtre + 3 s). Il raflait le +1 du plus rapide, la mention
+ * « plus rapide » et les départages au temps en finale.
+ *
+ * Depuis qu'on peut sortir de la partie pour consulter la carte et revenir,
+ * la faille devient triviale à exploiter : on persiste donc la référence.
+ *
+ * Horloge murale (`Date.now`) et non `performance.now` : cette dernière est
+ * relative au chargement de la page, donc incomparable après un rechargement.
+ * Sur la durée d'une question, un saut d'horloge système est un risque
+ * théorique face à une triche qui, elle, serait systématique.
+ */
+export function questionShownAt(sessionId: string, questionIndex: number): number {
+  try {
+    const raw = sessionStorage.getItem(SHOWN_AT_KEY);
+    if (raw) {
+      const mark = JSON.parse(raw) as ShownMark;
+      if (mark.sessionId === sessionId && mark.questionIndex === questionIndex) {
+        return mark.at;
+      }
+    }
+  } catch {
+    /* stockage indisponible : on retombe sur l'instant courant */
+  }
+  const at = Date.now();
+  try {
+    const mark: ShownMark = { sessionId, questionIndex, at };
+    sessionStorage.setItem(SHOWN_AT_KEY, JSON.stringify(mark));
+  } catch {
+    /* ignore */
+  }
+  return at;
+}
+
+// ---------------------------------------------------------------------------
 // Horloge serveur : offset estimé via les réponses state (rtt/2)
 // ---------------------------------------------------------------------------
 

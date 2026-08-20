@@ -4,6 +4,12 @@
  * Le téléphone est un pad de réponse : inscription au pseudo, activation des
  * bonus pendant l'annonce, réponse pendant la fenêtre, feedback personnel à
  * la révélation. Pour tout le reste : "regarde l'écran principal".
+ *
+ * MONTAGE EMBARQUÉ : la même surface sert aussi sur les bornes tactiles, via
+ * /table/play (cf. tables/pages/TablePlayPage.tsx). Deux props optionnelles
+ * suffisent, `embedded` pour le cadrage et `onExit` pour le retour à
+ * l'interface de la table. Le parcours téléphone, lui, ne les passe pas et ne
+ * change donc pas d'un pixel.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -13,6 +19,7 @@ import {
   clearIdentity,
   gameApi,
   loadIdentity,
+  questionShownAt,
   saveIdentity,
   type PublicState,
   type You,
@@ -43,7 +50,16 @@ export function label(err: string): string {
   return ERROR_LABELS[err] ?? err;
 }
 
-export default function PlayerApp() {
+export interface PlayerAppProps {
+  /** monté dans une autre interface (borne tactile) : cadrage en hauteur fluide */
+  embedded?: boolean;
+  /** affiche un retour vers l'interface hôte ; absent sur téléphone */
+  onExit?: () => void;
+  /** valeur envoyée en `device` à l'inscription (défaut 'mobile') */
+  deviceLabel?: string;
+}
+
+export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppProps = {}) {
   const { code } = useParams<{ code?: string }>();
   const [sessionRef, setSessionRef] = useState<string | null>(code ?? null);
   const [playerToken, setPlayerToken] = useState<string | null>(null);
@@ -81,12 +97,14 @@ export default function PlayerApp() {
     }
   }, [state, playerToken]);
 
+  const shellProps = { embedded, onExit };
+
   if (resolving) {
-    return <Shell><Center><Spinner /></Center></Shell>;
+    return <Shell {...shellProps}><Center><Spinner /></Center></Shell>;
   }
   if (!sessionRef || (state && state.ended)) {
     return (
-      <Shell>
+      <Shell {...shellProps}>
         <Center>
           <div className="anim-fade-up text-center">
             <h1 className="mb-3 text-3xl font-black text-white">INVADER</h1>
@@ -99,16 +117,29 @@ export default function PlayerApp() {
     );
   }
   if (!state) {
-    return <Shell><Center><Spinner /></Center></Shell>;
+    return <Shell {...shellProps}><Center><Spinner /></Center></Shell>;
   }
 
   return (
-    <Shell onResync={() => void refresh()}>
+    <Shell
+      {...shellProps}
+      onResync={() => void refresh()}
+      // Quitter pendant une question de battle royale, c'est être éliminé de
+      // la manche (battleFlow : pas de réponse = raison 'timeout'). Le reste
+      // du temps, on sort sans rien demander.
+      exitWarning={
+        state.mode === 'battle' && (state.status === 'question' || state.status === 'locked')
+          ? 'Une question est en cours. Si tu quittes maintenant, tu seras éliminé de cette manche.'
+          : undefined
+      }
+    >
       <PlayerScreen
         state={state}
         you={you}
         sessionRef={sessionRef}
         playerToken={playerToken}
+        embedded={embedded}
+        deviceLabel={deviceLabel}
         onJoined={(token, newYou) => {
           setPlayerToken(token);
           setYou(newYou);
@@ -131,10 +162,69 @@ export default function PlayerApp() {
 // Shell + primitives
 // ---------------------------------------------------------------------------
 
-function Shell({ children, onResync }: { children: React.ReactNode; onResync?: () => void }) {
+interface ShellProps {
+  children: React.ReactNode;
+  onResync?: () => void;
+  embedded?: boolean;
+  onExit?: () => void;
+  /** si defini, la sortie demande confirmation avec ce message */
+  exitWarning?: string;
+}
+
+function Shell({ children, onResync, embedded, onExit, exitWarning }: ShellProps) {
   const [spinning, setSpinning] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  const requestExit = () => {
+    if (exitWarning) setConfirming(true);
+    else onExit?.();
+  };
+
   return (
-    <div className="game-bg flex min-h-dvh flex-col text-white">
+    // embedded : la borne fournit deja la hauteur, min-h-dvh y creerait une
+    // seconde barre de defilement. Sur telephone, min-h-dvh reste necessaire.
+    <div className={`game-bg flex flex-col text-white ${embedded ? 'h-full overflow-y-auto' : 'min-h-dvh'}`}>
+      {onExit && (
+        <button
+          type="button"
+          onClick={requestExit}
+          className="absolute left-2 top-2 z-50 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-3 py-1.5 text-sm font-bold text-white/70 backdrop-blur active:bg-white/20"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Retour
+        </button>
+      )}
+
+      {confirming && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 px-6">
+          <div className="w-full max-w-sm rounded-2xl border border-white/15 bg-[#141033] p-6 text-center">
+            <div className="mb-3 text-4xl">&#9888;&#65039;</div>
+            <p className="text-balance text-base text-white/85">{exitWarning}</p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="flex-1 rounded-xl bg-white/10 px-4 py-3 font-bold text-white active:bg-white/20"
+              >
+                Rester
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(false);
+                  onExit?.();
+                }}
+                className="flex-1 rounded-xl bg-rose-500/80 px-4 py-3 font-bold text-white active:bg-rose-500"
+              >
+                Quitter quand même
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {onResync && (
         <button
           type="button"
@@ -215,6 +305,10 @@ export interface ScreenProps {
   you: You | null;
   sessionRef: string;
   playerToken: string | null;
+  /** monte dans l'interface d'une borne : hauteur fluide */
+  embedded?: boolean;
+  /** valeur `device` a l'inscription : hostname de la borne, ou 'mobile' */
+  deviceLabel?: string;
   onJoined: (token: string, you: You) => void;
   onLeft: () => void;
   refresh: () => Promise<void>;
@@ -223,7 +317,18 @@ export interface ScreenProps {
 function PlayerScreen(props: ScreenProps) {
   const { state, you } = props;
 
-  if (!you) return <JoinScreen {...props} />;
+  if (!you) {
+    // Reprise en cours : le premier refresh part sans token, donc il existe
+    // une fenetre d'un aller-retour ou l'etat est charge mais `you` pas
+    // encore. Sans cette garde on affichait l'ecran d'inscription au joueur
+    // qui revient, et s'il y tapait son pseudo il prenait un 409 pseudo deja
+    // pris.
+    const identity = loadIdentity();
+    if (identity && identity.sessionId === state.id) {
+      return <Center><Spinner /></Center>;
+    }
+    return <JoinScreen {...props} />;
+  }
 
   if (state.mode === 'battle') {
     return <BattlePlayerScreen {...props} you={you} />;
@@ -265,7 +370,7 @@ function PlayerScreen(props: ScreenProps) {
   })();
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className={`flex flex-col ${props.embedded ? 'flex-1' : 'min-h-dvh'}`}>
       <StatusBar state={state} you={you} />
       {body}
     </div>
@@ -276,7 +381,7 @@ function PlayerScreen(props: ScreenProps) {
 // Inscription
 // ---------------------------------------------------------------------------
 
-function JoinScreen({ state, sessionRef, onJoined }: ScreenProps) {
+function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel }: ScreenProps) {
   const [pseudo, setPseudo] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,7 +391,13 @@ function JoinScreen({ state, sessionRef, onJoined }: ScreenProps) {
     setBusy(true);
     setError(null);
     try {
-      const data = await gameApi.join(sessionRef, { pseudo: pseudo.trim(), device: 'mobile' });
+      // playerToken transmis quand on en a un : la route /join sait alors
+      // reprendre l'identite existante au lieu de creer un doublon.
+      const data = await gameApi.join(sessionRef, {
+        pseudo: pseudo.trim(),
+        device: deviceLabel ?? 'mobile',
+        playerToken: playerToken ?? undefined,
+      });
       onJoined(data.playerToken, data.you);
     } catch (err) {
       setError(err instanceof ApiError ? label(err.message) : 'Erreur réseau, réessaie');
@@ -496,7 +607,9 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: Screen
   const remaining = usePhaseCountdown(state.phaseEndsAt);
   const q = state.question;
   const locked = state.status === 'locked';
-  const shownAtRef = useRef<number>(performance.now());
+  // Reference persistee : survit a une sortie/retour vers la carte du bar.
+  // Voir questionShownAt() pour le detail de la faille evitee.
+  const shownAtRef = useRef<number>(0);
   const questionIndexRef = useRef<number>(-1);
   const [selected, setSelected] = useState<number | null>(null);
   const [numberValue, setNumberValue] = useState<string>('');
@@ -509,7 +622,7 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: Screen
   useEffect(() => {
     if (q && q.index !== questionIndexRef.current) {
       questionIndexRef.current = q.index;
-      shownAtRef.current = performance.now();
+      shownAtRef.current = questionShownAt(state.id, q.index);
       setSelected(null);
       setNumberValue('');
       setTextValue('');
@@ -535,7 +648,8 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: Screen
   const send = async (answer: { choice?: number; number?: number; text?: string }) => {
     if (!playerToken || sendState === 'sending' || sendState === 'recorded') return;
     setSendState('sending');
-    const elapsedMs = Math.round(performance.now() - shownAtRef.current);
+    const shownAt = shownAtRef.current || questionShownAt(state.id, q.index);
+    const elapsedMs = Math.round(Date.now() - shownAt);
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await gameApi.answer(sessionRef, { playerToken, questionIndex: q.index, answer, elapsedMs });

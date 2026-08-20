@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, gameApi, type PublicState, type You } from '../lib/gameClient';
+import { ApiError, gameApi, questionShownAt, type PublicState, type You } from '../lib/gameClient';
 import { usePhaseCountdown } from '../hooks/useGameSession';
 import { DifficultyBadge, TimerRing } from '../ui/bits';
 import { ANSWER_COLORS, BigMessage, Center, Spinner, type ScreenProps } from './PlayerApp';
@@ -210,7 +210,9 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
   const remaining = usePhaseCountdown(state.phaseEndsAt);
   const q = state.question;
   const grace = state.status === 'locked';
-  const shownAtRef = useRef<number>(performance.now());
+  // Reference persistee, cf. questionShownAt() : une sortie/retour ne doit
+  // pas offrir le bonus de rapidite.
+  const shownAtRef = useRef<number>(0);
   const questionIndexRef = useRef<number>(-1);
   const [selected, setSelected] = useState<number | null>(null);
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'recorded' | 'failed'>(
@@ -220,7 +222,7 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
   useEffect(() => {
     if (q && q.index !== questionIndexRef.current) {
       questionIndexRef.current = q.index;
-      shownAtRef.current = performance.now();
+      shownAtRef.current = questionShownAt(state.id, q.index);
       setSelected(null);
       setSendState(you.answered ? 'recorded' : 'idle');
     }
@@ -243,7 +245,8 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
   const send = async (choice: number) => {
     if (!playerToken || sendState === 'sending' || sendState === 'recorded') return;
     setSendState('sending');
-    const elapsedMs = Math.round(performance.now() - shownAtRef.current);
+    const shownAt = shownAtRef.current || questionShownAt(state.id, q.index);
+    const elapsedMs = Math.round(Date.now() - shownAt);
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await gameApi.answer(sessionRef, {

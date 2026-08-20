@@ -4,7 +4,11 @@
  * Layout :
  *   - Image de fond : geree par TableLayout
  *   - Top : bandeau evenement (permanent) + apparitions de mises en avant
- *   - Centre : titre INVADER centre + 2 boutons CTA (picto + nom + sous-titre)
+ *   - Centre : titre INVADER centre + 2 boutons CTA (picto + nom + sous-titre),
+ *     plus un 3e bouton "Rejoindre la partie" quand un quiz ou un battle
+ *     tourne. Avant, une banniere prenait la place du bandeau evenement, donc
+ *     on perdait les mises en avant et le client ne trouvait pas l'entree la
+ *     ou il la cherche : dans la rangee de boutons.
  *   - Top-right : locale switcher + bouton power (vers screensaver)
  *
  * Chaque bouton emet des particules vers l'exterieur (gauche pour Carte,
@@ -15,15 +19,15 @@
 
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Utensils, Gamepad2, Power, ArrowRight } from 'lucide-react';
+import { Utensils, Gamepad2, Power, ArrowRight, Swords, Target } from 'lucide-react';
 import { useHostname } from '../hooks/useHostname';
 import { useTableHome } from '../hooks/useTableHome';
 import { useLiveEvent } from '../hooks/useLiveEvent';
 import { useDesignConfig } from '../hooks/useDesignConfig';
 import { useT } from '../i18n/useT';
 import HomeTopBanner from '../components/home/HomeTopBanner';
-import LiveGameBanner from '../components/home/LiveGameBanner';
 import { useLiveGame } from '../hooks/useLiveGame';
+import { loadIdentity } from '../../game/lib/gameClient';
 import ButtonParticles from '../components/home/ButtonParticles';
 import GamepadBadge from '../components/layout/GamepadBadge';
 import LocaleSwitcher from '../components/layout/LocaleSwitcher';
@@ -52,22 +56,27 @@ export default function HomePage() {
 
   const menuColor = design.menuButtonColor;
   const gamesColor = design.gamesButtonColor;
+  // Pas de couleur configurable pour un 3e bouton dans le modele de design
+  // (menuButtonColor / gamesButtonColor seulement) : cyan en dur, la teinte
+  // de l'ancienne banniere.
+  const liveColor = '#22B8CF';
+
+  // "Reprendre" plutot que "Rejoindre" si ce client a deja une identite dans
+  // la partie en cours : c'est ce qui materialise le retour apres un detour
+  // par la carte ou par un jeu retro.
+  const alreadyPlaying = !!liveGame && loadIdentity()?.sessionId === liveGame.sessionId;
 
   return (
     <div className="relative flex h-full w-full flex-col px-12 py-8">
       {/* === Top bar : bandeau central + actions a droite === */}
       <header className="relative z-10 flex shrink-0 items-start">
         <div className="flex-1">
-          {liveGame ? (
-            <LiveGameBanner game={liveGame} />
-          ) : (
           <HomeTopBanner
             liveEvent={liveEvent}
             nextEvent={nextEvent}
             featured={featured}
             featuredIntervalMs={settings?.home_featured_interval_ms}
           />
-          )}
         </div>
         <div className="absolute right-0 top-0 flex items-center gap-3">
           <GamepadBadge />
@@ -120,6 +129,30 @@ export default function HomePage() {
             label={t('table.home.cta.games', 'Voir les jeux')}
             hint={t('table.home.cta.games.subtitle', 'Lance ta partie')}
           />
+          {liveGame && (
+            <CTAButton
+              to="/table/play"
+              emitDirection="right"
+              color={liveColor}
+              icon={
+                liveGame.mode === 'battle' ? (
+                  <Swords className="h-9 w-9" />
+                ) : (
+                  <Target className="h-9 w-9" />
+                )
+              }
+              label={
+                alreadyPlaying
+                  ? t('table.home.liveGame.resume', 'Reprendre')
+                  : t('table.home.liveGame.cta', 'Rejoindre')
+              }
+              hint={
+                liveGame.mode === 'battle'
+                  ? t('table.home.liveGame.battle', 'Battle Royale en cours')
+                  : t('table.home.liveGame.quiz', 'Quiz en cours')
+              }
+            />
+          )}
         </motion.div>
       </div>
     </div>
