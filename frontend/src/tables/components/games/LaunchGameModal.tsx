@@ -10,6 +10,12 @@
  *   3. Pour quitter le jeu : maintenir START 3s
  *
  * Le compte de manettes est mis a jour live via la Gamepad API.
+ *
+ * LANCEMENT : les DEUX dalles peuvent lancer. La demande part au serveur, qui
+ * l'adresse au PC master (seul cable aux deux ecrans, seul capable de basculer
+ * la dalle du slave). L'ecran qui a clique suit l'avancement ici meme ; l'autre
+ * bascule sur l'ecran plein cadre. Avant, un client sur l'ecran secondaire ne
+ * pouvait tout simplement pas lancer de jeu.
  */
 
 import { useEffect, useState } from 'react';
@@ -24,17 +30,15 @@ import {
   XCircle,
   Sparkles,
   ArrowLeft,
+  Loader2,
 } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import ArcadeButton from '../ui/ArcadeButton';
 import YouTubeFadePreview from './YouTubeFadePreview';
 import SNESControllerSchematic from './SNESControllerSchematic';
 import type { Game } from '../../hooks/useGames';
-import {
-  buildInvaderUrl,
-  launchOnLocalMachine,
-  notifySlaveStartGame,
-} from '../../lib/gameLaunch';
+import { requestLaunch } from '../../lib/gameLaunch';
+import { useLaunchOrder, primeLaunchOrder } from '../../hooks/useLaunchOrder';
 import { useHostname } from '../../hooks/useHostname';
 import { useGamepadCount } from '../../hooks/useGamepadCount';
 import { useT } from '../../i18n/useT';
@@ -125,8 +129,12 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
   const identity = useHostname();
   const navigate = useNavigate();
   const t = useT();
+  const { order } = useLaunchOrder();
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Ordre deja en cours sur la table, sur un AUTRE jeu : on ne bascule jamais
+  // en silence, le client doit confirmer.
+  const [busyOrderGame, setBusyOrderGame] = useState<string | null>(null);
   // Etape de la modale : 'details' (defaut) ou 'controls' (rappel touches avant lancement)
   const [step, setStep] = useState<'details' | 'controls'>('details');
 
@@ -139,13 +147,29 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
     if (!open) {
       setStep('details');
       setError(null);
+      setLaunching(false);
+      setBusyOrderGame(null);
     }
   }, [open, game?.id]);
 
+  // L'ordre est la verite : des qu'il est confirme, on passe a l'ecran plein
+  // cadre. En cas d'echec, on affiche le message ici plutot que de laisser un
+  // spinner tourner indefiniment.
+  const orderStatus = order?.status ?? null;
+  const orderIsForThisGame = !!order && !!game && order.gameId === game.id;
+  useEffect(() => {
+    if (!orderIsForThisGame) return;
+    if (orderStatus === 'dispatched') {
+      navigate('/table/in-game', { replace: true });
+    } else if (orderStatus === 'failed' || orderStatus === 'cancelled') {
+      setLaunching(false);
+      setError(t('table.ingame.failed.info'));
+    }
+  }, [orderIsForThisGame, orderStatus, navigate, t]);
+
   if (!game) return null;
 
-  const isMaster = identity?.role === 'master';
-  const invaderUrl = buildInvaderUrl(game);
+  const launchable = !!game.fileName;
   const noControllerNeeded = isInvaderGame(game);
   const hasController = gamepadCount > 0;
 
@@ -165,12 +189,14 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
 
   const step2Tone: StepTone = step2Valid ? 'success' : 'danger';
 
-  const launchDisabled = launching || !invaderUrl || !step2Valid;
+  const launchDisabled = launching || !launchable || !step2Valid;
+  // Ecran d'attente : on a demande, le serveur n'a pas encore confirme.
+  const waiting = launching || (orderIsForThisGame && orderStatus === 'pending');
 
-  async function handleLaunch() {
+  async function handleLaunch(replace = false) {
     if (!game) return;
-    if (!identity || identity.role !== 'master') return;
-    if (!invaderUrl) {
+    if (!identity) return;
+    if (!launchable) {
       setError(
         t(
           'table.games.error.missing',
@@ -181,28 +207,26 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
     }
     setLaunching(true);
     setError(null);
+    setBusyOrderGame(null);
     try {
-      await notifySlaveStartGame(identity.hostname, {
-        game: {
-          id: game.id,
-          name: game.name,
-          fileName: game.fileName,
-          consoleLibrary: game.consoleLibrary,
-        },
-        invaderUrl,
-      });
-      launchOnLocalMachine(invaderUrl);
-      try {
-        sessionStorage.setItem(
-          'invaderInGame',
-          JSON.stringify({ game: { id: game.id, name: game.name } })
-        );
-      } catch {
-        /* ignore */
+      const { order: created, alreadyActive } = await requestLaunch(game.id, { replace });
+      // Une partie tourne deja sur un AUTRE jeu : on demande confirmation au
+      // lieu de la couper dans le dos du joueur en cours.
+      if (alreadyActive && created && created.gameId !== game.id) {
+        setLaunching(false);
+        setBusyOrderGame(created.gameName);
+        return;
       }
-      navigate('/table/in-game', { replace: true });
+      // Le store partage prend l'ordre tout de suite : sur le master, c'est ce
+      // qui declenche la reclamation puis le deeplink, sans attendre le
+      // prochain sondage.
+      primeLaunchOrder(created);
     } catch (err: any) {
-      setError(err?.message ?? t('table.games.error.launch', 'Erreur au lancement'));
+      setError(
+        err?.response?.data?.message ??
+          err?.message ??
+          t('table.games.error.launch', 'Erreur au lancement')
+      );
       setLaunching(false);
     }
   }
@@ -214,8 +238,58 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
     if (hasPreLaunchInfo) {
       setStep('controls');
     } else {
-      handleLaunch();
+      void handleLaunch();
     }
+  }
+
+  // ----- Vue "une partie tourne deja" -----
+  // Jamais de bascule silencieuse : couper la partie d'un autre client sans
+  // le lui dire serait pire que de lui demander.
+  if (busyOrderGame) {
+    return (
+      <ArcadeModal open={open} onClose={onClose} size="lg" title={game.name.toUpperCase()}>
+        <div className="flex flex-col items-center gap-5 py-6 text-center">
+          <AlertTriangle className="h-12 w-12 text-table-yellow" />
+          <div className="font-display text-2xl uppercase tracking-wider text-table-ink">
+            {t('table.games.busy.title', 'Une partie est deja en cours')}
+          </div>
+          <p className="max-w-md text-sm text-table-ink-muted">
+            {t('table.games.busy.info', 'Sur cette table : {game}. Veux-tu changer de jeu ?').replace(
+              '{game}',
+              busyOrderGame
+            )}
+          </p>
+          <div className="flex gap-3">
+            <ArcadeButton variant="ghost" size="md" onClick={onClose}>
+              {t('table.common.back', 'Retour')}
+            </ArcadeButton>
+            <ArcadeButton variant="primary" size="md" onClick={() => void handleLaunch(true)}>
+              {t('table.games.busy.replace', 'Changer de jeu')}
+            </ArcadeButton>
+          </div>
+        </div>
+      </ArcadeModal>
+    );
+  }
+
+  // ----- Vue "lancement en cours" -----
+  // C'est la pop-up d'attente : elle reste affichee tant que le serveur n'a pas
+  // tranche. Elle ne peut pas rester bloquee, l'ordre finit toujours par etre
+  // confirme, echoue ou balaye.
+  if (waiting) {
+    return (
+      <ArcadeModal open={open} onClose={onClose} size="lg" title={game.name.toUpperCase()}>
+        <div className="flex flex-col items-center gap-5 py-10 text-center">
+          <Loader2 className="h-14 w-14 animate-spin text-table-magenta" />
+          <div className="font-display text-3xl uppercase tracking-wider text-table-ink">
+            {t('table.ingame.launching', 'Lancement en cours')}
+          </div>
+          <p className="max-w-md text-sm text-table-ink-muted">
+            {t('table.ingame.launching.info')}
+          </p>
+        </div>
+      </ArcadeModal>
+    );
   }
 
   // ----- Vue "rappel des touches" -----
@@ -267,7 +341,7 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
               size="xl"
               fullWidth
               disabled={launchDisabled}
-              onClick={handleLaunch}
+              onClick={() => void handleLaunch()}
               icon={<Play className="h-6 w-6" />}
             >
               {launching
@@ -411,35 +485,29 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
           )}
 
           <div className="mt-auto pt-5">
-            {isMaster ? (
-              <>
-                <ArcadeButton
-                  variant="primary"
-                  size="xl"
-                  fullWidth
-                  disabled={launchDisabled}
-                  onClick={handlePrimaryAction}
-                  icon={<Play className="h-6 w-6" />}
-                >
-                  {launching
-                    ? t('table.games.launching', 'Lancement...')
-                    : t('table.games.launch')}
-                </ArcadeButton>
-                {!step2Valid && !launching && (
-                  <div className="mt-2 flex items-center justify-center gap-2 text-center text-xs text-table-red">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    Branche une manette USB pour pouvoir lancer le jeu.
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
-                <div className="font-display text-lg uppercase tracking-wider text-table-ink">
-                  {t('table.games.slave.title', "Lancement depuis l'ecran principal")}
-                </div>
-                <div className="mt-2 text-xs text-table-ink-muted">
-                  {t('table.games.slave.info')}
-                </div>
+            {/* Les deux dalles lancent. Le serveur adresse ensuite l'ordre au
+                PC master : c'est lui qui execute et bascule l'ecran. */}
+            <ArcadeButton
+              variant="primary"
+              size="xl"
+              fullWidth
+              disabled={launchDisabled}
+              onClick={handlePrimaryAction}
+              icon={<Play className="h-6 w-6" />}
+            >
+              {launching
+                ? t('table.games.launching', 'Lancement...')
+                : t('table.games.launch')}
+            </ArcadeButton>
+            {!step2Valid && !launching && (
+              <div className="mt-2 flex items-center justify-center gap-2 text-center text-xs text-table-red">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Branche une manette USB pour pouvoir lancer le jeu.
+              </div>
+            )}
+            {identity?.role === 'slave' && (
+              <div className="mt-3 text-center text-xs text-table-ink-muted">
+                {t('table.games.slave.info')}
               </div>
             )}
           </div>

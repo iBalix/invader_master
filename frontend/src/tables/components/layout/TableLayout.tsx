@@ -12,6 +12,8 @@
  *   - Transitions verticales Framer Motion : conservees mais desactivees
  *     en mode reduced (prefers-reduced-motion / low-end / ?perf=lite).
  *   - Heartbeat backend + detection inactivite : inchange.
+ *   - Bascule vers l'ecran de jeu : pilotee par l'ordre de lancement serveur
+ *     (useLaunchNavigation), pas par un evenement temps reel volatile.
  */
 
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -19,7 +21,7 @@ import { useMemo, useRef } from 'react';
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useInactivity } from '../../hooks/useInactivity';
 import { useHeartbeat } from '../../hooks/useHeartbeat';
-import { useSlaveGameSync } from '../../hooks/useSlaveGameSync';
+import { useLaunchNavigation } from '../../hooks/useLaunchOrder';
 import { usePerfMode } from '../../hooks/usePerfMode';
 import { useTablesSettings } from '../../hooks/useTablesSettings';
 import { useDesignConfig } from '../../hooks/useDesignConfig';
@@ -115,7 +117,10 @@ export default function TableLayout() {
   });
 
   useHeartbeat();
-  useSlaveGameSync();
+  // Bascule vers / depuis l'ecran de jeu, pilotee par l'ordre de lancement
+  // serveur. Les deux dalles suivent le meme ordre, donc aucune ne peut rester
+  // bloquee sur "partie en cours" apres la fin du jeu.
+  useLaunchNavigation();
 
   const isShow = routeKind === 'home' || routeKind === 'screensaver';
   const showBgImage = isShow;

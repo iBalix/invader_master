@@ -48,6 +48,7 @@ import { barRoutes } from './routes/bar.js';
 import { cashRoutes } from './routes/cash.js';
 import { rolePermissionRoutes } from './routes/rolePermissions.js';
 import { initAgentBridge } from './websocket/agent-bridge.js';
+import { startLaunchScheduler } from './services/tableLaunch.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -130,4 +131,7 @@ initAgentBridge(server);
 
 server.listen(PORT, () => {
   console.log(`[invader-backend] Listening on port ${PORT}`);
+  // Les echeances des ordres de lancement vivent en base : ce ticker les relit,
+  // donc un redemarrage en pleine soiree ne perd aucun lancement en cours.
+  startLaunchScheduler();
 });

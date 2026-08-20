@@ -16,6 +16,7 @@ import { useDesignConfig } from '../hooks/useDesignConfig';
 import type { Game } from '../hooks/useGames';
 import { useT } from '../i18n/useT';
 import HeaderBar from '../components/layout/HeaderBar';
+import GamepadBadge from '../components/layout/GamepadBadge';
 import BackButton from '../components/layout/BackButton';
 import LauncherSidebar, { type SidebarEntry } from '../components/layout/LauncherSidebar';
 import GameCard from '../components/games/GameCard';
@@ -82,7 +83,11 @@ export default function GamesPage() {
 
   return (
     <div className="relative flex h-full w-full flex-col px-8 py-6">
-      <HeaderBar title={t('table.games.title').toUpperCase()} left={<BackButton />} />
+      <HeaderBar
+        title={t('table.games.title').toUpperCase()}
+        left={<BackButton />}
+        right={<GamepadBadge />}
+      />
 
       <div className="mt-5 flex min-h-0 flex-1 gap-5">
         <LauncherSidebar

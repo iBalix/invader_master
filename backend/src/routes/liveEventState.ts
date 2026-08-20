@@ -12,7 +12,7 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { triggerSafe } from '../config/pusher.js';
+import { broadcastTopic } from '../games/realtime.js';
 
 export const liveEventStateAuthRoutes = Router();
 export const liveEventStatePublicRoutes = Router();
@@ -132,14 +132,14 @@ liveEventStateAuthRoutes.put('/', async (req, res) => {
       .single();
 
     if (is_live) {
-      await triggerSafe('TABLES', 'event-start', {
+      await broadcastTopic('tables', 'event-start', {
         event_type: state?.event_type ?? null,
         event_label: state?.event_label ?? null,
         redirect_url: state?.redirect_url ?? null,
         started_at: state?.started_at ?? null,
       });
     } else {
-      await triggerSafe('TABLES', 'event-end', {
+      await broadcastTopic('tables', 'event-end', {
         ended_at: state?.ended_at ?? null,
       });
     }

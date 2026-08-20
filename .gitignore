@@ -33,3 +33,6 @@ agent/ping_results.json
 
 # TypeScript
 *.tsbuildinfo
+
+# Config locale des agents IA (launch.json contient des chemins absolus)
+.claude/

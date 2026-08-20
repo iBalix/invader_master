@@ -6,7 +6,7 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { triggerSafe } from '../config/pusher.js';
+import { broadcastTopic } from '../games/realtime.js';
 
 export const tableDevicesRoutes = Router();
 
@@ -67,7 +67,12 @@ tableDevicesRoutes.delete('/:id', async (req, res) => {
 });
 
 // POST /api/table-devices/:hostname/reload
-// Force un reload sur une table specifique (pousse Pusher event `reload`)
+// Force le rechargement d'une table depuis le back-office.
+//
+// Le bouton etait sans effet : l'evenement partait sur un channel par ECRAN
+// que plus aucun client n'ecoutait depuis la refonte des tables. On diffuse
+// desormais sur le topic de la TABLE, celui auquel les deux dalles sont
+// abonnees, et le hook useLaunchOrder recharge la page a la reception.
 tableDevicesRoutes.post('/:hostname/reload', async (req, res) => {
   try {
     const hostname = req.params.hostname;
@@ -75,7 +80,8 @@ tableDevicesRoutes.post('/:hostname/reload', async (req, res) => {
       res.status(400).json({ status: 'error', message: 'hostname invalide' });
       return;
     }
-    await triggerSafe(hostname, 'reload', {});
+    const tableId = hostname.split('-')[0];
+    await broadcastTopic(`table:${tableId}`, 'reload');
     res.json({ status: 'success' });
   } catch (err) {
     console.error('Reload table device error:', err);

@@ -13,6 +13,7 @@
  * Optimise : scaleX (GPU) pour le fond, opacity/translate pour texte & icone.
  */
 
+import { useT, type TFunction } from '../../i18n/useT';
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { Calendar, Radio, Sparkles, ArrowRight, Star } from 'lucide-react';
@@ -97,6 +98,7 @@ export default function HomeTopBanner({
   //     ? { kind: 'event' }
   //     : { kind: 'empty' };
   const baseSlide: Slide = { kind: 'empty' };
+  const t = useT();
 
   const [featuredIndex, setFeaturedIndex] = useState<number | null>(null);
   const cursorRef = useRef(0);
@@ -137,7 +139,7 @@ export default function HomeTopBanner({
   const slide: Slide = activeFeatured ? { kind: 'featured', item: activeFeatured } : baseSlide;
   const slideKey = slide.kind === 'featured' ? `featured-${slide.item.id}` : slide.kind;
 
-  const parts = getSlideParts(slide, liveEvent, nextEvent);
+  const parts = getSlideParts(slide, liveEvent, nextEvent, t);
 
   return (
     <div className="relative mx-auto h-24 w-full max-w-4xl">
@@ -182,6 +184,7 @@ function getSlideParts(
   slide: Slide,
   liveEvent: LiveEventState,
   nextEvent: UpcomingEvent | null,
+  t: TFunction,
 ): SlideParts {
   if (slide.kind === 'live') {
     const label = liveEvent.event_label || liveEvent.event_type?.toUpperCase() || 'EVENT EN COURS';
@@ -276,8 +279,12 @@ function getSlideParts(
     ),
     body: (
       <>
-        <div className="font-display text-xl uppercase tracking-wider text-table-ink-soft">Pas d'event à l'horizon</div>
-        <div className="text-sm text-table-ink-muted">Reste branché, on en programme chaque semaine.</div>
+        <div className="font-display text-xl uppercase tracking-wider text-table-ink-soft">
+          {t('table.home.noEvent.title', "Pas d'event à l'horizon")}
+        </div>
+        <div className="text-sm text-table-ink-muted">
+          {t('table.home.noEvent.sub', 'Reste branché, on en programme chaque semaine.')}
+        </div>
       </>
     ),
   };

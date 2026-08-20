@@ -5,9 +5,17 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
-import { triggerSafe } from '../config/pusher.js';
 import { requireOrderingEnabled } from '../middleware/requireOrderingEnabled.js';
 import { resolveEffectiveDesign } from '../lib/designResolver.js';
+import {
+  ackOrder,
+  createOrder,
+  endOrder,
+  getDisplayOrderFor,
+  getLiveOrderFor,
+  reportFocus,
+  toPublicOrder,
+} from '../services/tableLaunch.js';
 
 export const tablesRoutes = Router();
 
@@ -21,7 +29,6 @@ function toCamelDesign(row: Record<string, unknown> | null): Record<string, unkn
 }
 
 const HOSTNAME_RE = /^TABLE\d{2}-[12]$/;
-const PUSHER_CHANNEL_WHITELIST = /^(TABLE\d{2}-[12]|TABLES)$/;
 
 function parseHostname(raw: string | undefined | null): { hostname: string; tableNumber: string; role: 'master' | 'slave' } | null {
   if (!raw) return null;
@@ -538,44 +545,120 @@ tablesRoutes.get('/:hostname/orders/:id', async (req, res) => {
   }
 });
 
-// ------------------------------------------------------------
-// POST /public/tables/pusher
-// Body: { channel, event, data }
-// Proxy securise pour permettre au client de trigger un event Pusher
-// (le secret reste cote serveur). Whitelist : TABLEXX-[12] | TABLES.
-// ------------------------------------------------------------
-tablesRoutes.post('/pusher', async (req, res) => {
-  const parsedHost = parseHostname(req.headers['x-hostname'] as string);
-  if (!parsedHost) {
+// ============================================================
+// Lancement de jeux
+//
+// L'ancien proxy public POST /pusher a ete supprime ici : il permettait a
+// n'importe qui de declencher un evenement temps reel sur une table, et son
+// seul usage (notifier le slave) est remplace par l'ordre de lancement, qui
+// est persiste, arbitre et verifie. Voir services/tableLaunch.ts.
+// ============================================================
+
+// POST /public/tables/launch  { gameId, replace? }
+// Appelable depuis LES DEUX dalles : c'est le backend qui adresse l'ordre au
+// master (seul PC cable aux deux ecrans).
+tablesRoutes.post('/launch', async (req, res) => {
+  const parsed = getHostnameFromReq(req);
+  if (!parsed) {
     res.status(400).json({ status: 'error', message: 'X-Hostname requis' });
     return;
   }
-  const { channel, event, data } = req.body ?? {};
-  if (typeof channel !== 'string' || !PUSHER_CHANNEL_WHITELIST.test(channel)) {
-    res.status(400).json({ status: 'error', message: 'Channel non autorise' });
+  const gameId = (req.body?.gameId ?? '') as string;
+  if (!gameId) {
+    res.status(400).json({ status: 'error', message: 'gameId requis' });
     return;
-  }
-  if (typeof event !== 'string' || event.length === 0 || event.length > 64) {
-    res.status(400).json({ status: 'error', message: 'Event invalide' });
-    return;
-  }
-  // Le master ne peut trigger qu'un event sur le slave de SA propre table ou sur TABLES
-  if (channel !== 'TABLES') {
-    const expectedTable = parsedHost.tableNumber;
-    if (!channel.startsWith(`${expectedTable}-`)) {
-      res.status(403).json({ status: 'error', message: 'Channel cible interdit pour cet hostname' });
-      return;
-    }
   }
   try {
-    let payload: unknown = data;
-    if (typeof data === 'string') {
-      try { payload = JSON.parse(data); } catch { payload = data; }
-    }
-    await triggerSafe(channel, event, payload ?? {});
-    res.json({ status: 'success' });
+    const { order, alreadyActive } = await createOrder(parsed.hostname, gameId, {
+      replace: req.body?.replace === true,
+    });
+    res.status(alreadyActive ? 200 : 201).json({
+      status: 'success',
+      order: toPublicOrder(order),
+      alreadyActive,
+    });
   } catch (err) {
-    console.error('[tables/pusher] error:', err);
+    const httpStatus = (err as { httpStatus?: number }).httpStatus ?? 500;
+    if (httpStatus === 500) console.error('[tables/launch] error:', err);
+    res.status(httpStatus).json({ status: 'error', message: (err as Error).message });
+  }
+});
+
+// GET /public/tables/launch/current
+// Source de verite unique des deux dalles. Interrogee en boucle : meme si tous
+// les evenements temps reel se perdent, l'ecran se debloque au prochain appel.
+tablesRoutes.get('/launch/current', async (req, res) => {
+  const parsed = getHostnameFromReq(req);
+  if (!parsed) {
+    res.status(400).json({ status: 'error', message: 'X-Hostname requis' });
+    return;
+  }
+  try {
+    const order = await getDisplayOrderFor(parsed.hostname);
+    res.json({ status: 'success', order: toPublicOrder(order), serverNow: new Date().toISOString() });
+  } catch (err) {
+    console.error('[tables/launch/current] error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// POST /public/tables/launch/:id/ack
+// Le master reclame l'execution. Reponse ok:false => NE PAS lancer (l'agent a
+// deja pris le relais). C'est la garde anti double-lancement.
+tablesRoutes.post('/launch/:id/ack', async (req, res) => {
+  const parsed = getHostnameFromReq(req);
+  if (!parsed) {
+    res.status(400).json({ status: 'error', message: 'X-Hostname requis' });
+    return;
+  }
+  try {
+    const result = await ackOrder(req.params.id, parsed.hostname);
+    res.json({
+      status: 'success',
+      ok: result.ok,
+      deeplink: result.deeplink ?? null,
+      order: toPublicOrder(result.order),
+    });
+  } catch (err) {
+    const httpStatus = (err as { httpStatus?: number }).httpStatus ?? 500;
+    if (httpStatus === 500) console.error('[tables/launch/ack] error:', err);
+    res.status(httpStatus).json({ status: 'error', message: (err as Error).message });
+  }
+});
+
+// POST /public/tables/launch/:id/report  { signal: 'focus' }
+// Chrome reprend le focus sur le master = le jeu s'est ferme. Libere les DEUX
+// dalles, alors que l'ancien code ne nettoyait que le master.
+tablesRoutes.post('/launch/:id/report', async (req, res) => {
+  const parsed = getHostnameFromReq(req);
+  if (!parsed) {
+    res.status(400).json({ status: 'error', message: 'X-Hostname requis' });
+    return;
+  }
+  try {
+    const order = await reportFocus(req.params.id);
+    res.json({ status: 'success', order: toPublicOrder(order) });
+  } catch (err) {
+    console.error('[tables/launch/report] error:', err);
+    res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+// POST /public/tables/launch/:id/end
+// Disponible sur LES DEUX dalles : si le master est fige, le slave doit pouvoir
+// liberer la table lui-meme.
+tablesRoutes.post('/launch/:id/end', async (req, res) => {
+  const parsed = getHostnameFromReq(req);
+  if (!parsed) {
+    res.status(400).json({ status: 'error', message: 'X-Hostname requis' });
+    return;
+  }
+  try {
+    await endOrder(req.params.id, 'user');
+    const order = await getLiveOrderFor(parsed.hostname);
+    res.json({ status: 'success', order: toPublicOrder(order) });
+  } catch (err) {
+    console.error('[tables/launch/end] error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });
   }
 });

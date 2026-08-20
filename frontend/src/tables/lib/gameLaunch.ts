@@ -1,120 +1,98 @@
 /**
- * Helpers de lancement / synchronisation des jeux entre master et slave.
+ * Lancement d'un jeu depuis une table tactile.
  *
- * - buildInvaderUrl : construit l'URL custom invader:\\... attendue par
- *   l'agent kiosque Windows (qui spawn retroarch).
+ * Tout passe desormais par un ORDRE DE LANCEMENT persiste cote serveur
+ * (backend/src/services/tableLaunch.ts). Ce fichier ne fait plus que deux
+ * choses : parler a cette API, et tirer le deeplink sur la machine locale.
  *
- * - triggerStartGame / triggerEndGame : envoient un Pusher event au slave
- *   (channel TABLExx-2 si on est master) via le proxy serveur
- *   POST /public/tables/pusher (ainsi le secret reste cote serveur).
- *
- * Convention de hostname (rappel) :
- *   - master = "TABLExx-1"
- *   - slave  = "TABLExx-2"
- *
- * Le slave ecoute sur son propre channel "TABLExx-2".
- * Le master ecoute aussi sur "TABLExx-1" (utile si jamais on automatise
- * la fin de jeu depuis le slave).
+ * Ce qui a disparu, et pourquoi :
+ *   - buildInvaderUrl : le deeplink est construit par le backend. Le client
+ *     n'a plus a concatener ".dll" et ne peut plus faire executer une commande
+ *     arbitraire sur un PC du bar via un endpoint public.
+ *   - notifySlaveStartGame / notifySlaveEndGame : elles poussaient un evenement
+ *     Pusher vers un channel calcule a partir d'un hostname mal forme
+ *     ("01-2" au lieu de "TABLE01-2"), rejete par le serveur, avec l'erreur
+ *     avalee dans un catch. Le slave n'etait donc jamais notifie.
+ *   - getSlaveHostname / getMasterHostname : l'adressage master/slave est une
+ *     decision serveur, plus une deduction client.
  */
 
 import { tablesApi } from './tablesApi';
-import { parseHostname } from './hostname';
 
-export interface LaunchableGame {
+export type LaunchStatus = 'pending' | 'dispatched' | 'failed' | 'cancelled';
+
+export interface LaunchOrderView {
   id: string;
-  name: string;
-  fileName?: string | null;
-  consoleLibrary?: string | null;
-  gameType?: string | null;
-  gameUrl?: string | null;
+  status: LaunchStatus;
+  gameId: string | null;
+  gameName: string;
+  /** hostname de l'ecran qui a clique (master ou slave) */
+  requestedBy: string;
+  /** hostname du PC qui execute : toujours le master */
+  targetHostname: string;
+  createdAt: string;
+  endedAt: string | null;
 }
 
-export function buildInvaderUrl(game: LaunchableGame): string | null {
-  // Les jeux web (Phaser etc.) ont une URL HTTP directe : on la lance telle quelle.
-  if (game.gameType === 'web' && game.gameUrl) {
-    return game.gameUrl;
-  }
-  if (!game.fileName || !game.consoleLibrary) return null;
-  const params = new URLSearchParams({
-    run: '1',
-    istable: '1',
-    cmd: 'retroarch',
-    libcore: `${game.consoleLibrary}.dll`,
-    game: game.fileName,
-  });
-  // L'agent kiosque attend "invader:\\run?..." (double backslash, pas slash).
-  return `invader:\\\\run?${params.toString()}`;
+interface OrderResponse {
+  order: LaunchOrderView | null;
+  alreadyActive?: boolean;
 }
 
-export function getSlaveHostname(masterHostname: string): string | null {
-  const parsed = parseHostname(masterHostname);
-  if (!parsed || parsed.role !== 'master') return null;
-  return `${parsed.tableNumber}-2`;
+/** Demande de lancement. Appelable depuis les DEUX dalles. */
+export async function requestLaunch(
+  gameId: string,
+  opts: { replace?: boolean } = {},
+): Promise<OrderResponse> {
+  const { data } = await tablesApi.post('/launch', { gameId, replace: opts.replace === true });
+  return { order: data?.order ?? null, alreadyActive: data?.alreadyActive === true };
 }
 
-export function getMasterHostname(slaveHostname: string): string | null {
-  const parsed = parseHostname(slaveHostname);
-  if (!parsed || parsed.role !== 'slave') return null;
-  return `${parsed.tableNumber}-1`;
-}
-
-interface GamePayload {
-  game: LaunchableGame;
-  invaderUrl?: string | null;
+export async function fetchCurrentOrder(): Promise<LaunchOrderView | null> {
+  const { data } = await tablesApi.get('/launch/current');
+  return data?.order ?? null;
 }
 
 /**
- * Le master appelle cette fonction quand il lance un jeu.
- * Notifie le slave via Pusher channel TABLExx-2.
+ * Le master reclame l'execution avant de tirer le deeplink.
+ * ok=false => quelqu'un d'autre execute deja (l'agent, ou l'autre onglet) :
+ * il ne faut SURTOUT pas lancer, sinon le jeu demarre deux fois.
  */
-export async function notifySlaveStartGame(masterHostname: string, payload: GamePayload): Promise<void> {
-  const slave = getSlaveHostname(masterHostname);
-  if (!slave) return;
-  try {
-    await tablesApi.post('/pusher', {
-      channel: slave,
-      event: 'start-game',
-      data: {
-        ...payload,
-        from: masterHostname,
-        startedAt: new Date().toISOString(),
-      },
-    });
-  } catch (err) {
-    console.warn('[gameLaunch] notifySlaveStartGame failed', err);
-  }
+export async function ackOrder(
+  orderId: string,
+): Promise<{ ok: boolean; deeplink: string | null; order: LaunchOrderView | null }> {
+  const { data } = await tablesApi.post(`/launch/${orderId}/ack`, {});
+  return { ok: data?.ok === true, deeplink: data?.deeplink ?? null, order: data?.order ?? null };
+}
+
+/** Indice de fin de partie (Chrome reprend le focus sur le master). */
+export async function reportFocus(orderId: string): Promise<void> {
+  await tablesApi.post(`/launch/${orderId}/report`, { signal: 'focus' });
+}
+
+/** Bouton "Terminer", disponible sur les deux dalles. */
+export async function endOrder(orderId: string): Promise<void> {
+  await tablesApi.post(`/launch/${orderId}/end`, {});
 }
 
 /**
- * Idem mais pour la fin de partie.
+ * Tire le deeplink sur la machine locale.
+ *
+ * Iframe cachee plutot que window.location : une navigation vers un protocole
+ * custom peut etre bloquee ou laisser la page dans un etat instable, alors
+ * qu'une iframe echoue silencieusement sans casser le kiosque.
+ *
+ * Aucun accuse de reception n'est possible ici : c'est precisement pour ca que
+ * la confirmation est deleguee a l'agent du bar.
  */
-export async function notifySlaveEndGame(masterHostname: string): Promise<void> {
-  const slave = getSlaveHostname(masterHostname);
-  if (!slave) return;
-  try {
-    await tablesApi.post('/pusher', {
-      channel: slave,
-      event: 'end-game',
-      data: { from: masterHostname, endedAt: new Date().toISOString() },
-    });
-  } catch (err) {
-    console.warn('[gameLaunch] notifySlaveEndGame failed', err);
-  }
-}
-
-/**
- * Lance le jeu sur la machine locale via le custom protocol invader://
- * (ouvre une iframe cachee plutot que window.location pour eviter
- * les blocages de navigation).
- */
-export function launchOnLocalMachine(invaderUrl: string): void {
-  if (invaderUrl.startsWith('http')) {
-    window.location.href = invaderUrl;
+export function launchOnLocalMachine(deeplink: string): void {
+  if (deeplink.startsWith('http')) {
+    window.location.href = deeplink;
     return;
   }
   const iframe = document.createElement('iframe');
   iframe.style.display = 'none';
-  iframe.src = invaderUrl;
+  iframe.src = deeplink;
   document.body.appendChild(iframe);
   window.setTimeout(() => {
     try {

@@ -22,7 +22,10 @@ import { useLiveEvent } from '../hooks/useLiveEvent';
 import { useDesignConfig } from '../hooks/useDesignConfig';
 import { useT } from '../i18n/useT';
 import HomeTopBanner from '../components/home/HomeTopBanner';
+import LiveGameBanner from '../components/home/LiveGameBanner';
+import { useLiveGame } from '../hooks/useLiveGame';
 import ButtonParticles from '../components/home/ButtonParticles';
+import GamepadBadge from '../components/layout/GamepadBadge';
 import LocaleSwitcher from '../components/layout/LocaleSwitcher';
 import { EASE_OUT_QUART } from '../lib/motion';
 
@@ -42,6 +45,7 @@ export default function HomePage() {
   const identity = useHostname();
   const { featured, nextEvent, settings } = useTableHome(identity?.hostname);
   const liveEvent = useLiveEvent();
+  const liveGame = useLiveGame();
   const { design } = useDesignConfig();
   const t = useT();
   const navigate = useNavigate();
@@ -54,14 +58,19 @@ export default function HomePage() {
       {/* === Top bar : bandeau central + actions a droite === */}
       <header className="relative z-10 flex shrink-0 items-start">
         <div className="flex-1">
+          {liveGame ? (
+            <LiveGameBanner game={liveGame} />
+          ) : (
           <HomeTopBanner
             liveEvent={liveEvent}
             nextEvent={nextEvent}
             featured={featured}
             featuredIntervalMs={settings?.home_featured_interval_ms}
           />
+          )}
         </div>
         <div className="absolute right-0 top-0 flex items-center gap-3">
+          <GamepadBadge />
           <LocaleSwitcher />
           <button
             type="button"

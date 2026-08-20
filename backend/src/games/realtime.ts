@@ -2,9 +2,14 @@
  * Diffusion temps réel via Supabase Realtime (broadcast REST).
  *
  * Le backend n'ouvre pas de websocket : il POSTe sur l'endpoint broadcast.
- * Les événements sont des SIGNAUX, jamais la source de vérité : chaque payload
- * transporte state_version et les clients refont un GET state s'ils détectent
- * un trou (protocole auto-réparant).
+ * Les événements sont des SIGNAUX, jamais la source de vérité : chaque client
+ * sait se rattraper tout seul s'il en rate un (protocole auto-réparant :
+ * state_version côté moteur de jeu, sondage de l'ordre côté tables).
+ *
+ * Sert aussi bien au moteur de jeu (topic `game:<session>`) qu'aux tables
+ * tactiles (topic `table:<TABLExx>` et `tables`). C'est ce qui a permis de
+ * supprimer Pusher : un fournisseur en moins, et des identifiants qu'on
+ * maîtrise, alors que ceux de Pusher étaient partagés avec l'ancien site PHP.
  */
 
 const SUPABASE_URL = (process.env.SUPABASE_URL ?? '').replace(/\/$/, '');
@@ -19,6 +24,19 @@ export async function broadcast(
   event: string,
   payload: Record<string, unknown>,
 ): Promise<void> {
+  return broadcastTopic(gameTopic(sessionId), event, payload);
+}
+
+/**
+ * Diffusion sur un topic arbitraire. Best-effort et jamais attendu par un
+ * appelant critique : si Supabase est injoignable, les clients se rattrapent
+ * à leur prochain sondage.
+ */
+export async function broadcastTopic(
+  topic: string,
+  event: string,
+  payload: Record<string, unknown> = {},
+): Promise<void> {
   if (!SUPABASE_URL || !SERVICE_KEY) return;
   try {
     const res = await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
@@ -31,7 +49,7 @@ export async function broadcast(
       body: JSON.stringify({
         messages: [
           {
-            topic: gameTopic(sessionId),
+            topic,
             event,
             payload,
             private: false,

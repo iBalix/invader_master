@@ -18,6 +18,8 @@ export type TableRole = 'master' | 'slave';
 export interface TableIdentity {
   hostname: string;
   tableNumber: string; // ex: "01"
+  /** identifiant de la table, prefixe compris : "TABLE01" (= channel Pusher) */
+  tableId: string;
   role: TableRole;
 }
 
@@ -63,16 +65,37 @@ export function clearHostname(): void {
 }
 
 /**
- * Parse un hostname "TABLE01-1" -> { tableNumber: "01", role: "master" }.
- * Renvoie null si la regex n'est pas respectee (ex: TABLE-DEV).
+ * Regex STRICTEMENT alignee sur celle du backend (backend/src/routes/tables.ts
+ * et services/tableLaunch.ts). Avant, le front acceptait "TABLE1-1" et
+ * "TABLE01-3" que le serveur rejetait ensuite : la table semblait configuree
+ * mais aucun appel n'aboutissait.
+ */
+const HOSTNAME_RE = /^TABLE(\d{2})-([12])$/;
+
+/**
+ * Parse un hostname "TABLE01-1" -> identite de la table.
+ * Renvoie null si le format n'est pas respecte.
+ *
+ * Ce null est important : l'ancien code repliait tout hostname invalide sur
+ * un role "master", donc une borne mal configuree se croyait capable de
+ * lancer des jeux et polluait table_devices. Desormais elle part sur l'ecran
+ * de setup, ou l'erreur est visible tout de suite.
  */
 export function parseHostname(hostname: string | null): TableIdentity | null {
   if (!hostname) return null;
-  const match = hostname.match(/^TABLE(\d{1,3})-(\d)$/i);
-  if (!match) {
-    return { hostname, tableNumber: '??', role: 'master' };
-  }
-  const tableNumber = match[1].padStart(2, '0');
+  const match = hostname.trim().toUpperCase().match(HOSTNAME_RE);
+  if (!match) return null;
+  const tableNumber = match[1];
   const role: TableRole = match[2] === '1' ? 'master' : 'slave';
-  return { hostname, tableNumber, role };
+  return {
+    hostname: hostname.trim().toUpperCase(),
+    tableNumber,
+    tableId: `TABLE${tableNumber}`,
+    role,
+  };
+}
+
+/** Le hostname saisi est-il exploitable ? (utilise par l'ecran de setup) */
+export function isValidHostname(hostname: string): boolean {
+  return HOSTNAME_RE.test(hostname.trim().toUpperCase());
 }
