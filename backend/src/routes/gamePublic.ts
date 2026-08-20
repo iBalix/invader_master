@@ -5,7 +5,14 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
-import { isAdvanceDue, loadPlayers, loadSession, markDirty, withSession } from '../games/engine.js';
+import {
+  findPlayerByToken,
+  isAdvanceDue,
+  loadPlayers,
+  loadSession,
+  markDirty,
+  withSession,
+} from '../games/engine.js';
 import { activateBonus, joinSession, submitAnswer } from '../games/quizFlow.js';
 // import à effet de bord indispensable : enregistre l'advancer 'battle'
 import { joinBattleSession, submitBattleAnswer } from '../games/battleFlow.js';
@@ -21,19 +28,15 @@ function httpError(res: Parameters<Parameters<typeof gamePublicRoutes.get>[1]>[1
   res.status(status).json({ status: 'error', message });
 }
 
-async function findPlayerByToken(
-  sessionId: string,
-  token: string | undefined,
-): Promise<PlayerRow | null> {
-  if (!token) return null;
-  const { data } = await supabaseAdmin
-    .from('game_players')
-    .select('*')
-    .eq('session_id', sessionId)
-    .eq('player_token', token)
-    .neq('status', 'removed')
-    .maybeSingle();
-  return (data as PlayerRow) ?? null;
+/**
+ * Ces routes ne servent QUE quiz/battle : les jeux de tables (chess, ...) ont
+ * leurs propres routeurs. Sans cette garde, /public/game/<chessId>/join
+ * exécuterait le join quiz sur une partie d'échecs.
+ */
+function ensureQuizBattle(session: SessionRow): void {
+  if (session.mode !== 'quiz' && session.mode !== 'battle') {
+    throw Object.assign(new Error('Session introuvable'), { httpStatus: 404 });
+  }
 }
 
 async function hasAnswered(session: SessionRow, player: PlayerRow): Promise<boolean> {
@@ -54,6 +57,9 @@ gamePublicRoutes.get('/current', async (_req, res) => {
       .from('game_sessions')
       .select('id, join_code, mode, status, created_at')
       .is('ended_at', null)
+      // événements projo uniquement : une partie d'échecs sur une table ne
+      // doit jamais devenir "la" session courante du bar
+      .in('mode', ['quiz', 'battle'])
       .order('created_at', { ascending: false })
       .limit(1);
     if (error) throw error;
@@ -82,6 +88,7 @@ gamePublicRoutes.get('/:idOrCode/state', async (req, res) => {
       res.status(404).json({ status: 'error', message: 'Session introuvable' });
       return;
     }
+    ensureQuizBattle(session);
     // rattrapage paresseux : si une transition auto est due, on l'applique
     // dans withSession (persistée) ; jamais d'advance sur une copie jetable
     if (isAdvanceDue(session)) {
@@ -114,6 +121,7 @@ gamePublicRoutes.post('/:idOrCode/join', async (req, res) => {
       res.status(404).json({ status: 'error', message: 'Aucune partie en cours' });
       return;
     }
+    ensureQuizBattle(session);
     const { pseudo, device, playerToken } = req.body as {
       pseudo?: string;
       device?: string;
@@ -157,6 +165,7 @@ gamePublicRoutes.post('/:idOrCode/leave', async (req, res) => {
       res.status(404).json({ status: 'error', message: 'Session introuvable' });
       return;
     }
+    ensureQuizBattle(session);
     const player = await findPlayerByToken(session.id, (req.body as { playerToken?: string }).playerToken);
     if (player) {
       // soft delete : un DELETE dur cascaderait sur game_answers et fausserait
@@ -184,6 +193,7 @@ gamePublicRoutes.post('/:idOrCode/answer', async (req, res) => {
       res.status(404).json({ status: 'error', message: 'Session introuvable' });
       return;
     }
+    ensureQuizBattle(session);
     const { playerToken, questionIndex, answer, elapsedMs } = req.body as {
       playerToken?: string;
       questionIndex?: number;
@@ -221,6 +231,7 @@ gamePublicRoutes.post('/:idOrCode/bonus', async (req, res) => {
       res.status(404).json({ status: 'error', message: 'Session introuvable' });
       return;
     }
+    ensureQuizBattle(session);
     const { playerToken, questionIndex } = req.body as {
       playerToken?: string;
       questionIndex?: number;

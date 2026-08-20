@@ -13,7 +13,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '../config/supabase.js';
 import { broadcast } from './realtime.js';
 import { onSessionCommitted } from './lights.js';
-import type { PlayerRow, SessionRow } from './types.js';
+import type { GameMode, GameStatus, PlayerRow, SessionRow } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Accès DB
@@ -72,6 +72,87 @@ export async function saveSession(session: SessionRow): Promise<void> {
         `session supprimée ou modifiée par un autre process)`,
     );
   }
+}
+
+/**
+ * Clôt les sessions actives des modes donnés. Les modes "événement projo"
+ * (quiz/battle) s'excluent mutuellement ; les jeux de tables (chess, ...)
+ * vivent en parallèle et ne doivent JAMAIS être fauchés par un lancement de quiz.
+ */
+export async function endActiveSessions(modes: GameMode[]): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('game_sessions')
+    .update({ ended_at: new Date().toISOString(), status: 'end' })
+    .is('ended_at', null)
+    .in('mode', modes);
+  if (error) throw error;
+}
+
+export interface InsertSessionFields {
+  mode: GameMode;
+  status: GameStatus;
+  config: unknown;
+  runtime: unknown;
+  quizId?: string | null;
+  questionOrder?: unknown[];
+  phaseStartedAt?: string | null;
+  phaseEndsAt?: string | null;
+}
+
+/** Insert d'une session avec join_code unique (retry sur collision). */
+export async function insertSession(fields: InsertSessionFields): Promise<SessionRow> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const joinCode = generateJoinCode();
+    const { data, error } = await supabaseAdmin
+      .from('game_sessions')
+      .insert({
+        mode: fields.mode,
+        status: fields.status,
+        join_code: joinCode,
+        quiz_id: fields.quizId ?? null,
+        config: fields.config,
+        question_order: fields.questionOrder ?? [],
+        current_question_index: -1,
+        phase_started_at: fields.phaseStartedAt ?? null,
+        phase_ends_at: fields.phaseEndsAt ?? null,
+        runtime: fields.runtime,
+        state_version: 1,
+      })
+      .select('*')
+      .single();
+    if (!error) return data as SessionRow;
+    if (!`${error.message}`.includes('duplicate')) throw error;
+  }
+  throw new Error('Impossible de générer un code de session unique');
+}
+
+/** Sessions ouvertes d'un mode (base des lobbies multi-parties). */
+export async function listOpenSessions(mode: GameMode, limit = 30): Promise<SessionRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('game_sessions')
+    .select('*')
+    .eq('mode', mode)
+    .is('ended_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data as SessionRow[]) ?? [];
+}
+
+/** Auth joueur : token opaque cherché en base (401 côté routes si null). */
+export async function findPlayerByToken(
+  sessionId: string,
+  token: string | undefined,
+): Promise<PlayerRow | null> {
+  if (!token) return null;
+  const { data } = await supabaseAdmin
+    .from('game_players')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('player_token', token)
+    .neq('status', 'removed')
+    .maybeSingle();
+  return (data as PlayerRow) ?? null;
 }
 
 // ---------------------------------------------------------------------------

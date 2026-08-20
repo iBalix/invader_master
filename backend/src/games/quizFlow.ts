@@ -10,8 +10,9 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { judgeFreeText } from './aiJudge.js';
 import {
-  generateJoinCode,
+  endActiveSessions,
   generatePlayerToken,
+  insertSession,
   loadPlayers,
   loadSession,
   markDirty,
@@ -265,34 +266,18 @@ export async function createQuizSession(
     quizName: quiz.name as string,
   };
 
-  // Un seul run actif à la fois : on clôt les sessions actives précédentes
-  await supabaseAdmin
-    .from('game_sessions')
-    .update({ ended_at: new Date().toISOString(), status: 'end' })
-    .is('ended_at', null);
+  // Un seul run PROJO actif à la fois (quiz/battle s'excluent mutuellement).
+  // Les jeux de tables (chess, ...) vivent en parallèle : jamais fauchés ici.
+  await endActiveSessions(['quiz', 'battle']);
 
-  // join_code unique (retry sur collision)
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const joinCode = generateJoinCode();
-    const { data, error } = await supabaseAdmin
-      .from('game_sessions')
-      .insert({
-        mode: 'quiz',
-        status: 'lobby',
-        join_code: joinCode,
-        quiz_id: quizId,
-        config,
-        question_order: snapshots,
-        current_question_index: -1,
-        runtime: {},
-        state_version: 1,
-      })
-      .select('*')
-      .single();
-    if (!error) return data as SessionRow;
-    if (!`${error.message}`.includes('duplicate')) throw error;
-  }
-  throw new Error('Impossible de générer un code de session unique');
+  return insertSession({
+    mode: 'quiz',
+    status: 'lobby',
+    quizId,
+    config,
+    questionOrder: snapshots,
+    runtime: {},
+  });
 }
 
 // ---------------------------------------------------------------------------

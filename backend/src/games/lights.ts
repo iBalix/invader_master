@@ -76,6 +76,9 @@ async function isActiveSession(sessionId: string): Promise<boolean> {
         .from('game_sessions')
         .select('id')
         .is('ended_at', null)
+        // même périmètre que /public/game/current : une partie d'échecs plus
+        // récente ne doit pas voler le slot lumière du quiz en cours
+        .in('mode', ['quiz', 'battle'])
         .order('created_at', { ascending: false })
         .limit(1);
       activeSessionId = data?.[0]?.id ?? null;
@@ -134,6 +137,10 @@ interface ComputedCue {
  * cinématique partagent le même statut mais doivent produire deux cues.
  */
 export function computeCue(session: SessionRow): ComputedCue | null {
+  // Seuls les événements projo pilotent les lumières du bar. Les jeux de
+  // tables (chess, ...) partagent des statuts ('lobby', 'end') qui matcheraient
+  // le switch ci-dessous : on coupe court.
+  if (session.mode !== 'quiz' && session.mode !== 'battle') return null;
   const mode = session.mode;
   const status = session.status;
   const qi = session.current_question_index;

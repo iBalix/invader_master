@@ -25,8 +25,9 @@
 
 import { supabaseAdmin } from '../config/supabase.js';
 import {
-  generateJoinCode,
+  endActiveSessions,
   generatePlayerToken,
+  insertSession,
   loadPlayers,
   loadSession,
   markDirty,
@@ -239,36 +240,18 @@ export async function createBattleSession(
     } satisfies BattleRuntime,
   };
 
-  // Un seul run actif à la fois : on clôt les sessions actives précédentes
-  await supabaseAdmin
-    .from('game_sessions')
-    .update({ ended_at: new Date().toISOString(), status: 'end' })
-    .is('ended_at', null);
+  // Un seul run PROJO actif à la fois (quiz/battle s'excluent mutuellement).
+  // Les jeux de tables (chess, ...) vivent en parallèle : jamais fauchés ici.
+  await endActiveSessions(['quiz', 'battle']);
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const joinCode = generateJoinCode();
-    const { data, error } = await supabaseAdmin
-      .from('game_sessions')
-      .insert({
-        mode: 'battle',
-        status: 'lobby',
-        join_code: joinCode,
-        quiz_id: null,
-        config,
-        question_order: [],
-        current_question_index: -1,
-        runtime,
-        state_version: 1,
-      })
-      .select('*')
-      .single();
-    if (!error) {
-      void ensureQuestionStock().catch(() => undefined);
-      return data as SessionRow;
-    }
-    if (!`${error.message}`.includes('duplicate')) throw error;
-  }
-  throw new Error('Impossible de générer un code de session unique');
+  const session = await insertSession({
+    mode: 'battle',
+    status: 'lobby',
+    config,
+    runtime,
+  });
+  void ensureQuestionStock().catch(() => undefined);
+  return session;
 }
 
 // ---------------------------------------------------------------------------

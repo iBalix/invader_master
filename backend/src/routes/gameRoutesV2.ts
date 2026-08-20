@@ -14,13 +14,18 @@ const ALLOWED = [
   'youtube_video_id', 'youtube_start_sec', 'youtube_duration_sec',
   'control_a', 'control_b', 'control_x', 'control_y',
   'control_l', 'control_r', 'control_start', 'control_select',
-  'special_note',
+  'special_note', 'game_type', 'game_url',
 ] as const;
 
 function pick(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of ALLOWED) {
     if (key in body) out[key] = body[key];
+  }
+  // game_type : vocabulaire fermé (le CHECK SQL protège aussi, mais on évite
+  // un 500 PostgREST opaque sur une valeur farfelue)
+  if ('game_type' in out && out.game_type !== 'emulator' && out.game_type !== 'web') {
+    delete out.game_type;
   }
   // Clamp max_players to 1-4
   if (out.max_players != null) {

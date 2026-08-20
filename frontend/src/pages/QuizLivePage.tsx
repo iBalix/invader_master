@@ -134,8 +134,14 @@ export default function QuizLivePage() {
     void (async () => {
       try {
         const { data } = await api.get('/api/game');
-        const sessions = (data.items ?? []) as Array<{ id: string; endedAt: string | null }>;
-        const active = sessions.find((s) => !s.endedAt);
+        const sessions = (data.items ?? []) as Array<{
+          id: string;
+          mode: string;
+          endedAt: string | null;
+        }>;
+        // filtre par mode : sans lui, une partie d'échecs active serait
+        // adoptée comme session quiz par la console
+        const active = sessions.find((s) => !s.endedAt && s.mode === 'quiz');
         if (active) setSessionId(active.id);
       } catch {
         /* première visite */
