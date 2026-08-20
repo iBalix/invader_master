@@ -1,8 +1,8 @@
 /**
- * Moteur de jeu — types partagés (modes quiz / battle)
+ * Moteur de jeu — types partagés (modes quiz / battle / chess)
  */
 
-export type GameMode = 'quiz' | 'battle';
+export type GameMode = 'quiz' | 'battle' | 'chess';
 
 export type QuizStatus =
   | 'lobby'
@@ -31,7 +31,10 @@ export type BattleStatus =
   | 'closing'
   | 'end';
 
-export type GameStatus = QuizStatus | BattleStatus;
+/** échecs : pas de phases de questions, 3 états suffisent (le détail vit dans runtime.chess) */
+export type ChessSessionStatus = 'lobby' | 'playing' | 'end';
+
+export type GameStatus = QuizStatus | BattleStatus | ChessSessionStatus;
 
 export type QuestionType = 'qcm' | 'estimation' | 'free_text';
 
