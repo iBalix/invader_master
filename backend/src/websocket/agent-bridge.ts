@@ -2,6 +2,10 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { randomUUID } from 'crypto';
 
+// ---------------------------------------------------------------------------
+// Protocole
+// ---------------------------------------------------------------------------
+
 interface AgentCommand {
   type: 'execute';
   id: string;
@@ -9,11 +13,74 @@ interface AgentCommand {
   params: { targetName: string; gameName?: string };
 }
 
+/** Scènes lumineuses connues de l'agent (vocabulaire fermé, versionné par cue.v) */
+export type SceneName =
+  | 'idle'
+  | 'lobby'
+  | 'pause'
+  | 'category'
+  | 'question_start'
+  | 'question_show'
+  | 'question_warn'
+  | 'question_end'
+  | 'verdict'
+  | 'reveal'
+  | 'bonus_question'
+  | 'milestone'
+  | 'round_winner'
+  | 'leaderboard_reveal'
+  | 'leaderboard_first'
+  | 'cinematic_step'
+  | 'rewards_step'
+  | 'round_intro'
+  | 'round_end'
+  | 'event_end'
+  | 'test_ping';
+
+export interface LightCue {
+  v: 1;
+  /** monotone par session : l'agent ignore un cue plus ancien que le dernier joué */
+  seq: number;
+  scene: SceneName;
+  params: {
+    durationMs?: number;
+    /** OFFSET RELATIF depuis la réception, jamais un timestamp absolu :
+     *  l'horloge du PC du bar peut avoir dérivé de plusieurs secondes */
+    warnAtMs?: number;
+    difficulty?: string;
+    milestone?: 20 | 10 | 5 | 3;
+    rank?: number;
+    round?: number;
+    isFinal?: boolean;
+  };
+}
+
+interface AgentLight {
+  type: 'light';
+  id: string;
+  cue: LightCue;
+}
+
 interface AgentResult {
   type: 'result';
   id: string;
   success: boolean;
   output: string;
+}
+
+/** Santé du sous-système lumière, poussée périodiquement par l'agent */
+export interface LightStatus {
+  enabled: boolean;
+  bridgeHealthy: boolean;
+  lastCue: string | null;
+  /** âge en ms, relatif (jamais un timestamp : horloges non synchronisées) */
+  lastCueAgeMs: number | null;
+  sent60s: number;
+  errors60s: number;
+  dropped60s: number;
+  queueDepth: number;
+  workerAlive: boolean;
+  dryRun: boolean;
 }
 
 type PendingResolve = (result: AgentResult) => void;
@@ -24,10 +91,11 @@ const pendingCommands = new Map<string, { resolve: PendingResolve; timer: Return
 const COMMAND_TIMEOUT_MS = 30_000;
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const PING_STATUS_INTERVAL_MS = 60_000;
+const LIGHT_STATUS_INTERVAL_MS = 10_000;
 
-let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-let pingStatusInterval: ReturnType<typeof setInterval> | null = null;
 let lastPingStatus: Record<string, boolean> = {};
+let lastLightStatus: LightStatus | null = null;
+let agentCapabilities: string[] = [];
 
 export function isAgentConnected(): boolean {
   return agentSocket !== null && agentSocket.readyState === WebSocket.OPEN;
@@ -35,6 +103,18 @@ export function isAgentConnected(): boolean {
 
 export function getPingStatus(): Record<string, boolean> {
   return lastPingStatus;
+}
+
+export function getAgentCapabilities(): string[] {
+  return agentCapabilities;
+}
+
+export function supportsLights(): boolean {
+  return isAgentConnected() && agentCapabilities.includes('lights@1');
+}
+
+export function getLightStatus(): LightStatus | null {
+  return isAgentConnected() ? lastLightStatus : null;
 }
 
 export function sendCommand(
@@ -57,6 +137,23 @@ export function sendCommand(
     pendingCommands.set(id, { resolve, timer });
     agentSocket!.send(JSON.stringify(msg));
   });
+}
+
+/**
+ * Envoi d'un cue lumière. Fire-and-forget par construction : aucune promesse
+ * en attente, donc aucun résultat orphelin possible et aucun timeout à armer.
+ * Retourne false si l'agent est absent ou trop ancien pour comprendre.
+ */
+export function sendLightCue(cue: LightCue): boolean {
+  if (!supportsLights()) return false;
+  try {
+    const msg: AgentLight = { type: 'light', id: randomUUID(), cue };
+    agentSocket!.send(JSON.stringify(msg));
+    return true;
+  } catch (err) {
+    console.error('[ws] sendLightCue failed:', (err as Error).message);
+    return false;
+  }
 }
 
 export function initAgentBridge(server: Server): void {
@@ -84,22 +181,31 @@ export function initAgentBridge(server: Server): void {
     }
 
     agentSocket = ws;
+    agentCapabilities = [];
+    lastLightStatus = null;
     console.log('[ws] Bar agent connected');
 
-    heartbeatInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ping' }));
-      }
-    }, HEARTBEAT_INTERVAL_MS);
-
-    const requestPingStatus = () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ping_all' }));
-      }
+    // Les timers sont scopés à CETTE connexion (variables locales) : avec des
+    // variables de module, une reconnexion écrasait la référence et le timer
+    // de la session précédente fuyait à jamais.
+    const timers: Array<ReturnType<typeof setInterval>> = [];
+    const every = (ms: number, fn: () => void) => {
+      timers.push(setInterval(fn, ms));
+    };
+    const send = (payload: unknown) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
     };
 
+    every(HEARTBEAT_INTERVAL_MS, () => send({ type: 'ping' }));
+
+    const requestPingStatus = () => send({ type: 'ping_all' });
     requestPingStatus();
-    pingStatusInterval = setInterval(requestPingStatus, PING_STATUS_INTERVAL_MS);
+    every(PING_STATUS_INTERVAL_MS, requestPingStatus);
+
+    const requestLightStatus = () => {
+      if (agentCapabilities.includes('lights@1')) send({ type: 'light_status_request' });
+    };
+    every(LIGHT_STATUS_INTERVAL_MS, requestLightStatus);
 
     ws.on('message', (raw) => {
       try {
@@ -107,8 +213,33 @@ export function initAgentBridge(server: Server): void {
 
         if (msg.type === 'pong') return;
 
+        if (msg.type === 'hello') {
+          agentCapabilities = Array.isArray(msg.capabilities) ? msg.capabilities : [];
+          console.log(
+            `[ws] Agent hello — version=${msg.agentVersion ?? '?'} capabilities=${agentCapabilities.join(',') || 'none'}`,
+          );
+          requestLightStatus();
+          return;
+        }
+
         if (msg.type === 'ping_status') {
           lastPingStatus = msg.results ?? {};
+          return;
+        }
+
+        if (msg.type === 'light_status') {
+          lastLightStatus = {
+            enabled: Boolean(msg.enabled),
+            bridgeHealthy: Boolean(msg.bridgeHealthy),
+            lastCue: msg.lastCue ?? null,
+            lastCueAgeMs: typeof msg.lastCueAgeMs === 'number' ? msg.lastCueAgeMs : null,
+            sent60s: Number(msg.sent60s) || 0,
+            errors60s: Number(msg.errors60s) || 0,
+            dropped60s: Number(msg.dropped60s) || 0,
+            queueDepth: Number(msg.queueDepth) || 0,
+            workerAlive: Boolean(msg.workerAlive),
+            dryRun: Boolean(msg.dryRun),
+          };
           return;
         }
 
@@ -127,16 +258,16 @@ export function initAgentBridge(server: Server): void {
 
     ws.on('close', () => {
       console.log('[ws] Bar agent disconnected');
-      if (agentSocket === ws) agentSocket = null;
-      if (heartbeatInterval) {
-        clearInterval(heartbeatInterval);
-        heartbeatInterval = null;
+      for (const t of timers) clearInterval(t);
+      timers.length = 0;
+      // ne réinitialise l'état global que si cette socket est encore la courante
+      // (une connexion remplacée ne doit pas effacer l'état de la nouvelle)
+      if (agentSocket === ws) {
+        agentSocket = null;
+        lastPingStatus = {};
+        lastLightStatus = null;
+        agentCapabilities = [];
       }
-      if (pingStatusInterval) {
-        clearInterval(pingStatusInterval);
-        pingStatusInterval = null;
-      }
-      lastPingStatus = {};
       for (const [id, pending] of pendingCommands) {
         clearTimeout(pending.timer);
         pending.resolve({ type: 'result', id, success: false, output: 'Agent disconnected' });

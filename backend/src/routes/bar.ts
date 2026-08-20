@@ -2,7 +2,14 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
-import { isAgentConnected, sendCommand, getPingStatus } from '../websocket/agent-bridge.js';
+import {
+  isAgentConnected,
+  sendCommand,
+  getPingStatus,
+  getLightStatus,
+  supportsLights,
+} from '../websocket/agent-bridge.js';
+import { areLightsEnabled, sendManualCue, setLightsEnabled } from '../games/lights.js';
 
 export const barRoutes = Router();
 
@@ -37,6 +44,45 @@ barRoutes.post('/execute-command', async (req, res) => {
 
 barRoutes.get('/ping-status', (_req, res) => {
   res.json({ status: 'success', results: getPingStatus() });
+});
+
+// ── Lumieres Hue (pilotees par l'agent du bar) ──────────────────────
+
+/** Etat consolide pour le badge des consoles GM */
+barRoutes.get('/lights/status', (_req, res) => {
+  const status = getLightStatus();
+  res.json({
+    status: 'success',
+    data: {
+      agentConnected: isAgentConnected(),
+      supported: supportsLights(),
+      enabled: areLightsEnabled(),
+      agent: status,
+    },
+  });
+});
+
+/** Deux flashs visibles : checklist d'avant-soiree */
+barRoutes.post('/lights/test', (_req, res) => {
+  if (!supportsLights()) {
+    res.status(503).json({ status: 'error', message: 'Agent lumiere indisponible' });
+    return;
+  }
+  const sent = sendManualCue('test_ping');
+  res.json({ status: 'success', data: { sent } });
+});
+
+/** Coupe-circuit : le GM doit pouvoir stopper les lumieres en pleine soiree
+ *  sans toucher au jeu. A l'extinction, on repousse la scene de repos. */
+barRoutes.post('/lights/enabled', (req, res) => {
+  const { enabled } = req.body as { enabled?: boolean };
+  if (typeof enabled !== 'boolean') {
+    res.status(400).json({ status: 'error', message: 'enabled (booleen) requis' });
+    return;
+  }
+  setLightsEnabled(enabled);
+  if (!enabled) sendManualCue('idle');
+  res.json({ status: 'success', data: { enabled } });
 });
 
 // ── Machine labels ──────────────────────────────────────────────────

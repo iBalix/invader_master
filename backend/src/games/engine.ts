@@ -12,6 +12,7 @@
 import crypto from 'crypto';
 import { supabaseAdmin } from '../config/supabase.js';
 import { broadcast } from './realtime.js';
+import { onSessionCommitted } from './lights.js';
 import type { PlayerRow, SessionRow } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -208,6 +209,9 @@ export async function withSession<T>(
         status: session.status,
         qi: session.current_question_index,
       });
+      // Cue lumière : fire-and-forget STRICT. Jamais await, jamais de rejet
+      // remonté — une panne de lumière ne doit ni casser ni ralentir une partie.
+      void onSessionCommitted(session).catch(() => undefined);
     }
     return result;
   });

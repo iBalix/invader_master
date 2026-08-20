@@ -32,6 +32,97 @@ Get-ChildItem -Path $ScriptsDir -Filter "*.ps1" -ErrorAction SilentlyContinue | 
 }
 Write-Host "[agent] Scripts autorises: $($allowedScripts.Keys -join ', ')" -ForegroundColor Cyan
 
+# ── Sous-systeme lumieres Hue ────────────────────────────────────────
+# Le worker tourne dans un RUNSPACE SEPARE : la boucle WebSocket ci-dessous est
+# mono-thread, une animation de 12 s executee dedans gelerait la socket.
+# Ici on se contente d'empiler le cue (O(1)) et on repart en ReceiveAsync.
+$script:HueEnabled = ($env:HUE_ENABLED -eq 'true')
+$script:HueQueue   = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
+$script:HueLog     = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
+$script:HueState   = [hashtable]::Synchronized(@{
+    heartbeat = [DateTime]::UtcNow; bridgeHealthy = $true; lastCueName = $null
+    lastCueAt = $null; sent60s = 0; errors60s = 0; dropped60s = 0; queueDepth = 0
+})
+$script:HueWorker  = $null
+
+function Start-HueWorker {
+    if (-not $script:HueEnabled) { return }
+    $hueRoot = Join-Path $PSScriptRoot 'hue'
+    $workerPath = Join-Path $hueRoot 'hue-worker.ps1'
+    if (-not (Test-Path $workerPath)) {
+        Write-Host "[hue] hue-worker.ps1 introuvable, lumieres desactivees" -ForegroundColor Yellow
+        $script:HueEnabled = $false
+        return
+    }
+    $config = @{
+        BridgeIp = $env:HUE_BRIDGE_IP; ApiKey = $env:HUE_API_KEY
+        DryRun = ($env:HUE_DRY_RUN -eq 'true')
+        HueRoot = $hueRoot; AgentRoot = $PSScriptRoot
+        RateGlobal = $(if ($env:HUE_RATE_GLOBAL) { $env:HUE_RATE_GLOBAL } else { 8 })
+        MinIntervalMs = $(if ($env:HUE_MIN_INTERVAL_MS) { $env:HUE_MIN_INTERVAL_MS } else { 250 })
+    }
+    try {
+        $rs = [runspacefactory]::CreateRunspace(); $rs.Open()
+        $rs.SessionStateProxy.SetVariable('HueQueue',  $script:HueQueue)
+        $rs.SessionStateProxy.SetVariable('HueLog',    $script:HueLog)
+        $rs.SessionStateProxy.SetVariable('HueState',  $script:HueState)
+        $rs.SessionStateProxy.SetVariable('HueConfig', $config)
+        $ps = [powershell]::Create(); $ps.Runspace = $rs
+        $ps.AddScript((Get-Content $workerPath -Raw)) | Out-Null
+        $script:HueWorker = @{ ps = $ps; rs = $rs; handle = $ps.BeginInvoke() }
+        Write-Host "[hue] Worker demarre (bridge=$($config.BridgeIp) dryRun=$($config.DryRun))" -ForegroundColor Cyan
+    } catch {
+        Write-Host "[hue] Echec du demarrage du worker: $($_.Exception.Message)" -ForegroundColor Red
+        $script:HueEnabled = $false
+    }
+}
+
+# Un crash de runspace est SILENCIEUX par nature (erreurs avalees dans
+# $ps.Streams.Error) : on surveille le heartbeat et on relance.
+function Test-HueWorkerHealth {
+    if (-not $script:HueEnabled -or -not $script:HueWorker) { return }
+    $dead = $script:HueWorker.handle.IsCompleted
+    $stale = ((([DateTime]::UtcNow) - $script:HueState.heartbeat).TotalSeconds -gt 15)
+    if ($dead -or $stale) {
+        Write-Host "[hue] Worker inactif (termine=$dead, heartbeat en retard=$stale), relance" -ForegroundColor Yellow
+        foreach ($e in $script:HueWorker.ps.Streams.Error) { Write-Host "[hue] $e" -ForegroundColor Red }
+        try { $script:HueWorker.ps.Stop(); $script:HueWorker.ps.Dispose(); $script:HueWorker.rs.Dispose() } catch {}
+        $script:HueWorker = $null
+        $script:HueState.heartbeat = [DateTime]::UtcNow
+        Start-HueWorker
+    }
+}
+
+# Write-Host depuis un runspace ne remonte pas a la console : on draine la file.
+function Write-HueWorkerLogs {
+    $line = $null
+    while ($script:HueLog.TryDequeue([ref]$line)) {
+        Write-Host "[hue] $line" -ForegroundColor DarkGray
+    }
+}
+
+function Get-HueStatusPayload {
+    $ageMs = $null
+    if ($script:HueState.lastCueAt) {
+        $ageMs = [int]((([DateTime]::UtcNow) - $script:HueState.lastCueAt).TotalMilliseconds)
+    }
+    return @{
+        type = 'light_status'
+        enabled = $script:HueEnabled
+        bridgeHealthy = [bool]$script:HueState.bridgeHealthy
+        lastCue = $script:HueState.lastCueName
+        lastCueAgeMs = $ageMs
+        sent60s = [int]$script:HueState.sent60s
+        errors60s = [int]$script:HueState.errors60s
+        dropped60s = [int]$script:HueState.dropped60s
+        queueDepth = [int]$script:HueState.queueDepth
+        workerAlive = ($null -ne $script:HueWorker -and -not $script:HueWorker.handle.IsCompleted)
+        dryRun = ($env:HUE_DRY_RUN -eq 'true')
+    }
+}
+
+Start-HueWorker
+
 # ── Execute a command ────────────────────────────────────────────────
 function Invoke-AgentCommand {
     param($Id, $Command, $TargetName, $GameName)
@@ -93,6 +184,15 @@ while ($true) {
         Write-Host "[ws] Connecte!" -ForegroundColor Green
         $delay = $minDelay
 
+        # Annonce des capacites : le backend n'envoie de cues lumiere que si
+        # 'lights@1' est present. Un agent ancien reste donc compatible.
+        $caps = @('scripts')
+        if ($script:HueEnabled) { $caps += 'lights@1' }
+        $hello = @{ type = 'hello'; agentVersion = '2.1'; capabilities = $caps } | ConvertTo-Json -Compress -Depth 4
+        $helloBytes = [System.Text.Encoding]::UTF8.GetBytes($hello)
+        $helloSeg = New-Object System.ArraySegment[byte] $helloBytes, 0, $helloBytes.Length
+        $ws.SendAsync($helloSeg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).Wait() | Out-Null
+
         $buffer = New-Object byte[] 65536
 
         while ($ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
@@ -106,7 +206,9 @@ while ($true) {
                 $result.Wait() | Out-Null
             }
             catch [System.OperationCanceledException] {
-                # Timeout = no message received, loop continues
+                # Timeout de reception : moment ideal pour la maintenance
+                Test-HueWorkerHealth
+                Write-HueWorkerLogs
                 continue
             }
             catch {
@@ -138,6 +240,27 @@ while ($true) {
                 $pongBytes = [System.Text.Encoding]::UTF8.GetBytes($pong)
                 $pongSegment = New-Object System.ArraySegment[byte] $pongBytes, 0, $pongBytes.Length
                 $ws.SendAsync($pongSegment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).Wait() | Out-Null
+                Test-HueWorkerHealth
+                Write-HueWorkerLogs
+                continue
+            }
+
+            # Cue lumiere : on empile et on repart aussitot (fire-and-forget).
+            # Aucun travail Hue n'est fait dans cette boucle.
+            if ($msg.type -eq "light") {
+                if ($script:HueEnabled) {
+                    $script:HueQueue.Enqueue($json)
+                } 
+                continue
+            }
+
+            # Sante du sous-systeme lumiere, demandee periodiquement
+            if ($msg.type -eq "light_status_request") {
+                $statusJson = (Get-HueStatusPayload) | ConvertTo-Json -Compress -Depth 10
+                $statusBytes = [System.Text.Encoding]::UTF8.GetBytes($statusJson)
+                $statusSeg = New-Object System.ArraySegment[byte] $statusBytes, 0, $statusBytes.Length
+                $ws.SendAsync($statusSeg, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $cts.Token).Wait() | Out-Null
+                Write-HueWorkerLogs
                 continue
             }
 

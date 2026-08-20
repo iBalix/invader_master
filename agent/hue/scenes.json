@@ -1,0 +1,751 @@
+{
+  "_comment": "Carnet de scenes. Recharge a chaud par le worker : editer ce fichier sur le PC du bar suffit, aucun redemarrage. Couleurs en RGB, converties en xy par le worker. transition = dixiemes de seconde (unite native Hue).",
+  "palette": {
+    "REPOS_TOP": [
+      232,
+      143,
+      125
+    ],
+    "REPOS_BOTTOM": [
+      235,
+      170,
+      157
+    ],
+    "CYAN": [
+      0,
+      255,
+      255
+    ],
+    "JAUNE": [
+      255,
+      255,
+      0
+    ],
+    "ROUGE": [
+      255,
+      0,
+      0
+    ],
+    "BLANC": [
+      255,
+      255,
+      255
+    ],
+    "OR": [
+      237,
+      214,
+      9
+    ],
+    "ORANGE": [
+      255,
+      165,
+      0
+    ],
+    "ROSE": [
+      255,
+      20,
+      147
+    ],
+    "VIOLET": [
+      147,
+      0,
+      211
+    ],
+    "SOMBRE": [
+      40,
+      20,
+      60
+    ]
+  },
+  "difficultyColors": {
+    "Facile": "CYAN",
+    "Moyen": "JAUNE",
+    "Difficile": "ROUGE"
+  },
+  "scenes": {
+    "idle": {
+      "priority": "ambient",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 20,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 20,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "FRONT",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 20,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BACK",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 20,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "SALON",
+          "color": "REPOS_BOTTOM",
+          "bri": 200,
+          "transition": 20,
+          "on": true
+        }
+      ]
+    },
+    "lobby": {
+      "priority": "ambient",
+      "loop": true,
+      "loopMs": 6000,
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "CYAN",
+          "bri": 200,
+          "transition": 28,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "CYAN",
+          "bri": 120,
+          "transition": 28,
+          "on": true
+        },
+        {
+          "atMs": 3000,
+          "target": "BAR_TOP",
+          "color": "CYAN",
+          "bri": 110,
+          "transition": 28
+        },
+        {
+          "atMs": 3000,
+          "target": "BAR_BOTTOM",
+          "color": "CYAN",
+          "bri": 200,
+          "transition": 28
+        }
+      ]
+    },
+    "pause": {
+      "extends": "lobby"
+    },
+    "category": {
+      "priority": "normal",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "$difficulty",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 127,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "FRONT",
+          "color": "$difficulty",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BACK",
+          "color": "$difficulty",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "SALON",
+          "color": "$difficulty",
+          "bri": 200,
+          "transition": 8,
+          "on": true
+        }
+      ]
+    },
+    "question_start": {
+      "priority": "normal",
+      "comment": "flash blanc d'attaque puis retour couleur difficulte ; l'alerte rouge est armee par le worker via warnAtMs, sans aller-retour reseau",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 400,
+          "target": "BAR_TOP",
+          "color": "$difficulty",
+          "bri": 254,
+          "transition": 6
+        },
+        {
+          "atMs": 400,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 127,
+          "transition": 6
+        }
+      ],
+      "warnScene": "question_warn"
+    },
+    "question_warn": {
+      "priority": "accent",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "ROUGE",
+          "bri": 254,
+          "transition": 25,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "ROUGE",
+          "bri": 254,
+          "transition": 25,
+          "on": true
+        }
+      ]
+    },
+    "question_end": {
+      "priority": "normal",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 12,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 12,
+          "on": true
+        }
+      ]
+    },
+    "verdict": {
+      "priority": "normal",
+      "loop": true,
+      "loopMs": 4000,
+      "comment": "suspense sombre pendant que le GM valide les eliminations",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "SOMBRE",
+          "bri": 90,
+          "transition": 18,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "SOMBRE",
+          "bri": 60,
+          "transition": 18,
+          "on": true
+        },
+        {
+          "atMs": 2000,
+          "target": "BAR_TOP",
+          "color": "SOMBRE",
+          "bri": 140,
+          "transition": 18
+        }
+      ]
+    },
+    "reveal": {
+      "extends": "question_end"
+    },
+    "bonus_question": {
+      "priority": "accent",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "ROUGE",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 400,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 800,
+          "target": "BAR_TOP",
+          "color": "ROUGE",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 1200,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 1600,
+          "target": "BAR_TOP",
+          "color": "ROUGE",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 2000,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 3
+        }
+      ]
+    },
+    "milestone": {
+      "priority": "accent",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 600,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 5
+        },
+        {
+          "atMs": 600,
+          "target": "BAR_BOTTOM",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 5
+        }
+      ]
+    },
+    "round_winner": {
+      "priority": "accent",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 10,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 10,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "FRONT",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 10,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BACK",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 10,
+          "on": true
+        }
+      ]
+    },
+    "leaderboard_reveal": {
+      "priority": "normal",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 50,
+          "transition": 4,
+          "on": true
+        },
+        {
+          "atMs": 900,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 15
+        }
+      ]
+    },
+    "cinematic_step": {
+      "priority": "accent",
+      "comment": "intensite croissante a mesure qu'on remonte vers la 1re place",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "OR",
+          "bri": "$rankBri",
+          "transition": 6,
+          "on": true
+        },
+        {
+          "atMs": 1200,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 200,
+          "transition": 15
+        }
+      ]
+    },
+    "leaderboard_first": {
+      "priority": "accent",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "OR",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "OR",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 30
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_BOTTOM",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 30
+        }
+      ]
+    },
+    "rewards_step": {
+      "priority": "normal",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "OR",
+          "bri": 220,
+          "transition": 5,
+          "on": true
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 15
+        }
+      ]
+    },
+    "round_intro": {
+      "priority": "accent",
+      "loop": true,
+      "loopMs": 3000,
+      "comment": "danse sur DEUX GROUPES dephases (et non 10 ampoules) : ~16 requetes sur 12 s la ou le legacy en envoyait ~130",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "VIOLET",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_TOP",
+          "color": "ROSE",
+          "bri": 254,
+          "transition": 8
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_BOTTOM",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 8
+        }
+      ]
+    },
+    "round_end": {
+      "priority": "accent",
+      "loop": true,
+      "loopMs": 3000,
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "ORANGE",
+          "bri": 200,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_TOP",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 8
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_BOTTOM",
+          "color": "JAUNE",
+          "bri": 200,
+          "transition": 8
+        }
+      ]
+    },
+    "event_end": {
+      "priority": "override",
+      "comment": "sequence de fin : danse, puis cyan, flash blanc, retour repos en fondu",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "OR",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "VIOLET",
+          "bri": 254,
+          "transition": 8,
+          "on": true
+        },
+        {
+          "atMs": 1600,
+          "target": "BAR_TOP",
+          "color": "ROSE",
+          "bri": 254,
+          "transition": 8
+        },
+        {
+          "atMs": 1600,
+          "target": "BAR_BOTTOM",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 8
+        },
+        {
+          "atMs": 3200,
+          "target": "BAR_TOP",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 30
+        },
+        {
+          "atMs": 3200,
+          "target": "BAR_BOTTOM",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 30
+        },
+        {
+          "atMs": 6500,
+          "target": "BAR_TOP",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 6500,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 8000,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 40
+        },
+        {
+          "atMs": 8000,
+          "target": "BAR_BOTTOM",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 40
+        },
+        {
+          "atMs": 8000,
+          "target": "FRONT",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 40
+        },
+        {
+          "atMs": 8000,
+          "target": "BACK",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 40
+        },
+        {
+          "atMs": 8000,
+          "target": "SALON",
+          "color": "REPOS_BOTTOM",
+          "bri": 200,
+          "transition": 40
+        }
+      ]
+    },
+    "test_ping": {
+      "priority": "override",
+      "comment": "deux flashs bien visibles : checklist d'avant-soiree",
+      "steps": [
+        {
+          "atMs": 0,
+          "target": "BAR_TOP",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0,
+          "on": true
+        },
+        {
+          "atMs": 600,
+          "target": "BAR_TOP",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 600,
+          "target": "BAR_BOTTOM",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 1400,
+          "target": "BAR_TOP",
+          "color": "REPOS_TOP",
+          "bri": 254,
+          "transition": 15
+        },
+        {
+          "atMs": 1400,
+          "target": "BAR_BOTTOM",
+          "color": "REPOS_BOTTOM",
+          "bri": 254,
+          "transition": 15
+        }
+      ]
+    },
+    "_comment_salon": "SALON n'a pas de groupe Hue : chaque changement coute 2 requetes. Il ne suit donc que les scenes de fond (idle, category, fin d'event), pas les flashs."
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "_comment": "Topologie reelle du bar (relevee depuis invader_table/config.php en prod, aout 2026). Ne change que si le bar est recable. IMPORTANT : les rampes TOP et BOTTOM comptent 12 ampoules chacune -> TOUJOURS passer par le groupe (1 requete) et jamais par les ampoules une a une (12 requetes), sous peine de saturer le bridge. Les listes 'lights' ne servent que de repli si le groupe est absent.",
+  "targets": {
+    "BAR_TOP": {
+      "group": 83,
+      "lights": [16, 24, 19, 23, 2, 14, 7, 11, 6, 10, 18, 17]
+    },
+    "BAR_BOTTOM": {
+      "group": 82,
+      "lights": [22, 20, 21, 3, 1, 9, 8, 12, 15, 13, 5, 4]
+    },
+    "FRONT":  { "group": null, "lights": [26] },
+    "BACK":   { "group": null, "lights": [25] },
+    "SALON":  { "group": null, "lights": [27, 28] }
+  },
+  "aliases": {
+    "ALL_BAR": ["BAR_TOP", "BAR_BOTTOM"],
+    "ALL":     ["BAR_TOP", "BAR_BOTTOM", "FRONT", "BACK", "SALON"]
+  }
+}
