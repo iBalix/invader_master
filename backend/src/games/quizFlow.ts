@@ -209,7 +209,15 @@ export async function createQuizSession(
       ? ((rawDifficulty[0] as string) ?? 'Moyen')
       : ((rawDifficulty as string) ?? 'Moyen');
     const pointsOverride = q.points_override as number | null;
-    const points = pointsOverride ?? DIFFICULTY_POINTS[difficulty] ?? 2;
+    // Estimation : le bareme reel vient des paliers, pas de la difficulte.
+    // On expose le MEILLEUR palier pour que l'annonce ne sous-vende pas la
+    // question (le joueur mise son quitte-ou-double sur cette valeur).
+    const tiers = (q.estimation_scoring as Array<{ points?: number }> | null) ?? null;
+    const bestTier =
+      type === 'estimation' && Array.isArray(tiers) && tiers.length > 0
+        ? Math.max(...tiers.map((t) => Number(t.points) || 0))
+        : null;
+    const points = pointsOverride ?? bestTier ?? DIFFICULTY_POINTS[difficulty] ?? 2;
 
     // QCM : mélange des réponses figé pour la session
     let answers = (q.answers as string[]) ?? [];
@@ -606,6 +614,23 @@ export async function gmAction(
           throw Object.assign(new Error('Jugement IA en cours, réessaie dans un instant'), {
             httpStatus: 409,
           });
+        }
+        // Reponse libre revelee EN AVANCE (pendant la question) : le jugement IA
+        // n'a pas encore ete lance par la transition question->locked. Sans ce
+        // passage force, toutes les reponses seraient comptees fausses.
+        const revealQ = currentQuestion(session);
+        if (
+          session.status === 'question' &&
+          revealQ?.type === 'free_text' &&
+          !session.runtime.judge
+        ) {
+          // on verrouille et on lance le jugement : le GM revele au clic suivant
+          // (l'UI affiche "Jugement IA en cours"). Pas d'exception ici, sinon la
+          // mutation serait perdue et le job de jugement abandonne.
+          setPhase(session, 'locked', null);
+          session.runtime.judge = { running: true, verdicts: {} };
+          queueJudging(session.id, session.current_question_index);
+          break;
         }
         await applyReveal(session);
         break;

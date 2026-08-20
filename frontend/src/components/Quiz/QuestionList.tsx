@@ -13,6 +13,22 @@ const TYPE_BADGES: { key: keyof QuestionData; label: string; style: string }[] =
   { key: 'image_question_url', label: 'Image', style: 'bg-sky-50 text-sky-600' },
 ];
 
+const KIND_BADGES: Record<string, { label: string; style: string }> = {
+  estimation: { label: 'Estimation', style: 'bg-indigo-50 text-indigo-600' },
+  free_text: { label: 'Réponse libre', style: 'bg-teal-50 text-teal-600' },
+};
+
+/** Reponse a afficher en resume selon le type de question */
+function answerSummary(q: QuestionData): string | null {
+  if (q.type === 'estimation') {
+    return q.expected_number !== null && q.expected_number !== undefined
+      ? String(q.expected_number)
+      : null;
+  }
+  if (q.type === 'free_text') return q.expected_answer?.trim() || null;
+  return q.answers[q.correct_answer_index]?.trim() || null;
+}
+
 interface Props {
   questions: QuestionData[];
   onEdit: (index: number) => void;
@@ -64,15 +80,23 @@ export default function QuestionList({ questions, onEdit, onRemove, onMove }: Pr
                   {d}
                 </span>
               ))}
+              {q.type && KIND_BADGES[q.type] && (
+                <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${KIND_BADGES[q.type].style}`}>
+                  {KIND_BADGES[q.type].label}
+                </span>
+              )}
               {TYPE_BADGES.filter((t) => q[t.key]).map((t) => (
                 <span key={t.key} className={`text-xs px-1.5 py-0.5 rounded font-medium ${t.style}`}>
                   {t.label}
                 </span>
               ))}
-              {q.answers[q.correct_answer_index]?.trim() && (
-                <span className="text-xs text-green-600">
-                  ✓ {q.answers[q.correct_answer_index]}
+              {q.points_override != null && (
+                <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-600">
+                  {q.points_override} pt{q.points_override > 1 ? 's' : ''}
                 </span>
+              )}
+              {answerSummary(q) && (
+                <span className="text-xs text-green-600 truncate">✓ {answerSummary(q)}</span>
               )}
             </div>
           </div>

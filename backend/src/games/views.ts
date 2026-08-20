@@ -82,6 +82,9 @@ function publicBattle(session: SessionRow, players: PlayerRow[]): Record<string,
   return {
     roundNumber: b.roundNumber,
     isFinal: b.isFinal,
+    // numero de la question DANS la manche (les ecrans ne doivent jamais
+    // afficher l'index global : la finale repart a 1)
+    questionInRound: b.roundQuestionCount,
     survivorCount,
     finalSize: session.config.finalSize ?? 10,
     verdictPending: session.status === 'verdict',
@@ -126,6 +129,9 @@ export function buildPublicState(
       musicUrl: cfg.musicUrl,
     },
     playerCount: active.length,
+    // en battle, tout le monde est "eliminated" entre deux manches : l'ecran bar
+    // doit annoncer les PARTICIPANTS, pas les seuls survivants du moment
+    participantCount: players.filter((p) => p.status !== 'removed').length,
     players: active.map((p) => ({ pseudo: p.pseudo, device: p.device })),
     question: publicQuestion(session),
     qdFeed: (session.runtime.qd?.[String(qi)] ?? []).map((x) => x.pseudo),

@@ -144,7 +144,7 @@ function Shell({ children, onResync }: { children: React.ReactNode; onResync?: (
             onResync();
             setTimeout(() => setSpinning(false), 700);
           }}
-          className="fixed bottom-3 right-3 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-black/40 text-white/60 backdrop-blur active:bg-white/15"
+          className="fixed bottom-2 right-2 z-50 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur active:bg-white/20"
         >
           <svg
             viewBox="0 0 24 24"
@@ -300,7 +300,9 @@ function JoinScreen({ state, sessionRef, onJoined }: ScreenProps) {
   return (
     <Center>
       <div className="anim-fade-up w-full max-w-sm text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">Quiz</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">
+          {state.mode === 'battle' ? 'Battle Royale' : 'Quiz'}
+        </p>
         <h1 className="anim-title-glow mb-1 text-balance text-3xl font-black">{state.quizName}</h1>
         <p className="mb-8 text-sm text-white/50">
           {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} connecté{state.playerCount > 1 ? 's' : ''}
@@ -419,7 +421,7 @@ function AnnounceScreen({ state, you, sessionRef, playerToken, refresh }: Screen
         <h2 className="mt-2 text-balance text-2xl font-black">{q.theme ?? 'Culture générale'}</h2>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
           <DifficultyBadge difficulty={q.difficulty} />
-          <PointsBadge points={q.points} />
+          <PointsBadge points={q.points} upTo={q.type === 'estimation'} />
           <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm text-white/60">
             {TYPE_LABELS[q.type]}
           </span>
@@ -556,11 +558,11 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: Screen
   const totalMs = state.phaseEndsAt && state.phaseStartedAt ? state.phaseEndsAt - state.phaseStartedAt : state.config.questionMs;
 
   return (
-    <div className="flex flex-1 flex-col px-4 py-4">
+    <div className="flex flex-1 flex-col px-4 pb-16 pt-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-widest text-white/40">
-            Question {q.index + 1}/{q.total} · {q.points} pt{q.points > 1 ? 's' : ''}
+            Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''}
             {you.qdActive ? ' · 🎲 x2' : ''}
           </p>
           <h2 className="text-balance text-lg font-bold leading-snug">{q.question}</h2>

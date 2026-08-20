@@ -109,6 +109,8 @@ export interface BattleRoundResult {
 export interface PublicBattle {
   roundNumber: number;
   isFinal: boolean;
+  /** numero de la question dans la manche courante (repart a 1 en finale) */
+  questionInRound?: number;
   survivorCount: number;
   finalSize: number;
   verdictPending: boolean;
@@ -154,6 +156,8 @@ export interface PublicState {
     sfxVolume?: number;
   };
   playerCount: number;
+  /** joueurs inscrits (survivants + eliminés), pour les ecrans d'appel */
+  participantCount?: number;
   players: Array<{ pseudo: string; device: string }>;
   question: PublicQuestion | null;
   qdFeed: string[];

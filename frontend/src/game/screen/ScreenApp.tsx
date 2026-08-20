@@ -121,7 +121,8 @@ function BarScreen({ state }: { state: PublicState }) {
       </p>
       <QrCanvas value={playUrl(state.joinCode)} size={260} />
       <p className="text-xl text-white/50">
-        {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} en jeu · WiFi{' '}
+        {state.participantCount ?? state.playerCount} joueur
+        {(state.participantCount ?? state.playerCount) > 1 ? 's' : ''} en jeu · WiFi{' '}
         <span className="font-bold text-white">{state.config.wifiSsid}</span>
       </p>
     </div>
@@ -419,7 +420,7 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
       <div className="mt-8 flex items-center gap-4">
         <DifficultyBadge difficulty={q.difficulty} className="!px-6 !py-2 !text-2xl" />
         <span className="anim-glow rounded-full border border-cyan-400/50 bg-cyan-400/15 px-6 py-2 text-2xl font-black text-cyan-300">
-          {q.points} POINT{q.points > 1 ? 'S' : ''}
+          {q.type === 'estimation' ? 'JUSQU\u2019À ' : ''}{q.points} POINT{q.points > 1 ? 'S' : ''}
         </span>
         <span className="rounded-full border border-white/15 bg-white/5 px-6 py-2 text-2xl text-white/70">
           {TYPE_LABELS[q.type]}
@@ -468,7 +469,7 @@ function QuestionProjo({
       <div className="mb-6 flex items-start justify-between gap-8">
         <div className="min-w-0">
           <p className="text-xl uppercase tracking-widest text-white/40">
-            Question {q.index + 1}/{q.total} · {q.points} pt{q.points > 1 ? 's' : ''} · {q.difficulty}
+            Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''} · {q.difficulty}
           </p>
           <h1 className="mt-2 text-balance text-5xl font-black leading-tight">{q.question}</h1>
         </div>

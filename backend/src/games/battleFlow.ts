@@ -659,6 +659,47 @@ async function applyShowResults(session: SessionRow): Promise<void> {
     );
   }
 
+  // Joueurs marqués "bonne réponse" par le GM alors qu'ils n'ont AUCUNE réponse
+  // enregistrée (cas terrain : l'écran du joueur n'a jamais affiché la question).
+  // On matérialise une réponse attribuée par le GM : le point est crédité, et
+  // l'idempotence comme le rollback (qui rejouent game_answers) restent exacts.
+  const answeredIds = new Set(answers.map((a) => a.player_id));
+  const gmCredited = v.pending.filter(
+    (p) => p.overturned === 'correct' && !answeredIds.has(p.playerId),
+  );
+  for (const entry of gmCredited) {
+    const p = byId.get(entry.playerId);
+    if (!p) continue;
+    playerWrites.push(
+      supabaseAdmin.from('game_answers').upsert(
+        {
+          session_id: session.id,
+          player_id: p.id,
+          question_index: qi,
+          answer: { gm: true },
+          elapsed_ms: null,
+          bonus: 'gm_correct',
+          is_correct: true,
+          points_awarded: 1,
+        },
+        { onConflict: 'session_id,player_id,question_index' },
+      ),
+    );
+    playerWrites.push(
+      supabaseAdmin
+        .from('game_players')
+        .update({
+          score: p.score + 1,
+          stats: {
+            ...p.stats,
+            correctCount: (p.stats.correctCount ?? 0) + 1,
+            answerCount: (p.stats.answerCount ?? 0) + 1,
+          },
+        })
+        .eq('id', p.id),
+    );
+  }
+
   // éliminations
   const survivorsAfter = v.survivorsBefore - effectiveEliminated.length;
   const groupRank = survivorsAfter + 1;

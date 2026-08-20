@@ -98,12 +98,21 @@ export function DifficultyBadge({ difficulty, className = '' }: { difficulty: st
   );
 }
 
-export function PointsBadge({ points, className = '' }: { points: number; className?: string }) {
+export function PointsBadge({
+  points,
+  upTo = false,
+  className = '',
+}: {
+  points: number;
+  /** estimation : le bareme depend de l'ecart, on annonce le meilleur palier */
+  upTo?: boolean;
+  className?: string;
+}) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-3 py-1 text-sm font-bold text-cyan-300 ${className}`}
     >
-      {points} pt{points > 1 ? 's' : ''}
+      {upTo ? 'jusqu\u2019à ' : ''}{points} pt{points > 1 ? 's' : ''}
     </span>
   );
 }

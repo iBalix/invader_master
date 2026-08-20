@@ -122,7 +122,8 @@ function BattleAnnounceProjo({ state, remaining }: { state: PublicState; remaini
   return (
     <FullCenter>
       <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-white/40">
-        {state.battle?.isFinal ? 'Finale' : `Manche ${state.battle?.roundNumber}`} · Question {q.index + 1}
+        {state.battle?.isFinal ? 'Finale' : `Manche ${state.battle?.roundNumber}`} · Question{' '}
+        {state.battle?.questionInRound ?? q.index + 1}
       </p>
       <h1 className="anim-pop mt-6 text-balance text-center text-7xl font-black">{q.theme ?? 'Culture générale'}</h1>
       <div className="mt-8 flex items-center gap-4">

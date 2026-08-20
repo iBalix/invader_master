@@ -74,6 +74,13 @@ export default function QuizFormPage() {
         (q.questions ?? []).map((qn: Record<string, unknown>) => ({
           id: qn.id,
           question: qn.question ?? '',
+          // type et champs specifiques : indispensables, sinon une question
+          // estimation/reponse libre se rouvre en QCM et perd ses donnees a l'edition
+          type: qn.type ?? 'qcm',
+          points_override: qn.points_override ?? null,
+          expected_answer: qn.expected_answer ?? null,
+          expected_number: qn.expected_number ?? null,
+          estimation_scoring: qn.estimation_scoring ?? null,
           difficulty: qn.difficulty ?? [],
           answers: qn.answers ?? [],
           correct_answer_index: qn.correct_answer_index ?? 0,

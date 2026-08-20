@@ -310,7 +310,7 @@ export default function QuestionModal({ initial, onSave, onClose, saving }: Prop
                     Aperçu :{' '}
                     {[...tiers]
                       .sort((a, b) => a.maxGap - b.maxGap)
-                      .map((t) => `entre ${form.expected_number! - t.maxGap} et ${form.expected_number! + t.maxGap} → ${t.points} pts`)
+                      .map((t) => `entre ${form.expected_number! - t.maxGap} et ${form.expected_number! + t.maxGap} → ${t.points} pt${t.points > 1 ? 's' : ''}`)
                       .join(' · ')}
                   </p>
                 )}

@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import LightsBadge from '../components/Live/LightsBadge';
 
 // ---------------------------------------------------------------------------
 // Types (vue GM battle)
@@ -235,6 +236,7 @@ export default function BattleLivePage() {
         </div>
         <div className="space-y-6">
           <PlayersPanel state={state} busy={busy} action={action} />
+          <LightsBadge />
           <MixerPanel state={state} action={action} />
           <DangerPanel action={action} onClosed={() => { setSessionId(null); setState(null); }} />
         </div>
