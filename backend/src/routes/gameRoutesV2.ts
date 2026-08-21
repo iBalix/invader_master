@@ -27,10 +27,10 @@ function pick(body: Record<string, unknown>): Record<string, unknown> {
   if ('game_type' in out && out.game_type !== 'emulator' && out.game_type !== 'web') {
     delete out.game_type;
   }
-  // Clamp max_players to 1-4
+  // Clamp max_players to 1-8 (les jeux web en reseau montent a 8)
   if (out.max_players != null) {
     const n = Number(out.max_players);
-    if (Number.isFinite(n)) out.max_players = Math.max(1, Math.min(4, Math.round(n)));
+    if (Number.isFinite(n)) out.max_players = Math.max(1, Math.min(8, Math.round(n)));
     else delete out.max_players;
   }
   // Sanitize youtube_start_sec / youtube_duration_sec (integers >= 0)

@@ -2,7 +2,7 @@
  * Moteur de jeu — types partagés (modes quiz / battle / chess)
  */
 
-export type GameMode = 'quiz' | 'battle' | 'chess';
+export type GameMode = 'quiz' | 'battle' | 'chess' | 'blackjack';
 
 export type QuizStatus =
   | 'lobby'
@@ -34,7 +34,18 @@ export type BattleStatus =
 /** échecs : pas de phases de questions, 3 états suffisent (le détail vit dans runtime.chess) */
 export type ChessSessionStatus = 'lobby' | 'playing' | 'end';
 
-export type GameStatus = QuizStatus | BattleStatus | ChessSessionStatus;
+/** blackjack : phases d'une manche, le détail vit dans runtime.blackjack */
+export type BlackjackStatus =
+  | 'lobby'
+  | 'intro'
+  | 'betting'
+  | 'dealing'
+  | 'acting'
+  | 'dealer'
+  | 'payout'
+  | 'end';
+
+export type GameStatus = QuizStatus | BattleStatus | ChessSessionStatus | BlackjackStatus;
 
 export type QuestionType = 'qcm' | 'estimation' | 'free_text';
 

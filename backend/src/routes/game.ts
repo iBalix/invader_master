@@ -18,6 +18,9 @@ import {
 // idem : enregistre l'advancer 'chess'
 import { chessGmAction } from '../games/chess/chessFlow.js';
 import { buildChessPublicState } from '../games/chess/chessViews.js';
+// idem : enregistre l'advancer 'blackjack'
+import { bjGmAction } from '../games/blackjack/bjFlow.js';
+import { buildBjPublicState } from '../games/blackjack/bjViews.js';
 import { buildGmState } from '../games/views.js';
 
 export const gameSessionRoutes = Router();
@@ -97,9 +100,13 @@ gameSessionRoutes.get('/:id/state', async (req, res) => {
     if (isAdvanceDue(session)) {
       session = await withSession(session.id, async (s) => s);
     }
-    // échecs : rien de secret, la vue publique suffit au staff
+    // échecs / blackjack : rien de secret, la vue publique suffit au staff
     if (session.mode === 'chess') {
       res.json({ status: 'success', data: buildChessPublicState(session) });
+      return;
+    }
+    if (session.mode === 'blackjack') {
+      res.json({ status: 'success', data: buildBjPublicState(session) });
       return;
     }
     const players = await loadPlayers(session.id);
@@ -178,6 +185,11 @@ gameSessionRoutes.post('/:id/action', async (req, res) => {
       // seule action staff sur une partie d'échecs : la terminer de force
       const session = await chessGmAction(existing.id, action);
       res.json({ status: 'success', data: buildChessPublicState(session) });
+      return;
+    }
+    if (existing.mode === 'blackjack') {
+      const session = await bjGmAction(existing.id, action);
+      res.json({ status: 'success', data: buildBjPublicState(session) });
       return;
     }
     const session =

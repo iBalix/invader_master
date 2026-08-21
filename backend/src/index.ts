@@ -34,6 +34,7 @@ import { battleQuestionRoutes } from './routes/battleQuestions.js';
 import { publicRoutes } from './routes/public.js';
 import { gamePublicRoutes } from './routes/gamePublic.js';
 import { chessPublicRoutes } from './routes/chessPublic.js';
+import { blackjackPublicRoutes } from './routes/blackjackPublic.js';
 import { gameSessionRoutes } from './routes/game.js';
 import { tablesRoutes } from './routes/tables.js';
 import { liveEventStateAuthRoutes, liveEventStatePublicRoutes } from './routes/liveEventState.js';
@@ -74,6 +75,7 @@ app.use(express.json());
 
 app.use('/public/game', cors(), gamePublicRoutes);
 app.use('/public/chess', cors(), chessPublicRoutes);
+app.use('/public/blackjack', cors(), blackjackPublicRoutes);
 app.use('/public', cors(), publicRoutes);
 app.use('/public/tables', cors(), tablesRoutes);
 app.use('/public/live-event', cors(), liveEventStatePublicRoutes);
