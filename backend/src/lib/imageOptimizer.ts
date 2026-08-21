@@ -20,13 +20,51 @@
  *     fichier déjà optimisé ne doit pas grossir en passant ici.
  */
 
-import sharp, { type Metadata } from 'sharp';
+import type { Metadata, Sharp } from 'sharp';
 
-// Un conteneur Railway n'est pas une ferme de rendu : pas de cache libvips,
-// une image à la fois. La latence d'un upload isolé est négligeable, la
-// mémoire ne l'est pas.
-sharp.cache(false);
-sharp.concurrency(1);
+/**
+ * CHARGEMENT PARESSEUX, et volontairement non fatal.
+ *
+ * sharp est un module natif : il exige Node >= 20.9 et un binaire compilé pour
+ * la plateforme. Un `import` en tête de fichier fait donc tomber TOUT le
+ * backend au démarrage si l'hôte ne convient pas. C'est arrivé en production :
+ * Railway tournait en Node 18 et le serveur bouclait sur un crash, alors que
+ * l'optimisation d'image n'est qu'un confort.
+ *
+ * Une brique d'agrément ne doit jamais empêcher le bar de fonctionner : si
+ * sharp est indisponible, les uploads passent sans compression et on le dit
+ * une fois dans les logs.
+ */
+type SharpModule = {
+  (input?: Buffer, opts?: { failOn?: 'none' }): Sharp;
+  cache: (v: boolean) => unknown;
+  concurrency: (v: number) => unknown;
+};
+
+let sharpModule: SharpModule | null = null;
+let sharpTried = false;
+
+async function getSharp(): Promise<SharpModule | null> {
+  if (sharpTried) return sharpModule;
+  sharpTried = true;
+  try {
+    const mod = (await import('sharp')) as unknown as { default: SharpModule };
+    sharpModule = mod.default;
+    // Un conteneur Railway n'est pas une ferme de rendu : pas de cache
+    // libvips, une image à la fois. La latence d'un upload isolé est
+    // négligeable, la mémoire ne l'est pas.
+    sharpModule.cache(false);
+    sharpModule.concurrency(1);
+    console.log('[upload] optimisation d\'image active (sharp)');
+  } catch (err) {
+    sharpModule = null;
+    console.warn(
+      '[upload] sharp indisponible, les images seront stockées sans compression : ' +
+        (err as Error).message,
+    );
+  }
+  return sharpModule;
+}
 
 /** au-delà, on réduit : le plus grand écran du bar est en 1920 */
 const MAX_EDGE = 2560;
@@ -72,6 +110,9 @@ export async function optimizeImage(
 
   if (!mimetype.startsWith('image/')) return untouched;
   if (PASSTHROUGH_MIME.has(mimetype)) return untouched;
+
+  const sharp = await getSharp();
+  if (!sharp) return untouched;
 
   let meta: Metadata;
   try {
