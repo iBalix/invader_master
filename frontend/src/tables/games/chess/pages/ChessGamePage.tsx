@@ -401,21 +401,20 @@ export default function ChessGamePage() {
     <div className="relative h-full w-full overflow-hidden" style={{ background: theme.pageBg }}>
       <ChessNotice message={notice} />
 
-      <button
-        type="button"
-        onClick={handleQuit}
-        // en BAS à gauche : le haut de cette colonne accueille désormais le
-        // panneau de l'adversaire
-        className="absolute bottom-5 left-5 z-30 flex items-center gap-2 rounded-full border border-white/15 bg-black/45 px-5 py-2.5 font-display uppercase tracking-wider text-table-ink-soft transition-transform active:scale-95"
-      >
-        <X className="h-5 w-5" />
-        {t('table.chess.quit')}
-      </button>
-      {!isSeatedViewer && !isDemo && (
-        <div className="absolute right-5 top-5 z-30">
-          <SpectatorBadge />
-        </div>
-      )}
+      {/* coin haut droit : le panneau de ce côté est aligné en bas, la place
+          est donc libre. Empilé et non côte à côte pour que la largeur reste
+          celle d'un seul élément et n'empiète jamais sur le plateau. */}
+      <div className="absolute right-5 top-5 z-30 flex flex-col items-end gap-3">
+        <button
+          type="button"
+          onClick={handleQuit}
+          className="flex items-center gap-2 rounded-full border border-white/15 bg-black/45 px-5 py-2.5 font-display uppercase tracking-wider text-table-ink-soft transition-transform active:scale-95"
+        >
+          <X className="h-5 w-5" />
+          {t('table.chess.quit')}
+        </button>
+        {!isSeatedViewer && !isDemo && <SpectatorBadge />}
+      </div>
 
       <div
         // pas d'items-center ici : les colonnes doivent occuper toute la
