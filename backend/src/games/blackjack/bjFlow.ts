@@ -26,6 +26,8 @@ import {
   generatePlayerToken,
   insertSession,
   listOpenSessions,
+  loadPlayers,
+  loadSession,
   markDirty,
   registerAdvancer,
   registerSyncPayload,
@@ -347,6 +349,27 @@ export async function joinBjSession(
   pseudo: string,
   device: string,
 ): Promise<{ session: SessionRow; player: PlayerRow }> {
+  // reprise par dalle : au bar, l'écran EST l'identité physique. Si cette
+  // dalle a déjà un siège actif (localStorage perdu, navigateur redémarré),
+  // on lui rend son siège au lieu de la laisser dehors.
+  const dev = (device || 'unknown').toUpperCase();
+  if (dev !== 'UNKNOWN') {
+    const existing = await loadSession(sessionId);
+    if (existing && existing.mode === 'blackjack' && !existing.ended_at) {
+      const taken = bjStateOf(existing).seats.find(
+        (seat) => !seat.left && seat.device.toUpperCase() === dev,
+      );
+      if (taken) {
+        const owner = (await loadPlayers(sessionId)).find((p) => p.id === taken.playerId);
+        if (owner) {
+          // purge les transitions dues avant de rendre l'état
+          const fresh = await withSession(sessionId, async (x) => x);
+          return { session: fresh, player: owner };
+        }
+      }
+    }
+  }
+
   const player = await insertBjPlayer(sessionId, pseudo, device);
   try {
     const session = await withSession(sessionId, async (s) => {
@@ -355,8 +378,8 @@ export async function joinBjSession(
       const config = bjConfigOf(s);
       const seated = state.seats.filter((seat) => !seat.left);
       if (seated.length >= config.maxSeats) throw httpErr('error_bj_table_full', 409);
-      // une dalle = un siège (le placement physique n'a de sens qu'ainsi)
-      const dev = (device || 'unknown').toUpperCase();
+      // garde-fou de course : deux requêtes simultanées de la même dalle ne
+      // doivent pas créer deux sièges (le chemin normal est la reprise ci-dessus)
       if (dev !== 'UNKNOWN' && seated.some((seat) => seat.device.toUpperCase() === dev)) {
         throw httpErr('error_bj_device_seated', 409);
       }
