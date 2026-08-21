@@ -159,6 +159,8 @@ export interface BjState {
   creatorId: string;
   /** table issue d'une revanche : le lancement saute la présentation */
   fromRematch?: boolean;
+  /** dernière invitation générale envoyée au bar (anti-spam) */
+  inviteAt?: number;
   /** PRIVÉ : jamais exposé en vue publique */
   shoe: Card[];
   /** le sabot vient d'être rempli (animation) */

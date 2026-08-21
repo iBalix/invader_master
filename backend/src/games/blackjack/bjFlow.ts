@@ -1081,7 +1081,7 @@ export async function bjJoker(
 // Actions de table (lancer, votes, départs, revanche)
 // ---------------------------------------------------------------------------
 
-export type BjMeta = 'launch' | 'skip-intro' | 'leave' | 'end-after-round' | 'rematch';
+export type BjMeta = 'launch' | 'skip-intro' | 'leave' | 'end-after-round' | 'rematch' | 'invite';
 
 const ROUND_STATUSES = new Set(['betting', 'dealing', 'acting', 'dealer', 'payout']);
 
@@ -1111,6 +1111,26 @@ export async function bjMeta(
         markDirty(session);
       }
       notifyLobby();
+      return session;
+    }
+
+    if (action === 'invite') {
+      // invitation générale : toutes les dalles du bar en dehors d'une partie
+      // reçoivent le bandeau. Anti-spam : une invitation par table par 45 s.
+      if (session.status !== 'lobby') throw httpErr('error_bj_already_started', 409);
+      const now = Date.now();
+      if (state.inviteAt && now - state.inviteAt < 45_000) {
+        throw httpErr('error_bj_invite_cooldown', 429);
+      }
+      state.inviteAt = now;
+      markDirty(session);
+      void broadcastTopic('tables:invites', 'invite', {
+        game: 'blackjack',
+        sessionId: session.id,
+        pseudo: seat.pseudo,
+        theme: config.theme,
+        at: now,
+      }).catch(() => undefined);
       return session;
     }
 

@@ -95,6 +95,8 @@ export interface ChessState {
   drawOffer: { by: ChessColor; atPly: number } | null;
   rematch: ChessRematch | null;
   result: ChessResult | null;
+  /** dernière invitation générale envoyée au bar (anti-spam) */
+  inviteAt?: number;
 }
 
 export function chessStateOf(session: SessionRow): ChessState {

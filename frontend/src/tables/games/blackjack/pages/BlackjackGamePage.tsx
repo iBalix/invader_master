@@ -119,7 +119,7 @@ export default function BlackjackGamePage() {
   );
 
   const meta = useCallback(
-    (action: 'launch' | 'skip-intro' | 'leave' | 'end-after-round' | 'rematch') => {
+    (action: 'launch' | 'skip-intro' | 'leave' | 'end-after-round' | 'rematch' | 'invite') => {
       if (!playerToken) return;
       void guard(() => bjApi.action(sessionId, { playerToken, action }));
     },
@@ -258,6 +258,7 @@ export default function BlackjackGamePage() {
             onLaunch={() => meta('launch')}
             onLeave={handleLeave}
             onSit={() => setSitOpen(true)}
+            onInvite={() => meta('invite')}
             t={t}
           />
         )}

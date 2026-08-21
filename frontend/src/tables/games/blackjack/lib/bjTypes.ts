@@ -184,7 +184,7 @@ export interface CreateBjInput {
 }
 
 export type BjAct = 'hit' | 'stand' | 'double' | 'split';
-export type BjMeta = 'launch' | 'skip-intro' | 'leave' | 'end-after-round' | 'rematch';
+export type BjMeta = 'launch' | 'skip-intro' | 'leave' | 'end-after-round' | 'rematch' | 'invite';
 
 /**
  * Estimation de durée d'une partie (minutes), alignée sur le cahier des

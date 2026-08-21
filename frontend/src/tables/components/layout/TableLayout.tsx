@@ -22,6 +22,7 @@ import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useInactivity } from '../../hooks/useInactivity';
 import { useHeartbeat } from '../../hooks/useHeartbeat';
 import { useWakeLock } from '../../hooks/useWakeLock';
+import InviteBanner from './InviteBanner';
 import { useLaunchNavigation } from '../../hooks/useLaunchOrder';
 import { usePerfMode } from '../../hooks/usePerfMode';
 import { useTablesSettings } from '../../hooks/useTablesSettings';
@@ -154,6 +155,8 @@ export default function TableLayout() {
           : undefined
       }
     >
+      {/* invitation generale d'une table en attente : hors partie seulement */}
+      <InviteBanner enabled={routeKind === 'home' || routeKind === 'sub'} />
       {showBgImage && (
         <>
           <div

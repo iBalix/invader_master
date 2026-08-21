@@ -4,7 +4,8 @@
  * table rendue derrière. La table s'annule seule au bout de 15 minutes.
  */
 
-import { Play, LogOut, Armchair } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Play, LogOut, Armchair, Megaphone } from 'lucide-react';
 import ArcadeButton from '../../../components/ui/ArcadeButton';
 import { estimateMinutes } from '../lib/bjTypes';
 import type { BjPublicState, BjYou } from '../lib/bjTypes';
@@ -19,10 +20,24 @@ interface Props {
   onLaunch: () => void;
   onLeave: () => void;
   onSit: () => void;
+  onInvite: () => void;
   t: TFunction;
 }
 
-export default function WaitingRoom({ state, you, theme, busy, onLaunch, onLeave, onSit, t }: Props) {
+export default function WaitingRoom({ state, you, theme, busy, onLaunch, onLeave, onSit, onInvite, t }: Props) {
+  // anti-spam local : le bouton se grise 45 s après un envoi (le serveur
+  // applique le même délai)
+  const [inviteSent, setInviteSent] = useState(false);
+  const inviteTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (inviteTimer.current) window.clearTimeout(inviteTimer.current);
+  }, []);
+  function handleInvite() {
+    onInvite();
+    setInviteSent(true);
+    inviteTimer.current = window.setTimeout(() => setInviteSent(false), 45_000);
+  }
+
   const seatCount = state.seats.length;
   const creator = state.seats.find((s) => s.isCreator);
   const isCreator = you !== null && you.isCreator;
@@ -95,14 +110,25 @@ export default function WaitingRoom({ state, you, theme, busy, onLaunch, onLeave
         )}
 
         {seated && (
-          <button
-            className="flex items-center gap-2.5 rounded-2xl border border-white/20 px-8 py-3.5 text-xl font-bold uppercase text-white/75 active:scale-95"
-            disabled={busy}
-            onClick={onLeave}
-          >
-            <LogOut className="h-6 w-6" />
-            {t('table.bj.waiting.leave')}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              className="flex items-center gap-2.5 rounded-2xl border-2 px-8 py-3.5 text-xl font-bold uppercase active:scale-95 disabled:opacity-50"
+              style={{ borderColor: `${theme.hudAccent}66`, color: theme.hudAccent, background: `${theme.hudAccent}12` }}
+              disabled={busy || inviteSent}
+              onClick={handleInvite}
+            >
+              <Megaphone className="h-6 w-6" />
+              {inviteSent ? t('table.invite.sent') : t('table.invite.cta')}
+            </button>
+            <button
+              className="flex items-center gap-2.5 rounded-2xl border border-white/20 px-8 py-3.5 text-xl font-bold uppercase text-white/75 active:scale-95"
+              disabled={busy}
+              onClick={onLeave}
+            >
+              <LogOut className="h-6 w-6" />
+              {t('table.bj.waiting.leave')}
+            </button>
+          </div>
         )}
       </div>
     </div>

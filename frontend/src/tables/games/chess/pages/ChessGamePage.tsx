@@ -476,6 +476,7 @@ export default function ChessGamePage() {
             backToLobby();
           }}
           onJoin={() => setJoinOpen(true)}
+          onInvite={() => sendAction('invite')}
         />
       )}
 

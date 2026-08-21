@@ -44,6 +44,7 @@ const PLAYER_ACTIONS = new Set<ChessPlayerAction>([
   'draw-decline',
   'cancel',
   'rematch',
+  'invite',
 ]);
 
 function ensureChess(session: SessionRow | null): SessionRow {

@@ -229,6 +229,13 @@ export const DEFAULT_TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'table.chess.error.unknown_player': 'Identité inconnue, rejoins la partie',
 
     // --- blackjack ---
+    'table.invite.cta': 'Inviter tout le bar',
+    'table.invite.sent': 'Invitation envoyée !',
+    'table.invite.join': 'Rejoindre',
+    'table.invite.blackjack': '{pseudo} vous invite à une partie de blackjack !',
+    'table.invite.chess': '{pseudo} vous invite à une partie d\'échecs !',
+    'table.bj.error.bj_invite_cooldown': 'Invitation déjà envoyée, patiente un peu',
+    'table.chess.error.chess_invite_cooldown': 'Invitation déjà envoyée, patiente un peu',
     'table.bj.title': 'Blackjack',
     'table.bj.theme.neon': 'Néon Invader',
     'table.bj.theme.casino': 'Casino classique',
@@ -624,6 +631,13 @@ export const DEFAULT_TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'table.chess.error.unknown_player': 'Unknown identity, join the game',
 
     // --- blackjack ---
+    'table.invite.cta': 'Invite the whole bar',
+    'table.invite.sent': 'Invitation sent!',
+    'table.invite.join': 'Join',
+    'table.invite.blackjack': '{pseudo} invites you to a blackjack game!',
+    'table.invite.chess': '{pseudo} invites you to a chess game!',
+    'table.bj.error.bj_invite_cooldown': 'Invitation already sent, hold on a bit',
+    'table.chess.error.chess_invite_cooldown': 'Invitation already sent, hold on a bit',
     'table.bj.title': 'Blackjack',
     'table.bj.theme.neon': 'Neon Invader',
     'table.bj.theme.casino': 'Classic casino',

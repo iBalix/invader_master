@@ -344,7 +344,8 @@ export type ChessPlayerAction =
   | 'draw-accept'
   | 'draw-decline'
   | 'cancel'
-  | 'rematch';
+  | 'rematch'
+  | 'invite';
 
 export async function chessPlayerAction(
   sessionId: string,
@@ -389,6 +390,24 @@ export async function chessPlayerAction(
           state.drawOffer = null;
           markDirty(session);
         }
+        return session;
+      }
+      case 'invite': {
+        // invitation générale au bar depuis la salle d'attente (anti-spam 45 s)
+        if (session.status !== 'lobby') throw httpErr('error_chess_not_started', 409);
+        const now = Date.now();
+        if (state.inviteAt && now - state.inviteAt < 45_000) {
+          throw httpErr('error_chess_invite_cooldown', 429);
+        }
+        state.inviteAt = now;
+        markDirty(session);
+        void broadcastTopic('tables:invites', 'invite', {
+          game: 'chess',
+          sessionId: session.id,
+          pseudo: state.seats[color]?.pseudo ?? '',
+          theme: chessConfigOf(session).theme,
+          at: now,
+        }).catch(() => undefined);
         return session;
       }
       case 'cancel': {

@@ -40,7 +40,7 @@ function httpError(res: Parameters<Parameters<typeof blackjackPublicRoutes.get>[
 }
 
 const ACTS = new Set<BjAct>(['hit', 'stand', 'double', 'split']);
-const METAS = new Set<BjMeta>(['launch', 'skip-intro', 'leave', 'end-after-round', 'rematch']);
+const METAS = new Set<BjMeta>(['launch', 'skip-intro', 'leave', 'end-after-round', 'rematch', 'invite']);
 
 function ensureBj(session: SessionRow | null): SessionRow {
   if (!session || session.mode !== 'blackjack') {
