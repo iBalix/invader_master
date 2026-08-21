@@ -19,6 +19,11 @@
  * (desactive en back-office, ou hors de sa plage horaire), on l'oublie et on
  * revient a celui du serveur, sinon la borne resterait bloquee sur un fond
  * fantome.
+ *
+ * Ce choix est en outre temporaire : dix minutes apres le dernier appui sur la
+ * pastille, designStore l'efface et la borne reprend le fond que le serveur lui
+ * attribue. Rien a faire ici, la disparition de l'override suffit a nous y
+ * ramener.
  */
 
 import { useEffect, useState } from 'react';
