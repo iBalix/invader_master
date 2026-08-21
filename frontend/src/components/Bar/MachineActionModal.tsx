@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Play, Loader2, AlertTriangle, Plus, Pencil, Save, Power, RefreshCw, XCircle, RotateCcw, Monitor, Gamepad2, Zap } from 'lucide-react';
+import { X, Play, Loader2, AlertTriangle, Plus, Pencil, Save, Power, RefreshCw, XCircle, RotateCcw, Monitor, Gamepad2, Zap, FlaskConical } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
@@ -27,6 +27,21 @@ const BORNE_GAMES = [
   { label: 'Crash Team Racing', value: 'CrashTeamRacing/CrashTeamRacing.cue;swanstation_libretro.dll' },
   { label: 'Muggle (Manoir)', value: 'MUGGLE_MANOIR' },
 ];
+
+/**
+ * TEMPORAIRE — bascule d'une table vers la nouvelle interface (invader_master).
+ *
+ * A retirer quand toutes les tables auront bascule pour de bon, cote raccourci
+ * kiosque sur les PC. En attendant, ca permet de tester une table en bar sans
+ * toucher aux 9 autres, qui restent sur l'ancien site PHP.
+ *
+ * Le `?hostname=` est indispensable : la nouvelle interface est sur un autre
+ * domaine que l'ancien site, son localStorage est donc vide au premier
+ * affichage et elle ne saurait pas quelle table elle est. Elle memorise
+ * ensuite la valeur, mais on la repasse a chaque bascule pour rester
+ * deterministe.
+ */
+const V2_BASE_URL = 'https://invadermaster-frontend-production.up.railway.app/table';
 
 const PROJO_MODES = [
   { label: 'Invader', value: '' },
@@ -215,6 +230,44 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
         targetName: 'PROJO',
       });
       toast.success('Mode d\'affichage modifié');
+    } catch (err: any) {
+      const msg = err.response?.data?.message ?? 'Erreur lors de l\'exécution';
+      toast.error(msg);
+    } finally {
+      setExecuting(null);
+    }
+  };
+
+  /**
+   * TEMPORAIRE — envoie les deux dalles de la table sur la nouvelle interface.
+   *
+   * Reprend la mecanique deja en place pour le projecteur : url_edge_server
+   * ecrit l'URL dans C:\INVADER\forceURL.txt sur le poste, puis restart_edge
+   * relance le navigateur pour qu'il la prenne.
+   *
+   * Un appel PAR ECRAN, et pas un seul sur "TABLExx" : les scripts de l'agent
+   * filtrent en `-like "*TargetName*"`, donc un appel groupe ecrirait la MEME
+   * URL sur les deux dalles et elles se croiraient toutes les deux master.
+   *
+   * Non permanent par construction : au redemarrage du PC, le poste repart sur
+   * son URL habituelle.
+   */
+  const handleSwitchToV2 = async () => {
+    setExecuting('switch_v2');
+    try {
+      for (const suffix of ['-1', '-2']) {
+        const hostname = `${machine.name}${suffix}`;
+        await api.post('/api/bar/execute-command', {
+          command: 'url_edge_server',
+          targetName: hostname,
+          gameName: `${V2_BASE_URL}?hostname=${hostname}`,
+        });
+      }
+      await api.post('/api/bar/execute-command', {
+        command: 'restart_edge',
+        targetName: machine.name,
+      });
+      toast.success(`${labels?.display_name || machine.label} basculée sur l'interface V2`);
     } catch (err: any) {
       const msg = err.response?.data?.message ?? 'Erreur lors de l\'exécution';
       toast.error(msg);
@@ -499,6 +552,33 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
                         Appliquer
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* TEMPORAIRE : bascule de test vers la nouvelle interface */}
+                {machine.type === 'table' && (
+                  <div className="mt-4 pt-4 border-t">
+                    <label className="block text-xs font-medium text-gray-500 mb-2">
+                      Test de la nouvelle interface
+                    </label>
+                    <button
+                      disabled={!agentConnected || executing !== null}
+                      onClick={handleSwitchToV2}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-indigo-100 hover:bg-indigo-200 text-indigo-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {executing === 'switch_v2' ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <FlaskConical className="w-4 h-4" />
+                      )}
+                      Basculer vers interface V2
+                    </button>
+                    <p className="mt-2 text-xs text-gray-400">
+                      Envoie les deux écrans de {labels?.display_name || machine.label} (
+                      {machine.name}-1 et {machine.name}-2) sur la nouvelle interface et relance leur
+                      navigateur. Provisoire : au redémarrage du PC, la table repart sur l'ancienne
+                      interface.
+                    </p>
                   </div>
                 )}
 
