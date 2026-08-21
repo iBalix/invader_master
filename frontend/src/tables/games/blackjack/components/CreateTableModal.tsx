@@ -1,7 +1,11 @@
 /**
- * Création d'une table : pseudo, thème, places, manches (avec estimation de
+ * Création d'une table : pseudo, thème, table, manches (avec estimation de
  * durée à 2 / 5 / 8 joueurs), enjeu, rythme, règles, jokers. La prime de
  * manche vaut le double de la mise maximale.
+ *
+ * Tout tient SANS SCROLL sur une dalle 1080p : réglages regroupés en
+ * sections encadrées sur deux colonnes, chaque groupe de choix dans son
+ * propre cadre (segmented control), jamais de chiffres flottants.
  */
 
 import { useState } from 'react';
@@ -21,6 +25,7 @@ interface Props {
   onCreate: (input: CreateBjInput) => void;
 }
 
+/** groupe de choix encadré : les options vivent dans un cadre, pas en vrac */
 function Segment<T extends string | number>({
   options,
   value,
@@ -33,12 +38,12 @@ function Segment<T extends string | number>({
   render?: (v: T) => string;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="inline-flex gap-1 rounded-xl border border-white/10 bg-black/35 p-1">
       {options.map((option) => (
         <button
           key={String(option)}
-          className={`min-w-[68px] rounded-xl px-5 py-3 font-display text-xl font-bold transition-colors ${
-            option === value ? 'bg-table-cyan text-black' : 'bg-white/8 text-white/75'
+          className={`h-11 min-w-[52px] rounded-lg px-3.5 font-display text-lg font-bold transition-colors ${
+            option === value ? 'bg-table-cyan text-black' : 'text-white/70'
           }`}
           onClick={() => onChange(option)}
         >
@@ -49,15 +54,37 @@ function Segment<T extends string | number>({
   );
 }
 
+/** une ligne de réglage : libellé à gauche, choix encadrés à droite */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="font-display text-base font-bold uppercase tracking-wide text-white/65">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** section encadrée de la modale */
+function Section({ title, children, className }: { title?: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-2xl border border-white/10 bg-white/[0.04] p-4 ${className ?? ''}`}>
+      {title && (
+        <div className="mb-3 font-display text-sm font-bold uppercase tracking-[0.2em] text-table-cyan/80">{title}</div>
+      )}
+      {children}
+    </div>
+  );
+}
+
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
-      className={`flex items-center gap-2.5 rounded-xl px-5 py-3 font-display text-lg font-bold uppercase ${
-        value ? 'bg-table-cyan/20 text-table-cyan' : 'bg-white/8 text-white/55'
+      className={`flex h-11 items-center gap-2 rounded-xl border px-4 font-display text-base font-bold uppercase ${
+        value ? 'border-table-cyan/50 bg-table-cyan/15 text-table-cyan' : 'border-white/10 bg-black/30 text-white/50'
       }`}
       onClick={() => onChange(!value)}
     >
-      <span className={`h-3.5 w-3.5 rounded-full ${value ? 'bg-table-cyan' : 'bg-white/30'}`} />
+      <span className={`h-3 w-3 rounded-full ${value ? 'bg-table-cyan' : 'bg-white/25'}`} />
       {label}
     </button>
   );
@@ -88,122 +115,122 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
   });
 
   const anyJoker = JOKER_TYPES.some((type) => jokers[type]);
-
-  const label = 'font-display text-base font-bold uppercase tracking-wider text-white/55';
+  const selectedTheme = BJ_THEMES.find((th) => th.id === theme) ?? BJ_THEMES[0];
 
   return (
     <ArcadeModal open={open} onClose={onClose} title={t('table.bj.create.title')} size="2xl">
-      <div className="flex max-h-[72vh] flex-col gap-5 overflow-y-auto pr-1">
+      <div className="flex flex-col gap-4">
         {/* pseudo */}
         <input
           value={pseudo}
           onChange={(e) => setPseudo(e.target.value)}
           maxLength={16}
           placeholder={t('table.bj.create.pseudoPlaceholder')}
-          className="w-full rounded-2xl border border-white/15 bg-black/40 px-6 py-4 text-2xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
+          className="w-full rounded-2xl border border-white/15 bg-black/40 px-5 py-3 text-xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
         />
 
         {/* thème */}
-        <div className="flex flex-col gap-2">
-          <span className={label}>{t('table.bj.create.theme')}</span>
-          <div className="flex flex-wrap gap-3">
+        <Section title={t('table.bj.create.theme')}>
+          <div className="flex items-start gap-4">
             {BJ_THEMES.map((th) => (
               <button key={th.id} className="flex flex-col items-center gap-1.5" onClick={() => setTheme(th.id)}>
-                <BjThemePreview theme={th} size={104} selected={theme === th.id} />
-                <span className={`text-base font-bold uppercase ${theme === th.id ? 'text-table-cyan' : 'text-white/55'}`}>
+                <BjThemePreview theme={th} size={80} selected={theme === th.id} />
+                <span className={`text-sm font-bold uppercase ${theme === th.id ? 'text-table-cyan' : 'text-white/55'}`}>
                   {t(th.labelKey)}
                 </span>
               </button>
             ))}
           </div>
-        </div>
+        </Section>
 
-        <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+        <div className="grid grid-cols-2 gap-4">
           {/* table */}
-          <div className="flex flex-col gap-2">
-            <span className={label}>{t('table.bj.create.seats')}</span>
-            <Segment options={[2, 3, 4, 5, 6, 7, 8]} value={maxSeats} onChange={setMaxSeats} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className={label}>{t('table.bj.create.decks')}</span>
-            <Segment options={[2, 4, 6]} value={decks} onChange={setDecks} />
-          </div>
-
-          {/* manches + estimation */}
-          <div className="col-span-2 flex flex-col gap-2">
-            <span className={label}>{t('table.bj.create.rounds')}</span>
-            <Segment options={[6, 8, 10, 12]} value={rounds} onChange={setRounds} />
-            <div className="flex gap-2.5 text-base text-white/55">
+          <Section title={t('table.bj.create.sectionTable')} className="flex flex-col gap-3">
+            <Row label={t('table.bj.create.seats')}>
+              <Segment options={[2, 3, 4, 5, 6, 7, 8]} value={maxSeats} onChange={setMaxSeats} />
+            </Row>
+            <Row label={t('table.bj.create.decks')}>
+              <Segment options={[2, 4, 6]} value={decks} onChange={setDecks} />
+            </Row>
+            <Row label={t('table.bj.create.rounds')}>
+              <Segment options={[6, 8, 10, 12]} value={rounds} onChange={setRounds} />
+            </Row>
+            <div className="flex justify-end gap-2 text-sm text-white/50">
               {[2, 5, 8].map((p) => (
-                <span key={p} className="rounded-full bg-white/6 px-3.5 py-1.5">
+                <span key={p} className="rounded-full bg-black/30 px-3 py-1">
                   {t('table.bj.create.estimate').replace('{players}', String(p)).replace('{min}', String(estimateMinutes(rounds, p)))}
                 </span>
               ))}
             </div>
-          </div>
+          </Section>
 
           {/* enjeu */}
-          <div className="flex flex-col gap-2">
-            <span className={label}>{t('table.bj.create.startChips')}</span>
-            <Segment options={[200, 500, 1000]} value={startChips} onChange={setStartChips} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className={label}>{t('table.bj.create.decision')}</span>
-            <Segment options={[7_000, 10_000, 15_000, 20_000]} value={decisionMs} onChange={setDecisionMs} render={(v) => `${v / 1000}s`} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className={label}>{t('table.bj.create.minBet')}</span>
-            <Segment
-              options={[5, 10, 20]}
-              value={minBet}
-              onChange={(v) => {
-                setMinBet(v);
-                if (maxBet <= v) setMaxBet(v * 5);
-              }}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className={label}>
-              {t('table.bj.create.maxBet')} · {t('table.bj.create.prime').replace('{prime}', String(maxBet * 2))}
-            </span>
-            <Segment options={[50, 100, 200].filter((v) => v > minBet)} value={maxBet} onChange={setMaxBet} />
-          </div>
+          <Section title={t('table.bj.create.sectionStakes')} className="flex flex-col gap-3">
+            <Row label={t('table.bj.create.startChips')}>
+              <Segment options={[200, 500, 1000]} value={startChips} onChange={setStartChips} />
+            </Row>
+            <Row label={t('table.bj.create.minBet')}>
+              <Segment
+                options={[5, 10, 20]}
+                value={minBet}
+                onChange={(v) => {
+                  setMinBet(v);
+                  if (maxBet <= v) setMaxBet(v * 5);
+                }}
+              />
+            </Row>
+            <Row label={t('table.bj.create.maxBet')}>
+              <Segment options={[50, 100, 200].filter((v) => v > minBet)} value={maxBet} onChange={setMaxBet} />
+            </Row>
+            <div className="flex justify-end text-sm text-white/50">
+              <span className="rounded-full bg-black/30 px-3 py-1">{t('table.bj.create.prime').replace('{prime}', String(maxBet * 2))}</span>
+            </div>
+          </Section>
         </div>
 
-        {/* règles */}
-        <div className="flex flex-wrap gap-2">
-          <Toggle label={t('table.bj.create.lateJoin')} value={lateJoin} onChange={setLateJoin} />
-          <Toggle label={t('table.bj.create.double')} value={allowDouble} onChange={setAllowDouble} />
-          <Toggle label={t('table.bj.create.split')} value={allowSplit} onChange={setAllowSplit} />
-        </div>
+        {/* rythme et règles */}
+        <Section title={t('table.bj.create.sectionRules')}>
+          <div className="flex items-center justify-between gap-4">
+            <Row label={t('table.bj.create.decision')}>
+              <Segment options={[7_000, 10_000, 15_000, 20_000]} value={decisionMs} onChange={setDecisionMs} render={(v) => `${v / 1000}s`} />
+            </Row>
+            <div className="flex gap-2">
+              <Toggle label={t('table.bj.create.lateJoin')} value={lateJoin} onChange={setLateJoin} />
+              <Toggle label={t('table.bj.create.double')} value={allowDouble} onChange={setAllowDouble} />
+              <Toggle label={t('table.bj.create.split')} value={allowSplit} onChange={setAllowSplit} />
+            </div>
+          </div>
+        </Section>
 
         {/* jokers */}
-        <div className="flex flex-col gap-2">
-          <span className={label}>{t('table.bj.create.jokers')}</span>
-          <div className="flex flex-wrap items-center gap-2">
-            {JOKER_TYPES.map((type) => (
-              <button
-                key={type}
-                className="flex flex-col items-center gap-1 rounded-xl p-1.5"
-                style={{ opacity: jokers[type] ? 1 : 0.32, background: jokers[type] ? 'rgba(255,255,255,0.06)' : 'transparent' }}
-                onClick={() => setJokers((prev) => ({ ...prev, [type]: !prev[type] }))}
-              >
-                <JokerGlyph type={type} theme={BJ_THEMES.find((th) => th.id === theme) ?? BJ_THEMES[0]} width={64} t={t} compact />
-                <span className="text-sm font-bold uppercase text-white/65">{t(`table.bj.joker.${type}`)}</span>
-              </button>
-            ))}
-            <div className="ml-3 flex flex-col gap-1.5">
-              <span className={label}>{t('table.bj.create.frequency')}</span>
+        <Section title={t('table.bj.create.jokers')}>
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex gap-2.5">
+              {JOKER_TYPES.map((type) => (
+                <button
+                  key={type}
+                  className={`flex flex-col items-center gap-1 rounded-xl border p-1.5 ${
+                    jokers[type] ? 'border-white/15 bg-black/25' : 'border-transparent opacity-30'
+                  }`}
+                  onClick={() => setJokers((prev) => ({ ...prev, [type]: !prev[type] }))}
+                >
+                  <JokerGlyph type={type} theme={selectedTheme} width={52} t={t} compact />
+                  <span className="text-xs font-bold uppercase text-white/65">{t(`table.bj.joker.${type}`)}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <span className="font-display text-base font-bold uppercase tracking-wide text-white/65">{t('table.bj.create.frequency')}</span>
               <Segment
                 options={['rare', 'normal', 'generous'] as const}
                 value={jokerFrequency}
                 onChange={setJokerFrequency}
                 render={(v) => t(`table.bj.create.frequency.${v}`)}
               />
+              {!anyJoker && <span className="text-sm font-bold uppercase text-white/40">{t('table.bj.create.noJokers')}</span>}
             </div>
           </div>
-          {!anyJoker && <span className="text-base font-bold uppercase text-white/45">{t('table.bj.create.noJokers')}</span>}
-        </div>
+        </Section>
 
         <ArcadeButton
           variant="accent"

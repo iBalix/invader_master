@@ -86,7 +86,7 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
         <span className="w-24 text-sm uppercase tracking-wider text-table-ink-muted">{label}</span>
         <button
           type="button"
-          className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-table-ink active:scale-95 disabled:opacity-40"
+          className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-table-ink active:scale-95 disabled:opacity-40"
           disabled={value - step < min}
           onClick={() => setValue(Math.max(min, value - step))}
         >
@@ -95,7 +95,7 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
         <span className="w-14 text-center font-display text-3xl tabular-nums text-table-ink">{value}</span>
         <button
           type="button"
-          className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-table-ink active:scale-95 disabled:opacity-40"
+          className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/15 bg-white/5 text-table-ink active:scale-95 disabled:opacity-40"
           disabled={value + step > max}
           onClick={() => setValue(Math.min(max, value + step))}
         >
@@ -109,7 +109,8 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
 
   return (
     <ArcadeModal open={open} onClose={onClose} title={t('table.chess.create.title')} size="xl">
-      <div className="flex max-h-[68vh] flex-col gap-7 overflow-y-auto pr-2 tables-scroll">
+      {/* tout tient sans scroll sur une dalle 1080p : jamais de défilement dans une modale */}
+      <div className="flex flex-col gap-4">
         {/* pseudo */}
         <section>
           <div className="mb-2 font-display text-sm uppercase tracking-[0.25em] text-table-cyan/85">
@@ -164,17 +165,17 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
                   type="button"
                   onClick={() => setColor(choice)}
                   className={[
-                    'flex h-24 flex-1 items-center justify-center gap-1 rounded-2xl border transition-colors',
+                    'flex h-16 flex-1 items-center justify-center gap-1 rounded-2xl border transition-colors',
                     active ? 'border-table-cyan/70 bg-table-cyan/15' : 'border-white/15 bg-white/5',
                   ].join(' ')}
                 >
                   {choice !== 'b' && (
-                    <span className="h-14 w-14">
+                    <span className="h-11 w-11">
                       <PieceGlyph type="k" color="w" style={{ body: '#FDF6E3', stroke: '#2B2430', strokeWidth: 2 }} size="100%" />
                     </span>
                   )}
                   {choice !== 'w' && (
-                    <span className="h-14 w-14">
+                    <span className="h-11 w-11">
                       <PieceGlyph type="k" color="b" style={{ body: '#3B3542', stroke: '#EDE4F2', strokeWidth: 2 }} size="100%" />
                     </span>
                   )}
@@ -202,11 +203,11 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
                   type="button"
                   onClick={() => setThemeBase(choice.value)}
                   className={[
-                    'flex items-center gap-3 rounded-2xl border p-3 transition-colors',
+                    'flex items-center gap-3 rounded-2xl border p-2 transition-colors',
                     active ? 'border-table-cyan/70 bg-table-cyan/12' : 'border-white/15 bg-white/5',
                   ].join(' ')}
                 >
-                  <ThemePreview theme={tileTheme} size={72} />
+                  <ThemePreview theme={tileTheme} size={56} />
                   <span className="font-display text-base uppercase tracking-wider text-table-ink">
                     {t(choice.labelKey)}
                   </span>
@@ -215,7 +216,7 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
             })}
           </div>
           {themeBase === 'duo' && (
-            <div className="mt-3 flex gap-3">
+            <div className="mt-2.5 flex gap-3">
               {DUO_TINT_LIST.map((tint) => (
                 <button
                   key={tint}
@@ -223,7 +224,7 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
                   onClick={() => setDuoTint(tint)}
                   aria-label={tint}
                   className={[
-                    'h-12 w-12 rounded-full border-2 transition-transform active:scale-95',
+                    'h-10 w-10 rounded-full border-2 transition-transform active:scale-95',
                     duoTint === tint ? 'scale-110 border-white' : 'border-white/25',
                   ].join(' ')}
                   style={{ background: DUO_TINTS[tint].accent }}
