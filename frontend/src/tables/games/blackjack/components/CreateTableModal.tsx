@@ -201,17 +201,23 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
         {/* jokers */}
         <Section title={t('table.bj.create.jokers')}>
           <div className="flex items-center justify-between gap-6">
+            {/* tuiles de largeur identique, label sur hauteur fixe : la
+                rangée reste régulière quel que soit le nom du joker */}
             <div className="flex gap-2.5">
               {JOKER_TYPES.map((type) => (
                 <button
                   key={type}
-                  className={`flex flex-col items-center gap-1 rounded-xl border p-1.5 ${
-                    jokers[type] ? 'border-white/15 bg-black/25' : 'border-transparent opacity-30'
+                  className={`flex w-[118px] flex-col items-center gap-1.5 rounded-xl border p-2 outline-none transition-opacity ${
+                    jokers[type]
+                      ? 'border-table-cyan/45 bg-table-cyan/10'
+                      : 'border-white/10 bg-black/25 opacity-35'
                   }`}
                   onClick={() => setJokers((prev) => ({ ...prev, [type]: !prev[type] }))}
                 >
                   <JokerGlyph type={type} theme={selectedTheme} width={52} t={t} compact />
-                  <span className="text-xs font-bold uppercase text-white/65">{t(`table.bj.joker.${type}`)}</span>
+                  <span className="flex h-8 items-center text-center text-xs font-bold uppercase leading-tight text-white/70">
+                    {t(`table.bj.joker.${type}`)}
+                  </span>
                 </button>
               ))}
             </div>
