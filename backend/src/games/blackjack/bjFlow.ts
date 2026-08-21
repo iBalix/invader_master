@@ -1102,9 +1102,14 @@ export async function bjMeta(
       if (state.creatorId !== player.id) throw httpErr('error_bj_not_creator', 403);
       if (activeSeats(state).length < 2) throw httpErr('error_bj_need_players', 409);
       state.skipVotes = [];
-      session.status = 'intro';
-      setPhaseAt(session, Date.now() + BJ_INTRO_MS);
-      markDirty(session);
+      if (state.fromRematch) {
+        // revanche : tout le monde connaît le jeu, on distribue directement
+        startBetting(session, state, config);
+      } else {
+        session.status = 'intro';
+        setPhaseAt(session, Date.now() + BJ_INTRO_MS);
+        markDirty(session);
+      }
       notifyLobby();
       return session;
     }
@@ -1197,6 +1202,8 @@ async function createRematch(session: SessionRow, state: BjState, config: BjConf
 
   const newState: BjState = {
     creatorId: '',
+    // tout le monde vient de jouer : pas de présentation au lancement
+    fromRematch: true,
     shoe: buildShoe(config.decks),
     shoeRefilled: false,
     roundIndex: -1,

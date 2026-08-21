@@ -157,6 +157,8 @@ export interface BjFinal {
 
 export interface BjState {
   creatorId: string;
+  /** table issue d'une revanche : le lancement saute la présentation */
+  fromRematch?: boolean;
   /** PRIVÉ : jamais exposé en vue publique */
   shoe: Card[];
   /** le sabot vient d'être rempli (animation) */

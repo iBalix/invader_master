@@ -147,6 +147,10 @@ export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t
 
   const TITLES = ['goal', 'bets', 'deal', 'values', 'hit', 'double', 'dealer', 'payout', 'score', 'jokersAll', 'go'] as const;
 
+  // les 3 dernières secondes : décompte avant la première mise
+  const remainMs = Math.max(0, CHAPTERS * CHAPTER_MS - elapsed);
+  const countdown = step === 10 && remainMs <= 3_200 ? Math.max(1, Math.ceil(remainMs / 1000)) : null;
+
   // la timeline de la manche à blanc (ms depuis le début de l'intro)
   const DEAL = 2 * CHAPTER_MS;
   const HIT = 4 * CHAPTER_MS;
@@ -199,7 +203,33 @@ export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t
         className="relative flex w-[1150px] flex-col items-center rounded-[40px] border-2 px-14 pb-8 pt-5"
         style={{ background: theme.feltBg, borderColor: theme.seatBorder }}
       >
-        {step >= 9 ? (
+        {step === 0 ? (
+          <div className="flex min-h-[452px] w-full flex-col items-center justify-center gap-7">
+            <span
+              className="font-display text-8xl font-black uppercase tracking-[0.14em]"
+              style={{
+                color: theme.gold,
+                textShadow: `0 0 34px ${theme.gold}55`,
+                opacity: elapsed >= 300 ? 1 : 0,
+                transition: 'opacity 500ms ease',
+              }}
+            >
+              {t('table.bj.title')}
+            </span>
+            <span
+              className="max-w-[900px] text-center font-display text-3xl font-bold leading-snug text-white/90"
+              style={{ opacity: elapsed >= 1500 ? 1 : 0, transition: 'opacity 500ms ease' }}
+            >
+              {text('goal')}
+            </span>
+            <span
+              className="max-w-[900px] text-center font-display text-2xl font-bold leading-snug text-white/60"
+              style={{ opacity: elapsed >= 3000 ? 1 : 0, transition: 'opacity 500ms ease' }}
+            >
+              {text('winner')}
+            </span>
+          </div>
+        ) : step >= 9 ? (
           <div className="flex min-h-[452px] w-full items-center justify-center">
             {step === 9 ? (
               <div className="grid grid-cols-3 gap-x-12 gap-y-7">
@@ -216,21 +246,22 @@ export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t
                 ))}
               </div>
             ) : (
-              <div className="flex max-w-[900px] flex-wrap items-center justify-center gap-3">
-                {seats.map((s, i) => (
+              <div className="flex flex-col items-center justify-center gap-6">
+                <span
+                  className="font-display text-7xl font-black uppercase tracking-[0.12em]"
+                  style={{ color: theme.gold, textShadow: `0 0 30px ${theme.gold}55` }}
+                >
+                  {t('table.bj.tuto.go')}
+                </span>
+                {countdown !== null && (
                   <span
-                    key={s.playerId}
-                    className="rounded-full px-6 py-2.5 font-display text-2xl font-bold uppercase"
-                    style={{
-                      background: `${theme.hudAccent}1E`,
-                      color: theme.hudAccent,
-                      opacity: elapsed >= 10 * CHAPTER_MS + i * 240 ? 1 : 0,
-                      transition: 'opacity 250ms ease',
-                    }}
+                    key={countdown}
+                    className="bj-pop font-display text-9xl font-black leading-none"
+                    style={{ color: theme.hudAccent, textShadow: `0 0 36px ${theme.hudAccent}66` }}
                   >
-                    {s.pseudo}
+                    {countdown}
                   </span>
-                ))}
+                )}
               </div>
             )}
           </div>
@@ -306,10 +337,14 @@ export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t
         )}
       </div>
 
-      {/* l'explication de l'étape */}
-      <div key={step} className="bj-chapter-in max-w-[1240px] px-10 text-center font-display text-4xl font-bold leading-snug text-white">
-        {text(TITLES[step])}
-      </div>
+      {/* l'explication de l'étape (portée par l'écran central aux extrémités) */}
+      {step > 0 && step < 10 ? (
+        <div key={step} className="bj-chapter-in max-w-[1240px] px-10 text-center font-display text-4xl font-bold leading-snug text-white">
+          {text(TITLES[step])}
+        </div>
+      ) : (
+        <div className="h-[60px]" />
+      )}
 
       {/* vote passer */}
       {seated && (
