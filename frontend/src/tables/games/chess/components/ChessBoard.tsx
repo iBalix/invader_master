@@ -29,6 +29,7 @@ interface Props {
   lastMove: { from: string; to: string } | null;
   checkSquare: Square | null;
   shakeSquare: Square | null;
+  fallenKingSquare: Square | null;
   turnColor: ChessColor;
   suppressAnim: boolean;
   promotion: { color: ChessColor } | null;
@@ -47,6 +48,7 @@ export default function ChessBoard({
   lastMove,
   checkSquare,
   shakeSquare,
+  fallenKingSquare,
   turnColor,
   suppressAnim,
   promotion,
@@ -92,6 +94,7 @@ export default function ChessBoard({
           raisedSquare={lastMove?.to ?? null}
           selectedSquare={selection?.square ?? null}
           shakeSquare={shakeSquare}
+          fallenKingSquare={fallenKingSquare}
         />
         {!reduced && Ambient && <Ambient boardSize={boardSize} />}
         {promotion && (

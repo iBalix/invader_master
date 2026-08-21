@@ -32,6 +32,18 @@
   filter: none !important;
 }
 
+/* Le roi vaincu se couche : le geste réel des joueurs d'échecs, au mat comme
+   à l'abandon. Joué avant l'ouverture du récap pour qu'on le voie. */
+@keyframes chess-king-fall {
+  0% { transform: rotate(0deg) translateY(0); }
+  55% { transform: rotate(78deg) translateY(9%); }
+  70% { transform: rotate(68deg) translateY(9%); }
+  100% { transform: rotate(74deg) translateY(9%); }
+}
+.chess-king-fallen {
+  animation: chess-king-fall 760ms cubic-bezier(0.34, 1.2, 0.64, 1) 1 forwards;
+}
+
 @keyframes chess-shake {
   0%, 100% { transform: translateX(0); }
   30% { transform: translateX(-7%); }

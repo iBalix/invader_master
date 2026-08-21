@@ -22,6 +22,8 @@ export interface DemoChess {
 
 export function useDemoChess(theme: string): DemoChess {
   const [moves, setMoves] = useState<string[]>([]);
+  // instant de départ figé : donne une durée crédible au récap de fin
+  const [startedAt] = useState(() => Date.now());
   const chess = useMemo(() => buildChess(moves), [moves]);
 
   const result = useMemo<ChessResult | null>(() => {
@@ -46,6 +48,8 @@ export function useDemoChess(theme: string): DemoChess {
     serverNow: Date.now(),
     phaseStartedAt: null,
     phaseEndsAt: null,
+    startedAt,
+    endedAt: result ? Date.now() : null,
     config: { clock: null, theme, creatorColor: 'w' },
     seats: {
       w: { pseudo: 'Blancs', device: 'DEMO' },

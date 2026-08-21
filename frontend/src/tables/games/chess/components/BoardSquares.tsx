@@ -28,6 +28,7 @@ export default function BoardSquares({
   turnColor,
 }: Props) {
   const dotColor = theme.legalDot(turnColor);
+  const outlineColor = theme.selectedOutline(turnColor);
   const rows = [];
   for (let vy = 0; vy < 8; vy++) {
     for (let vx = 0; vx < 8; vx++) {
@@ -70,8 +71,8 @@ export default function BoardSquares({
               aria-hidden
               className={['pointer-events-none absolute inset-0', theme.selectedClass ?? ''].join(' ')}
               style={{
-                boxShadow: `inset 0 0 0 4px ${theme.selectedOutline}`,
-                color: theme.selectedOutline,
+                boxShadow: `inset 0 0 0 4px ${outlineColor}`,
+                color: outlineColor,
               }}
             />
           )}

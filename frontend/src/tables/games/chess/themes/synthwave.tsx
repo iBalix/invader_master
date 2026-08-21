@@ -97,7 +97,7 @@ export const synthwaveTheme: ChessTheme = {
   lightSquare: '#3A2260',
   darkSquare: '#241243',
   coordColor: 'rgba(234,249,255,0.45)',
-  selectedOutline: '#8FF6FF',
+  selectedOutline: (c) => (c === 'w' ? '#8FF6FF' : '#FF7BE0'),
   legalDot: (c) => (c === 'w' ? '#8FF6FF' : '#FF7BE0'),
   // doré : contraste avec le cyan des blancs comme avec le rose des noirs
   captureRing: '#FFE168',

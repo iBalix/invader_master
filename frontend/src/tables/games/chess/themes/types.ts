@@ -40,7 +40,8 @@ export interface ChessTheme {
   /** couleur des coordonnées a-h/1-8 ; défaut = couleur de la case opposée */
   coordColor?: string;
 
-  selectedOutline: string;
+  /** contour de la case sélectionnée, à la couleur du camp qui joue */
+  selectedOutline: (color: ChessColor) => string;
   /** classe CSS additionnelle du marqueur de sélection (ex: arc électrique) */
   selectedClass?: string;
   /**

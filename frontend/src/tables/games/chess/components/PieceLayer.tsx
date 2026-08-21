@@ -20,6 +20,8 @@ interface Props {
   selectedSquare: Square | null;
   /** pièce à secouer (coup illégal) */
   shakeSquare: Square | null;
+  /** roi vaincu : il se couche (mat, abandon, drapeau) */
+  fallenKingSquare: Square | null;
 }
 
 export default function PieceLayer({
@@ -30,6 +32,7 @@ export default function PieceLayer({
   raisedSquare,
   selectedSquare,
   shakeSquare,
+  fallenKingSquare,
 }: Props) {
   return (
     <div className="pointer-events-none absolute inset-0">
@@ -50,6 +53,7 @@ export default function PieceLayer({
               className={[
                 'chess-piece-inner',
                 piece.square === shakeSquare ? 'chess-shake' : '',
+                piece.square === fallenKingSquare ? 'chess-king-fallen' : '',
               ].join(' ')}
               data-selected={piece.square === selectedSquare ? 'true' : undefined}
             >

@@ -87,7 +87,7 @@ export const pixelTheme: ChessTheme = {
   lightSquare: '#262B4A',
   darkSquare: '#171B33',
   coordColor: 'rgba(245,242,255,0.45)',
-  selectedOutline: '#FFE955',
+  selectedOutline: (c) => (c === 'w' ? '#F5F2FF' : '#FF2BD6'),
   selectedClass: 'chess-selected-pixel',
   legalDot: (c) => (c === 'w' ? '#F5F2FF' : '#FF2BD6'),
   captureRing: '#FF3B5C',

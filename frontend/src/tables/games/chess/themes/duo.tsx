@@ -50,7 +50,7 @@ export function duoTheme(tint: DuoTint): ChessTheme {
     boardFrameClass: 'rounded-2xl border-2 border-white/12 shadow-[0_16px_44px_rgba(0,0,0,0.5)]',
     lightSquare: p.light,
     darkSquare: p.dark,
-    selectedOutline: p.accent,
+    selectedOutline: (c) => (c === 'w' ? '#FFF7E6' : p.accent),
     legalDot: (c) => (c === 'w' ? 'rgba(253,253,255,0.92)' : 'rgba(18,18,26,0.55)'),
     captureRing: '#FF3B5C',
     lastMoveTint: `${p.accent}42`,

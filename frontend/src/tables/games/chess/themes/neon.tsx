@@ -91,7 +91,7 @@ export const neonTheme: ChessTheme = {
   darkSquare: '#120C2A',
   squareBorder: 'rgba(51,226,255,0.22)',
   coordColor: 'rgba(159,240,255,0.5)',
-  selectedOutline: '#33E2FF',
+  selectedOutline: (c) => (c === 'w' ? '#33E2FF' : '#FF2BD6'),
   legalDot: (c) => (c === 'w' ? '#33E2FF' : '#FF2BD6'),
   // rouge et non magenta : le magenta est la couleur des noirs, l'anneau
   // serait invisible sur la pièce noire que les blancs veulent prendre

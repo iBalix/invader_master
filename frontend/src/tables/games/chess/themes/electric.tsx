@@ -32,7 +32,7 @@ export const electricTheme: ChessTheme = {
   darkSquare: '#15171E',
   squareBorder: 'rgba(255,255,255,0.06)',
   coordColor: 'rgba(217,222,232,0.4)',
-  selectedOutline: '#FFE955',
+  selectedOutline: (c) => (c === 'w' ? '#EAF0FA' : '#FFE955'),
   selectedClass: 'chess-selected-electric',
   legalDot: (c) => (c === 'w' ? 'rgba(230,236,247,0.85)' : '#FFE955'),
   captureRing: '#FF3B5C',

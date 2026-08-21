@@ -20,7 +20,7 @@ import ChessBoard from '../components/ChessBoard';
 import ChessNotice from '../components/ChessNotice';
 import CaptureFxLayer, { type CaptureFxItem } from '../components/CaptureFxLayer';
 import GameActions from '../components/GameActions';
-import GameOverOverlay from '../components/GameOverOverlay';
+import GameOverOverlay, { fallenKingColor } from '../components/GameOverOverlay';
 import DrawOfferBanner from '../components/DrawOfferBanner';
 import JoinPseudoModal from '../components/JoinPseudoModal';
 import PlayerPanel from '../components/PlayerPanel';
@@ -163,6 +163,29 @@ export default function ChessGamePage() {
     ]);
   }, [displayMoves.length, tracked]);
   const hiddenIds = useMemo(() => new Set(fxItems.map((i) => i.pieceId)), [fxItems]);
+
+  // ----- fin de partie : on laisse le plateau conclure (roi qui se couche)
+  // avant d'ouvrir le récap, sauf si on arrive sur une partie déjà terminée
+  const [showRecap, setShowRecap] = useState(false);
+  const hadResultRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const has = Boolean(state?.result);
+    const previously = hadResultRef.current;
+    hadResultRef.current = has;
+    if (!has) {
+      setShowRecap(false);
+      return undefined;
+    }
+    if (previously === false) {
+      const timer = window.setTimeout(() => setShowRecap(true), 1100);
+      return () => window.clearTimeout(timer);
+    }
+    setShowRecap(true);
+    return undefined;
+  }, [state?.result]);
+  useEffect(() => {
+    hadResultRef.current = null;
+  }, [sessionId]);
 
   // ----- avis d'erreur éphémère
   const [notice, setNotice] = useState<string | null>(null);
@@ -331,6 +354,8 @@ export default function ChessGamePage() {
   const isSeatedViewer = you !== null;
   const seatFree = state.seats[oppSide] === null || state.seats[mySide] === null;
   const onFlag = isDemo ? undefined : () => void online.refresh();
+  const loser = fallenKingColor(state);
+  const fallenKing = loser ? kingSquare(chess, loser) : null;
 
   const panel = (side: ChessColor) => (
     <PlayerPanel
@@ -414,6 +439,7 @@ export default function ChessGamePage() {
             lastMove={lastMove}
             checkSquare={checkSquare}
             shakeSquare={interaction.shakeSquare}
+            fallenKingSquare={fallenKing}
             turnColor={chess.turn() as ChessColor}
             suppressAnim={suppress}
             promotion={promotion ? { color: promotion.color } : null}
@@ -450,12 +476,14 @@ export default function ChessGamePage() {
         />
       )}
 
-      {state.result && (
+      {state.result && showRecap && (
         <GameOverOverlay
           state={state}
           you={isDemo ? demo.you : you}
           theme={theme}
           busy={busy}
+          capturedByWhite={tracked.capturedByWhite}
+          capturedByBlack={tracked.capturedByBlack}
           onRematch={isDemo ? demo.reset : () => sendAction('rematch')}
           onJoinRematch={handleJoinRematch}
           onSpectateRematch={() =>

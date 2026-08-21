@@ -30,6 +30,9 @@ export interface ChessPublicState {
   serverNow: number;
   phaseStartedAt: number | null;
   phaseEndsAt: number | null;
+  /** bornes de la partie, pour la durée affichée dans le récap de fin */
+  startedAt: number | null;
+  endedAt: number | null;
   config: { clock: ChessClockConfig | null; theme: string; creatorColor: ChessColor };
   seats: { w: ChessSeatView | null; b: ChessSeatView | null };
   fen: string;
@@ -75,6 +78,8 @@ export function buildChessPublicState(session: SessionRow): ChessPublicState {
     serverNow: now,
     phaseStartedAt: session.phase_started_at ? new Date(session.phase_started_at).getTime() : null,
     phaseEndsAt: session.phase_ends_at ? new Date(session.phase_ends_at).getTime() : null,
+    startedAt: session.started_at ? new Date(session.started_at).getTime() : null,
+    endedAt: session.ended_at ? new Date(session.ended_at).getTime() : null,
     config: { clock: config.clock, theme: config.theme, creatorColor: config.creatorColor },
     seats: {
       w: state.seats.w ? { pseudo: state.seats.w.pseudo, device: state.seats.w.device } : null,

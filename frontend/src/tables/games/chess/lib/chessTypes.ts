@@ -46,6 +46,9 @@ export interface ChessPublicState {
   serverNow: number;
   phaseStartedAt: number | null;
   phaseEndsAt: number | null;
+  /** bornes de la partie (récap de fin) */
+  startedAt: number | null;
+  endedAt: number | null;
   config: { clock: ChessClockConfig | null; theme: string; creatorColor: ChessColor };
   seats: { w: ChessSeatView | null; b: ChessSeatView | null };
   fen: string;

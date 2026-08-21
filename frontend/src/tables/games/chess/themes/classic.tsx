@@ -29,7 +29,7 @@ export const classicTheme: ChessTheme = {
   boardFrameClass: 'rounded-2xl border-4 border-[#2E2837] shadow-[0_18px_50px_rgba(0,0,0,0.5)]',
   lightSquare: '#EFE0C0',
   darkSquare: '#4A4A57',
-  selectedOutline: '#FFD166',
+  selectedOutline: (c) => (c === 'w' ? '#FFD166' : '#B39DFF'),
   legalDot: (c) => (c === 'w' ? 'rgba(253,246,227,0.9)' : 'rgba(43,36,48,0.55)'),
   captureRing: 'rgba(255,99,99,0.9)',
   lastMoveTint: 'rgba(255,209,102,0.38)',
