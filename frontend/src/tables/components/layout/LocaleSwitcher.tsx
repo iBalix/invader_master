@@ -17,10 +17,10 @@ export default function LocaleSwitcher() {
     <button
       type="button"
       onClick={toggle}
-      className="flex items-center gap-2 rounded-full border border-white/15 bg-table-bg-elev/85 px-4 py-2 font-display uppercase tracking-wider text-table-ink transition-transform duration-150 hover:bg-white/14 active:scale-95"
+      className="flex h-[3.25rem] items-center gap-2.5 rounded-full border border-white/15 bg-table-bg-elev/85 px-5 font-display text-lg uppercase tracking-wider text-table-ink transition-transform duration-150 hover:bg-white/14 active:scale-95"
       aria-label={locale === 'fr' ? 'Switch to English' : 'Passer en francais'}
     >
-      <Globe className="h-4 w-4" />
+      <Globe className="h-5 w-5" />
       {locale.toUpperCase()}
     </button>
   );

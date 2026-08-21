@@ -17,6 +17,7 @@
  * Si aucun hostname n'est connu (URL ni localStorage), on force /table/setup.
  */
 
+import { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import TableLayout from './components/layout/TableLayout';
 import SetupPage from './pages/SetupPage';
@@ -39,7 +40,30 @@ function HostnameGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Marque le document en mode kiosque tant qu'on est sous /table/*.
+ *
+ * Sur dalle tactile, un appui maintenu puis glisse faisait bouger tout l'ecran
+ * et decouvrait une bande blanche sur les bords : c'est le rebond elastique du
+ * navigateur, plus le fait que le document lui-meme pouvait defiler de quelques
+ * pixels (`w-screen` valant 100vw, barre de defilement comprise, il suffit d'une
+ * barre verticale pour creer un debordement horizontal). Les regles associees
+ * dans index.css coupent les deux, et peignent le fond du document dans la
+ * teinte du theme pour qu'aucune bande claire ne puisse apparaitre.
+ *
+ * Pose sur <html> et non en dur dans le CSS global : le back-office garde son
+ * defilement normal, seules les bornes sont verrouillees.
+ */
+function useKioskDocument(): void {
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('tables-kiosk');
+    return () => root.classList.remove('tables-kiosk');
+  }, []);
+}
+
 export default function TablesApp() {
+  useKioskDocument();
   return (
     <Routes>
       <Route path="setup" element={<SetupPage />} />

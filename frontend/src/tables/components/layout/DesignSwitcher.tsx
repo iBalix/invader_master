@@ -27,9 +27,9 @@ export default function DesignSwitcher() {
       onClick={cycle}
       aria-label={label}
       title={label}
-      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-table-bg-elev/85 text-table-ink-soft transition hover:border-table-cyan/60 hover:bg-table-cyan/15 hover:text-table-cyan active:scale-95"
+      className="flex h-[3.25rem] w-[3.25rem] items-center justify-center rounded-full border border-white/15 bg-table-bg-elev/85 text-table-ink-soft transition hover:border-table-cyan/60 hover:bg-table-cyan/15 hover:text-table-cyan active:scale-95"
     >
-      <Shuffle className="h-5 w-5" />
+      <Shuffle className="h-6 w-6" />
     </button>
   );
 }

@@ -8,6 +8,16 @@
  *   au centre (visuel + titre + sous-titre), reste quelques secondes, puis
  *   disparait. Cycle : noir -> featured -> noir -> featured suivante...
  * - Tap n'importe ou -> /table/home
+ *
+ * Le reveil est branche sur `click` UNIQUEMENT, jamais sur `touchstart` : ne pas
+ * remettre onTouchStart. Reveiller des le touchstart faisait naviguer avant la
+ * fin du geste, si bien que le `click` synthetise ensuite par le navigateur a la
+ * fin du tap atterrissait sur l'accueil deja monte. Un doigt pose a l'endroit du
+ * bouton CARTE ouvrait donc la carte, alors que le client voulait seulement
+ * sortir de veille. Avec `click`, l'evenement est le dernier de la sequence
+ * tactile et il est consomme ici : le premier appui ne fait que reveiller.
+ * `touch-manipulation` supprime au passage le delai de double-tap-zoom, donc le
+ * reveil reste immediat.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -91,9 +101,8 @@ export default function ScreensaverPage() {
 
   return (
     <div
-      className="relative flex h-full w-full items-center justify-center overflow-hidden"
+      className="relative flex h-full w-full touch-manipulation items-center justify-center overflow-hidden"
       onClick={wakeUp}
-      onTouchStart={wakeUp}
       role="button"
       aria-label={t('table.screensaver.tap')}
     >

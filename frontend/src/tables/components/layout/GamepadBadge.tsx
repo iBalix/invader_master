@@ -52,7 +52,7 @@ export default function GamepadBadge() {
     <div
       aria-label={`${t('table.gamepads.label', 'Manettes détectées')} : ${count}`}
       className={[
-        'flex h-11 items-center gap-2.5 rounded-full border px-4',
+        'flex h-[3.25rem] items-center gap-2.5 rounded-full border px-5',
         'font-display uppercase tracking-wider tabular-nums',
         active
           ? 'border-table-yellow bg-table-yellow text-table-bg shadow-[0_0_18px_rgba(255,233,85,0.6)]'
@@ -61,8 +61,8 @@ export default function GamepadBadge() {
             : 'border-white/15 bg-table-bg-elev/85 text-table-ink-muted transition-colors duration-300',
       ].join(' ')}
     >
-      <Gamepad2 className="h-5 w-5" />
-      <span className="text-lg leading-none">{count}</span>
+      <Gamepad2 className="h-6 w-6" />
+      <span className="text-xl leading-none">{count}</span>
     </div>
   );
 }

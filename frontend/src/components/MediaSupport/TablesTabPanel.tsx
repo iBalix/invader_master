@@ -7,7 +7,7 @@
  *   - Design : configs design (image fond + couleurs boutons + planification)
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Plus, Pencil, Trash2, Loader2, Home, Moon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
@@ -73,6 +73,68 @@ export default function TablesTabPanel() {
   );
 }
 
+/**
+ * Champ "duree en secondes" adosse a une valeur stockee en millisecondes.
+ *
+ * Pourquoi un composant plutot qu'un `<input>` nu : la version precedente
+ * recalculait la valeur affichee depuis les millisecondes en bornant a chaque
+ * frappe (`Math.max(10, parseInt(v) || 90)`). Impossible d'atteindre un
+ * intermediaire : vider le champ le remettait a 90, et effacer un chiffre de
+ * "100" le rebloquait a 10 des qu'on descendait sous le minimum. On ne pouvait
+ * donc pas passer de 100 a 300 sans batailler.
+ *
+ * Ici la frappe est libre, champ vide compris : on garde le texte tel quel dans
+ * un etat local et on ne borne qu'a la sortie du champ. Le parent recoit la
+ * valeur des qu'elle est un nombre, le backend borne de toute facon a son
+ * minimum, donc rien ne peut etre enregistre hors limites.
+ */
+interface SecondsFieldProps {
+  valueMs: number;
+  minSec: number;
+  fallbackSec: number;
+  onChangeMs: (ms: number) => void;
+}
+
+function SecondsField({ valueMs, minSec, fallbackSec, onChangeMs }: SecondsFieldProps) {
+  const [text, setText] = useState(() => String(Math.round(valueMs / 1000)));
+  // Ce que ce champ a lui-meme pousse au parent. Sert a distinguer "la valeur a
+  // change parce que je tape" de "elle a change ailleurs" (chargement, reset),
+  // seul cas ou le texte affiche doit etre reecrit sous les doigts.
+  const pushed = useRef(valueMs);
+
+  useEffect(() => {
+    if (valueMs !== pushed.current) {
+      pushed.current = valueMs;
+      setText(String(Math.round(valueMs / 1000)));
+    }
+  }, [valueMs]);
+
+  function push(ms: number) {
+    pushed.current = ms;
+    onChangeMs(ms);
+  }
+
+  return (
+    <input
+      type="number"
+      min={minSec}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const n = parseInt(e.target.value, 10);
+        if (Number.isFinite(n)) push(n * 1000);
+      }}
+      onBlur={() => {
+        const n = parseInt(text, 10);
+        const sec = Number.isFinite(n) ? Math.max(minSec, n) : fallbackSec;
+        setText(String(sec));
+        push(sec * 1000);
+      }}
+      className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+    />
+  );
+}
+
 // ============================================================
 // Onglet Général — réglages globaux
 // ============================================================
@@ -128,9 +190,6 @@ function GeneralSettings() {
     );
   }
 
-  const timeoutSec = Math.round(settings.screensaver_timeout_ms / 1000);
-  const featuredIntervalSec = Math.round((settings.home_featured_interval_ms ?? 30000) / 1000);
-
   return (
     <form onSubmit={save} className="max-w-2xl space-y-6">
       <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
@@ -139,12 +198,11 @@ function GeneralSettings() {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Durée avant bascule sur la veille (secondes)
           </label>
-          <input
-            type="number"
-            min={10}
-            value={timeoutSec}
-            onChange={(e) => set('screensaver_timeout_ms', Math.max(10, parseInt(e.target.value) || 90) * 1000)}
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          <SecondsField
+            valueMs={settings.screensaver_timeout_ms}
+            minSec={10}
+            fallbackSec={90}
+            onChangeMs={(ms) => set('screensaver_timeout_ms', ms)}
           />
           <p className="mt-1 text-xs text-gray-400">
             Sans action sur la borne pendant ce délai, l'écran de veille s'affiche. Minimum 10 s.
@@ -158,12 +216,11 @@ function GeneralSettings() {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Délai entre apparitions des mises en avant (secondes)
           </label>
-          <input
-            type="number"
-            min={5}
-            value={featuredIntervalSec}
-            onChange={(e) => set('home_featured_interval_ms', Math.max(5, parseInt(e.target.value) || 30) * 1000)}
-            className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          <SecondsField
+            valueMs={settings.home_featured_interval_ms ?? 30000}
+            minSec={5}
+            fallbackSec={30}
+            onChangeMs={(ms) => set('home_featured_interval_ms', ms)}
           />
           <p className="mt-1 text-xs text-gray-400">
             Le bandeau affiche le prochain évènement en permanence ; toutes les X secondes, une mise en avant apparaît brièvement puis l'évènement reprend sa place. Minimum 5 s.

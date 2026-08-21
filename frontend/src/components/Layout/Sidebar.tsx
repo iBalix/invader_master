@@ -85,9 +85,9 @@ const SIDEBAR_MENU: SidebarItem[] = [
     defaultOpen: true,
     items: [
       { title: 'Carte', icon: UtensilsCrossed, disabled: false, path: '/contenus/carte', pageKey: 'contenus/carte' },
-      { title: 'Carte v2', icon: Sparkles, disabled: false, path: '/contenus/carte-v2', pageKey: 'contenus/carte' },
+      { title: 'Carte v2', icon: Sparkles, disabled: false, path: '/contenus/carte-v2', pageKey: 'contenus/carte', badgeText: 'V2' },
       { title: 'Jeux', icon: Gamepad2, disabled: false, path: '/contenus/jeux', pageKey: 'contenus/jeux' },
-      { title: 'Jeux v2', icon: Sparkles, disabled: false, path: '/contenus/jeux-v2', pageKey: 'contenus/jeux' },
+      { title: 'Jeux v2', icon: Sparkles, disabled: false, path: '/contenus/jeux-v2', pageKey: 'contenus/jeux', badgeText: 'V2' },
       { title: 'Évènements', icon: Calendar, disabled: false, path: '/contenus/evenements', pageKey: 'contenus/evenements' },
       { title: 'Config écrans', icon: Monitor, disabled: false, path: '/contenus/config-ecrans', pageKey: 'contenus/medias' },
       { title: 'Traductions', icon: Languages, disabled: false, path: '/contenus/traductions', pageKey: 'contenus/traductions' },
@@ -99,9 +99,9 @@ const SIDEBAR_MENU: SidebarItem[] = [
     defaultOpen: false,
     items: [
       { title: 'Quiz', icon: BookOpen, disabled: false, path: '/contenus/quiz', pageKey: 'contenus/quiz' },
-      { title: 'Quiz live', icon: Radio, disabled: false, path: '/evenements/quiz-live', pageKey: 'evenements/quiz-live' },
+      { title: 'Quiz live', icon: Radio, disabled: false, path: '/evenements/quiz-live', pageKey: 'evenements/quiz-live', badgeText: 'V2' },
       { title: 'Battle Royal', icon: Swords, disabled: false, path: '/evenements/battle-questions', pageKey: 'evenements/battle-questions' },
-      { title: 'Battle live', icon: Radio, disabled: false, path: '/evenements/battle-live', pageKey: 'evenements/battle-live' },
+      { title: 'Battle live', icon: Radio, disabled: false, path: '/evenements/battle-live', pageKey: 'evenements/battle-live', badgeText: 'V2' },
     ],
   },
   {
@@ -203,6 +203,22 @@ export default function Sidebar() {
   );
 }
 
+/**
+ * Pastille de rubrique (aujourd'hui "V2", pour reperer ce qui appartient a la
+ * nouvelle interface des tables). Factorisee parce que la sidebar a cinq
+ * branches de rendu distinctes : elle n'etait cablee que dans les deux branches
+ * "desactive", si bien qu'un badgeText pose sur une entree active ne
+ * s'affichait jamais.
+ */
+function SidebarBadge({ text }: { text?: string }) {
+  if (!text) return null;
+  return (
+    <span className="ml-auto rounded border border-indigo-400/30 bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-300">
+      {text}
+    </span>
+  );
+}
+
 function AccordionSection({
   item,
   open,
@@ -248,7 +264,8 @@ function AccordionSection({
                   >
                     <SubIcon className="w-4 h-4 flex-shrink-0" />
                     <span>{sub.title}</span>
-                    <ExternalLink className="w-3 h-3 ml-auto text-gray-500 flex-shrink-0" />
+                    <SidebarBadge text={sub.badgeText} />
+                    <ExternalLink className="w-3 h-3 text-gray-500 flex-shrink-0" />
                   </a>
                 );
               }
@@ -264,6 +281,7 @@ function AccordionSection({
                 >
                   <SubIcon className="w-4 h-4 flex-shrink-0" />
                   <span>{sub.title}</span>
+                  <SidebarBadge text={sub.badgeText} />
                 </NavLink>
               );
             }
@@ -274,11 +292,7 @@ function AccordionSection({
               >
                 <SubIcon className="w-4 h-4 flex-shrink-0" />
                 <span className="text-sm">{sub.title}</span>
-                {sub.badgeText && (
-                  <span className="ml-auto text-xs bg-gray-800 px-2 py-1 rounded">
-                    {sub.badgeText}
-                  </span>
-                )}
+                <SidebarBadge text={sub.badgeText} />
               </div>
             );
           })}
@@ -296,9 +310,7 @@ function LinkItem({ item }: { item: SidebarLinkItem }) {
       <div className="flex items-center gap-3 px-4 py-3 rounded-lg opacity-50 cursor-not-allowed text-gray-400">
         <Icon className="w-5 h-5 flex-shrink-0" />
         <span className="font-medium">{item.title}</span>
-        {item.badgeText && (
-          <span className="ml-auto text-xs bg-gray-800 px-2 py-1 rounded">{item.badgeText}</span>
-        )}
+        <SidebarBadge text={item.badgeText} />
       </div>
     );
   }
@@ -315,6 +327,7 @@ function LinkItem({ item }: { item: SidebarLinkItem }) {
     >
       <Icon className="w-5 h-5 flex-shrink-0" />
       <span className="font-medium">{item.title}</span>
+      <SidebarBadge text={item.badgeText} />
     </NavLink>
   );
 }

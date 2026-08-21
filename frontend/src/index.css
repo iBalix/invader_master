@@ -52,3 +52,49 @@
 .tables-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* ============================================================
+ * Bornes tactiles : document verrouille (classe posee par TablesApp).
+ *
+ * Sur dalle tactile, un appui maintenu puis glisse dans n'importe quelle
+ * direction faisait glisser tout l'ecran et decouvrait une bande blanche.
+ * Deux causes cumulees, traitees ici :
+ *   - le rebond elastique du navigateur en bout de course -> overscroll-behavior
+ *   - un debordement de quelques pixels du document lui-meme -> overflow hidden
+ *     et hauteur figee (`w-screen` vaut 100vw, barre de defilement comprise :
+ *     une seule barre verticale suffit a creer un debordement horizontal)
+ * Le fond est peint dans la teinte du theme : meme si un rebond passait, la
+ * bande decouverte serait noire et non blanche.
+ *
+ * Scope volontaire : le back-office garde son defilement normal.
+ * ============================================================ */
+
+html.tables-kiosk,
+html.tables-kiosk body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: #070512;
+}
+
+/* Pas de selection de texte au glisse, ni de halo bleu au tap : sur une borne
+   ce ne sont que des artefacts, jamais une intention du client. Les champs de
+   saisie restent evidemment selectionnables. */
+html.tables-kiosk body {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html.tables-kiosk input,
+html.tables-kiosk textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Empeche le defilement d'une liste interne de se propager au document une fois
+   arrivee en bout de course : sans ca, continuer a tirer dans la carte ou la
+   ludotheque relancait le rebond de la page. */
+.tables-scroll {
+  overscroll-behavior: contain;
+}

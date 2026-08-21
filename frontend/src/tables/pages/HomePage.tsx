@@ -88,9 +88,9 @@ export default function HomePage() {
             onClick={() => navigate('/table/screensaver', { replace: true })}
             aria-label={t('table.home.standby', 'Mise en veille')}
             title={t('table.home.standby', 'Mise en veille')}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-table-bg-elev/85 text-table-ink-soft transition hover:border-table-magenta/60 hover:bg-table-magenta/15 hover:text-table-magenta active:scale-95"
+            className="flex h-[3.25rem] w-[3.25rem] items-center justify-center rounded-full border border-white/15 bg-table-bg-elev/85 text-table-ink-soft transition hover:border-table-magenta/60 hover:bg-table-magenta/15 hover:text-table-magenta active:scale-95"
           >
-            <Power className="h-5 w-5" />
+            <Power className="h-6 w-6" />
           </button>
         </div>
       </header>

@@ -36,9 +36,9 @@ interface DashCard {
 
 const CONTENUS: DashCard[] = [
   { title: 'Carte', icon: UtensilsCrossed, path: '/contenus/carte', description: 'Menu, catégories et produits', pageKey: 'contenus/carte' },
-  { title: 'Carte v2', icon: Sparkles, path: '/contenus/carte-v2', description: 'Nouvelle carte (conditionnements, variantes, icônes, paramètres)', pageKey: 'contenus/carte' },
+  { title: 'Carte v2', icon: Sparkles, badge: 'V2', path: '/contenus/carte-v2', description: 'Nouvelle carte (conditionnements, variantes, icônes, paramètres)', pageKey: 'contenus/carte' },
   { title: 'Jeux', icon: Gamepad2, path: '/contenus/jeux', description: 'Bornes, consoles et catalogue', pageKey: 'contenus/jeux' },
-  { title: 'Jeux v2', icon: Sparkles, path: '/contenus/jeux-v2', description: 'Nouveau modèle (vidéo YouTube, manette SNES, max joueurs)', pageKey: 'contenus/jeux' },
+  { title: 'Jeux v2', icon: Sparkles, badge: 'V2', path: '/contenus/jeux-v2', description: 'Nouveau modèle (vidéo YouTube, manette SNES, max joueurs)', pageKey: 'contenus/jeux' },
   { title: 'Évènements', icon: Calendar, path: '/contenus/evenements', description: 'Quizz, soirées, tournois', pageKey: 'contenus/evenements' },
   { title: 'Config écrans', icon: Monitor, path: '/contenus/config-ecrans', description: 'Projecteur, TV et tables tactiles', pageKey: 'contenus/medias' },
   { title: 'Traductions', icon: Languages, path: '/contenus/traductions', description: 'Textes multilingues', pageKey: 'contenus/traductions' },
@@ -46,9 +46,9 @@ const CONTENUS: DashCard[] = [
 
 const EVENEMENTS: DashCard[] = [
   { title: 'Quiz', icon: BookOpen, path: '/contenus/quiz', description: 'Questions, thèmes et médias', pageKey: 'contenus/quiz' },
-  { title: 'Quiz live', icon: Radio, path: '/evenements/quiz-live', description: 'Lancer et piloter une session de quiz en direct', pageKey: 'evenements/quiz-live' },
+  { title: 'Quiz live', icon: Radio, badge: 'V2', path: '/evenements/quiz-live', description: 'Lancer et piloter une session de quiz en direct', pageKey: 'evenements/quiz-live' },
   { title: 'Battle Royal', icon: Swords, path: '/evenements/battle-questions', description: 'Questions pour les battles', pageKey: 'evenements/battle-questions' },
-  { title: 'Battle live', icon: Swords, path: '/evenements/battle-live', description: 'Lancer et piloter une battle royale en direct', pageKey: 'evenements/battle-live' },
+  { title: 'Battle live', icon: Swords, badge: 'V2', path: '/evenements/battle-live', description: 'Lancer et piloter une battle royale en direct', pageKey: 'evenements/battle-live' },
 ];
 
 const TABLES_TACTILES: DashCard[] = [
@@ -125,7 +125,7 @@ export default function Dashboard() {
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 text-sm">{card.title}</span>
                           {card.badge && (
-                            <span className="text-[10px] uppercase font-semibold tracking-wider bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] uppercase font-semibold tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-100 px-1.5 py-0.5 rounded">
                               {card.badge}
                             </span>
                           )}
