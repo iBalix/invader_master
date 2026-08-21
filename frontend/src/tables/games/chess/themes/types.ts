@@ -43,7 +43,17 @@ export interface ChessTheme {
   selectedOutline: string;
   /** classe CSS additionnelle du marqueur de sélection (ex: arc électrique) */
   selectedClass?: string;
-  legalDot: string;
+  /**
+   * Couleur de la pastille de case libre, SELON LE CAMP QUI JOUE : c'est mon
+   * propre déplacement qui est annoncé, la pastille doit donc porter ma
+   * couleur (sinon les noirs voient des pastilles blanches et inversement).
+   */
+  legalDot: (color: ChessColor) => string;
+  /**
+   * Anneau de capture : couleur unique "danger" du thème. Elle entoure une
+   * pièce ADVERSE, elle doit donc contraster avec les deux camps — la teinter
+   * par camp la rendrait invisible sur la pièce visée une fois sur deux.
+   */
   captureRing: string;
   lastMoveTint: string;
   checkTint: string;

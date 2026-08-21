@@ -379,7 +379,9 @@ export default function ChessGamePage() {
       <button
         type="button"
         onClick={handleQuit}
-        className="absolute left-5 top-5 z-30 flex items-center gap-2 rounded-full border border-white/15 bg-black/45 px-5 py-2.5 font-display uppercase tracking-wider text-table-ink-soft transition-transform active:scale-95"
+        // en BAS à gauche : le haut de cette colonne accueille désormais le
+        // panneau de l'adversaire
+        className="absolute bottom-5 left-5 z-30 flex items-center gap-2 rounded-full border border-white/15 bg-black/45 px-5 py-2.5 font-display uppercase tracking-wider text-table-ink-soft transition-transform active:scale-95"
       >
         <X className="h-5 w-5" />
         {t('table.chess.quit')}
@@ -391,31 +393,39 @@ export default function ChessGamePage() {
       )}
 
       <div
-        className="grid h-full grid-cols-[1fr_auto_1fr] items-center"
+        // pas d'items-center ici : les colonnes doivent occuper toute la
+        // hauteur pour que chaque panneau puisse se coller en haut ou en bas
+        className="grid h-full grid-cols-[1fr_auto_1fr]"
         style={{ gap: COL_GAP, padding: PAGE_PAD }}
       >
-        <div className="flex justify-end">{panel(oppSide)}</div>
-        <ChessBoard
-          boardRef={boardRef}
-          boardSize={boardSize}
-          orientation={orientation}
-          theme={theme}
-          reduced={perf.reduced}
-          pieces={tracked.pieces}
-          selection={interaction.selection}
-          lastMove={lastMove}
-          checkSquare={checkSquare}
-          shakeSquare={interaction.shakeSquare}
-          suppressAnim={suppress}
-          promotion={promotion ? { color: promotion.color } : null}
-          onPromotionPick={(piece) => {
-            const pending = promotion;
-            setPromotion(null);
-            if (piece && pending) submitMove(pending.from, pending.to, piece);
-          }}
-          onSquareTap={interaction.onSquareTap}
-        />
-        <div className="flex justify-start">{panel(mySide)}</div>
+        {/* Chaque panneau est collé du côté où son joueur se trouve
+            réellement autour du plateau : l'adversaire est en haut de
+            l'échiquier, donc son panneau est en haut de l'écran. */}
+        <div className="flex items-start justify-end">{panel(oppSide)}</div>
+        <div className="flex items-center">
+          <ChessBoard
+            boardRef={boardRef}
+            boardSize={boardSize}
+            orientation={orientation}
+            theme={theme}
+            reduced={perf.reduced}
+            pieces={tracked.pieces}
+            selection={interaction.selection}
+            lastMove={lastMove}
+            checkSquare={checkSquare}
+            shakeSquare={interaction.shakeSquare}
+            turnColor={chess.turn() as ChessColor}
+            suppressAnim={suppress}
+            promotion={promotion ? { color: promotion.color } : null}
+            onPromotionPick={(piece) => {
+              const pending = promotion;
+              setPromotion(null);
+              if (piece && pending) submitMove(pending.from, pending.to, piece);
+            }}
+            onSquareTap={interaction.onSquareTap}
+          />
+        </div>
+        <div className="flex items-end justify-start">{panel(mySide)}</div>
       </div>
 
       <CaptureFxLayer

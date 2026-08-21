@@ -7,6 +7,7 @@
 import { isDarkSquare, squareFromView, type Orientation, type Square } from '../lib/geometry';
 import type { ChessTheme } from '../themes/types';
 import type { LegalTarget } from '../lib/chessRules';
+import type { ChessColor } from '../lib/chessTypes';
 
 interface Props {
   orientation: Orientation;
@@ -14,9 +15,19 @@ interface Props {
   selection: { square: Square; targets: Map<Square, LegalTarget> } | null;
   lastMove: { from: string; to: string } | null;
   checkSquare: Square | null;
+  /** camp qui joue : donne sa couleur aux pastilles de coups légaux */
+  turnColor: ChessColor;
 }
 
-export default function BoardSquares({ orientation, theme, selection, lastMove, checkSquare }: Props) {
+export default function BoardSquares({
+  orientation,
+  theme,
+  selection,
+  lastMove,
+  checkSquare,
+  turnColor,
+}: Props) {
+  const dotColor = theme.legalDot(turnColor);
   const rows = [];
   for (let vy = 0; vy < 8; vy++) {
     for (let vx = 0; vx < 8; vx++) {
@@ -74,7 +85,7 @@ export default function BoardSquares({ orientation, theme, selection, lastMove, 
                 'chess-marker-in pointer-events-none absolute inset-[35%]',
                 roundMarker ? 'rounded-full' : '',
               ].join(' ')}
-              style={{ background: theme.legalDot }}
+              style={{ background: dotColor }}
             />
           )}
           {target && target.capture && (

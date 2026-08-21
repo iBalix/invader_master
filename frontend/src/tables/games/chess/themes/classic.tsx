@@ -30,7 +30,7 @@ export const classicTheme: ChessTheme = {
   lightSquare: '#EFE0C0',
   darkSquare: '#4A4A57',
   selectedOutline: '#FFD166',
-  legalDot: 'rgba(46,40,55,0.35)',
+  legalDot: (c) => (c === 'w' ? 'rgba(253,246,227,0.9)' : 'rgba(43,36,48,0.55)'),
   captureRing: 'rgba(255,99,99,0.9)',
   lastMoveTint: 'rgba(255,209,102,0.38)',
   checkTint: 'rgba(255,77,77,0.55)',

@@ -29,6 +29,7 @@ interface Props {
   lastMove: { from: string; to: string } | null;
   checkSquare: Square | null;
   shakeSquare: Square | null;
+  turnColor: ChessColor;
   suppressAnim: boolean;
   promotion: { color: ChessColor } | null;
   onPromotionPick: (piece: PromotionPiece | null) => void;
@@ -46,6 +47,7 @@ export default function ChessBoard({
   lastMove,
   checkSquare,
   shakeSquare,
+  turnColor,
   suppressAnim,
   promotion,
   onPromotionPick,
@@ -80,6 +82,7 @@ export default function ChessBoard({
           selection={selection}
           lastMove={lastMove}
           checkSquare={checkSquare}
+          turnColor={turnColor}
         />
         <PieceLayer
           pieces={pieces}
