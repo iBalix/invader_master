@@ -83,9 +83,13 @@ export default function BlackjackLobbyPage() {
         title={t('table.bj.title').toUpperCase()}
         left={<BackButton to="/table/games" label={t('table.games.title')} />}
         right={
-          <ArcadeButton variant="accent" size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => setCreateOpen(true)}>
-            {t('table.bj.lobby.create')}
-          </ArcadeButton>
+          // l'état vide porte déjà son propre gros CTA : pas deux boutons
+          // identiques à l'écran (même règle qu'aux échecs)
+          items.length > 0 ? (
+            <ArcadeButton variant="accent" size="lg" icon={<Plus className="h-5 w-5" />} onClick={() => setCreateOpen(true)}>
+              {t('table.bj.lobby.create')}
+            </ArcadeButton>
+          ) : null
         }
       />
 
