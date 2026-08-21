@@ -29,11 +29,12 @@ const BORNE_GAMES = [
 ];
 
 /**
- * TEMPORAIRE — bascule d'une table vers la nouvelle interface (invader_master).
+ * TEMPORAIRE — bascule d'une table entre l'ancienne interface (site PHP servi
+ * en local par le poste) et la nouvelle (invader_master, sur Railway).
  *
- * A retirer quand toutes les tables auront bascule pour de bon, cote raccourci
- * kiosque sur les PC. En attendant, ca permet de tester une table en bar sans
- * toucher aux 9 autres, qui restent sur l'ancien site PHP.
+ * A retirer quand toutes les tables auront bascule pour de bon, cote lanceur
+ * kiosque sur les PC. En attendant, ca permet de basculer une table dans les
+ * deux sens sans toucher aux autres.
  *
  * Le `?hostname=` est indispensable : la nouvelle interface est sur un autre
  * domaine que l'ancien site, son localStorage est donc vide au premier
@@ -42,6 +43,16 @@ const BORNE_GAMES = [
  * deterministe.
  */
 const V2_BASE_URL = 'https://invadermaster-frontend-production.up.railway.app/table';
+
+/**
+ * L'ancienne interface est servie par le poste lui-meme, et la seconde dalle a
+ * son propre type d'affichage : une URL par ecran, indexee par son suffixe.
+ * Ce sont les valeurs que les postes utilisent au demarrage (kioskURL.txt).
+ */
+const V1_URL_BY_SCREEN: Record<string, string> = {
+  '-1': 'http://localhost?type=table',
+  '-2': 'http://localhost?type=table_slave',
+};
 
 const PROJO_MODES = [
   { label: 'Invader', value: '' },
@@ -239,7 +250,7 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
   };
 
   /**
-   * TEMPORAIRE — envoie les deux dalles de la table sur la nouvelle interface.
+   * TEMPORAIRE — envoie les deux dalles de la table sur l'interface demandee.
    *
    * Reprend la mecanique deja en place pour le projecteur : url_edge_server
    * ecrit l'URL dans C:\INVADER\forceURL.txt sur le poste, puis restart_edge
@@ -249,25 +260,31 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
    * filtrent en `-like "*TargetName*"`, donc un appel groupe ecrirait la MEME
    * URL sur les deux dalles et elles se croiraient toutes les deux master.
    *
-   * Non permanent par construction : au redemarrage du PC, le poste repart sur
-   * son URL habituelle.
+   * Non permanent par construction : le lanceur du poste vide forceURL.txt
+   * apres lecture et ne garde l'URL qu'en memoire, donc au redemarrage du PC le
+   * poste repart sur son URL habituelle, la V1.
    */
-  const handleSwitchToV2 = async () => {
-    setExecuting('switch_v2');
+  const handleSwitchInterface = async (target: 'v1' | 'v2') => {
+    setExecuting(target === 'v2' ? 'switch_v2' : 'switch_v1');
     try {
       for (const suffix of ['-1', '-2']) {
         const hostname = `${machine.name}${suffix}`;
+        const url = target === 'v2'
+          ? `${V2_BASE_URL}?hostname=${hostname}`
+          : `${V1_URL_BY_SCREEN[suffix]}&hostname=${hostname}`;
         await api.post('/api/bar/execute-command', {
           command: 'url_edge_server',
           targetName: hostname,
-          gameName: `${V2_BASE_URL}?hostname=${hostname}`,
+          gameName: url,
         });
       }
       await api.post('/api/bar/execute-command', {
         command: 'restart_edge',
         targetName: machine.name,
       });
-      toast.success(`${labels?.display_name || machine.label} basculée sur l'interface V2`);
+      toast.success(
+        `${labels?.display_name || machine.label} basculée sur l'interface ${target.toUpperCase()}`
+      );
     } catch (err: any) {
       const msg = err.response?.data?.message ?? 'Erreur lors de l\'exécution';
       toast.error(msg);
@@ -555,29 +572,42 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
                   </div>
                 )}
 
-                {/* TEMPORAIRE : bascule de test vers la nouvelle interface */}
+                {/* TEMPORAIRE : bascule entre l'ancienne et la nouvelle interface */}
                 {machine.type === 'table' && (
                   <div className="mt-4 pt-4 border-t">
                     <label className="block text-xs font-medium text-gray-500 mb-2">
-                      Test de la nouvelle interface
+                      Interface de la table
                     </label>
-                    <button
-                      disabled={!agentConnected || executing !== null}
-                      onClick={handleSwitchToV2}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-indigo-100 hover:bg-indigo-200 text-indigo-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {executing === 'switch_v2' ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <FlaskConical className="w-4 h-4" />
-                      )}
-                      Basculer vers interface V2
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        disabled={!agentConnected || executing !== null}
+                        onClick={() => handleSwitchInterface('v2')}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-indigo-100 hover:bg-indigo-200 text-indigo-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {executing === 'switch_v2' ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <FlaskConical className="w-4 h-4" />
+                        )}
+                        Passer en V2
+                      </button>
+                      <button
+                        disabled={!agentConnected || executing !== null}
+                        onClick={() => handleSwitchInterface('v1')}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {executing === 'switch_v1' ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-4 h-4" />
+                        )}
+                        Revenir en V1
+                      </button>
+                    </div>
                     <p className="mt-2 text-xs text-gray-400">
-                      Envoie les deux écrans de {labels?.display_name || machine.label} (
-                      {machine.name}-1 et {machine.name}-2) sur la nouvelle interface et relance leur
-                      navigateur. Provisoire : au redémarrage du PC, la table repart sur l'ancienne
-                      interface.
+                      Bascule les deux écrans de {labels?.display_name || machine.label} (
+                      {machine.name}-1 et {machine.name}-2) et relance leur navigateur. Sans effet sur
+                      les autres tables. Au redémarrage du PC, la table repart sur la V1.
                     </p>
                   </div>
                 )}
