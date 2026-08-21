@@ -43,8 +43,10 @@ export default function FeltLayer({ theme, t }: Props) {
     <div className="pointer-events-none absolute inset-0 select-none overflow-hidden" aria-hidden>
       <svg className="h-full w-full" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
         <defs>
-          <path id="bj-felt-t1" d={arcPath(372, 62)} fill="none" />
-          <path id="bj-felt-t2" d={arcPath(438, 58)} fill="none" />
+          {/* baselines centrées dans la bande [343, 478] : lettres du grand
+              texte ~382-406, du petit ~422-436, marges hautes et basses égales */}
+          <path id="bj-felt-t1" d={arcPath(406, 62)} fill="none" />
+          <path id="bj-felt-t2" d={arcPath(436, 58)} fill="none" />
         </defs>
 
         {/* les liserés concentriques, comme le double filet des vraies tables */}
