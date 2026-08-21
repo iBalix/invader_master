@@ -21,6 +21,7 @@ const ALLOWED = [
   'games_button_image_url',
   'menu_button_color',
   'games_button_color',
+  'design_per_table',
 ] as const;
 
 tablesSettingsRoutes.get('/', async (_req, res) => {

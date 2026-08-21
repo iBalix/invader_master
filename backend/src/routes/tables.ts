@@ -108,12 +108,24 @@ tablesRoutes.get('/settings', async (_req, res) => {
 });
 
 // ------------------------------------------------------------
-// GET /public/tables/design — config design effective (resolue selon planif)
+// GET /public/tables/design — design effectif de CETTE borne
+//
+// Le hostname etait deja envoye par l'intercepteur X-Hostname mais ignore ici,
+// d'ou un fond identique sur toutes les bornes du bar. On le lit desormais :
+// en mode « un design par table », la table N recoit le Nieme design.
+//
+// `designs` renvoie le groupe eligible au meme instant : c'est la liste dans
+// laquelle la pastille de l'accueil fait tourner le fond localement.
 // ------------------------------------------------------------
-tablesRoutes.get('/design', async (_req, res) => {
+tablesRoutes.get('/design', async (req, res) => {
   try {
-    const design = await resolveEffectiveDesign();
-    res.json({ status: 'success', design: toCamelDesign(design as Record<string, unknown> | null) });
+    const parsed = getHostnameFromReq(req);
+    const { design, group } = await resolveEffectiveDesign(parsed?.tableNumber);
+    res.json({
+      status: 'success',
+      design: toCamelDesign(design as Record<string, unknown> | null),
+      designs: group.map((d) => toCamelDesign(d as unknown as Record<string, unknown>)),
+    });
   } catch (err) {
     console.error('[tables/design] error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });

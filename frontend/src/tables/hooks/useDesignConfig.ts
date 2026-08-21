@@ -11,10 +11,19 @@
  * flicker "une config puis l'autre" a chaque montage/navigation. Un refresh
  * periodique capte les changements de planification sans re-rendre la borne
  * tant que la config effective n'a pas reellement change.
+ *
+ * Le serveur renvoie DEUX choses : `design`, celui attribue a cette table, et
+ * `designs`, le groupe eligible au meme instant. Ce groupe alimente la pastille
+ * de l'accueil : le client fait tourner le fond dedans, et son choix est
+ * memorise localement (designStore). Si le design memorise disparait du groupe
+ * (desactive en back-office, ou hors de sa plage horaire), on l'oublie et on
+ * revient a celui du serveur, sinon la borne resterait bloquee sur un fond
+ * fantome.
  */
 
 import { useEffect, useState } from 'react';
 import { tablesApi } from '../lib/tablesApi';
+import { useDesignOverride } from '../store/designStore';
 
 export interface DesignConfig {
   id: string;
@@ -35,9 +44,11 @@ const DEFAULTS: DesignConfig = {
 const REFRESH_INTERVAL_MS = 60_000;
 
 let cache: DesignConfig | null = null;
+/** groupe eligible renvoye par le serveur, ordre d'attribution inclus */
+let cacheGroup: DesignConfig[] = [];
 let inflight: Promise<DesignConfig> | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
-const listeners = new Set<(d: DesignConfig) => void>();
+const listeners = new Set<() => void>();
 
 function sameDesign(a: DesignConfig, b: DesignConfig): boolean {
   return (
@@ -50,11 +61,18 @@ function sameDesign(a: DesignConfig, b: DesignConfig): boolean {
 
 async function load(): Promise<DesignConfig> {
   try {
-    const res = await tablesApi.get<{ design: DesignConfig | null }>(`/design`);
+    const res = await tablesApi.get<{ design: DesignConfig | null; designs?: DesignConfig[] }>(
+      `/design`,
+    );
     const next = res.data?.design ?? DEFAULTS;
-    if (!cache || !sameDesign(cache, next)) {
+    const group = res.data?.designs ?? [];
+    const groupChanged =
+      group.length !== cacheGroup.length ||
+      group.some((d, i) => d.id !== cacheGroup[i]?.id);
+    cacheGroup = group;
+    if (!cache || !sameDesign(cache, next) || groupChanged) {
       cache = next;
-      listeners.forEach((fn) => fn(next));
+      listeners.forEach((fn) => fn());
     }
     return cache;
   } catch {
@@ -77,29 +95,45 @@ function ensurePolling(): void {
 
 interface State {
   loading: boolean;
+  /** le design a afficher : celui choisi sur cette borne, sinon celui du serveur */
   design: DesignConfig;
+  /** groupe dans lequel la pastille fait tourner le fond */
+  designs: DesignConfig[];
+  /** passe au design suivant du groupe, pour cette borne uniquement */
+  cycle: () => void;
 }
 
 export function useDesignConfig(): State {
-  const [state, setState] = useState<State>(() =>
-    cache ? { loading: false, design: cache } : { loading: true, design: DEFAULTS },
-  );
+  const [, force] = useState(0);
+  const { overrideId, setOverride } = useDesignOverride();
 
   useEffect(() => {
-    const onChange = (d: DesignConfig) => setState({ loading: false, design: d });
+    const onChange = () => force((n) => n + 1);
     listeners.add(onChange);
     ensurePolling();
-
-    if (cache) {
-      setState({ loading: false, design: cache });
-    } else {
-      void ensureLoaded().then((d) => setState({ loading: false, design: d }));
-    }
-
+    if (!cache) void ensureLoaded().then(onChange);
     return () => {
       listeners.delete(onChange);
     };
   }, []);
 
-  return state;
+  const serverDesign = cache ?? DEFAULTS;
+  const chosen = overrideId ? cacheGroup.find((d) => d.id === overrideId) : undefined;
+
+  // Choix devenu invalide (design desactive ou sorti de sa plage) : on nettoie
+  // pour que la borne reprenne le fond que le serveur lui attribue.
+  useEffect(() => {
+    if (overrideId && cacheGroup.length > 0 && !chosen) setOverride(null);
+  }, [overrideId, chosen, setOverride]);
+
+  const design = chosen ?? serverDesign;
+
+  const cycle = () => {
+    if (cacheGroup.length < 2) return;
+    const at = cacheGroup.findIndex((d) => d.id === design.id);
+    const next = cacheGroup[(at + 1) % cacheGroup.length];
+    setOverride(next.id);
+  };
+
+  return { loading: !cache, design, designs: cacheGroup, cycle };
 }

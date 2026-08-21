@@ -29,6 +29,7 @@ import HomeTopBanner from '../components/home/HomeTopBanner';
 import { useLiveGame } from '../hooks/useLiveGame';
 import { loadIdentity } from '../../game/lib/gameClient';
 import ButtonParticles from '../components/home/ButtonParticles';
+import DesignSwitcher from '../components/layout/DesignSwitcher';
 import GamepadBadge from '../components/layout/GamepadBadge';
 import LocaleSwitcher from '../components/layout/LocaleSwitcher';
 import { EASE_OUT_QUART } from '../lib/motion';
@@ -79,6 +80,7 @@ export default function HomePage() {
           />
         </div>
         <div className="absolute right-0 top-0 flex items-center gap-3">
+          <DesignSwitcher />
           <GamepadBadge />
           <LocaleSwitcher />
           <button

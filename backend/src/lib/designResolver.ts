@@ -22,6 +22,7 @@ interface DesignConfigRow {
   recurring_days: string[] | null;
   start_time: string | null;
   end_time: string | null;
+  created_at: string;
   updated_at: string;
 }
 
@@ -73,10 +74,49 @@ interface RuntimeState {
   chosen_at: string | null;
 }
 
-export async function resolveEffectiveDesign(): Promise<DesignConfigRow | null> {
+/** numero de table extrait d'un hostname : "TABLE07" -> 7 */
+function tableIndexOf(tableNumber: string | null | undefined): number | null {
+  const m = /^TABLE(\d{2})$/.exec((tableNumber ?? '').trim().toUpperCase());
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return n > 0 ? n : null;
+}
+
+/** true si le reglage « un design par table » est actif (defaut : oui) */
+async function isPerTableMode(): Promise<boolean> {
+  const { data } = await supabaseAdmin
+    .from('tables_settings')
+    .select('design_per_table')
+    .limit(1)
+    .maybeSingle();
+  // Absence de ligne ou colonne : on retombe sur le comportement voulu par
+  // defaut plutot que sur l'aleatoire.
+  return (data as { design_per_table?: boolean } | null)?.design_per_table !== false;
+}
+
+export interface ResolvedDesign {
+  /** le design a appliquer sur cette borne */
+  design: DesignConfigRow | null;
+  /**
+   * Le groupe de designs eligibles au meme instant. C'est dans cette liste, et
+   * pas dans tous les designs actifs, que la pastille de l'accueil fait
+   * tourner le fond : ainsi un design planifie pour une soiree speciale reste
+   * respecte, le client ne peut pas revenir a un fond hors saison.
+   */
+  group: DesignConfigRow[];
+}
+
+/**
+ * @param tableNumber "TABLE07" (prefixe compris). Quand il est fourni ET que le
+ * mode « un design par table » est actif, l'attribution devient DETERMINISTE :
+ * la table N recoit le Nieme design du groupe. Comme TABLExx-1 et TABLExx-2
+ * donnent le meme numero, les deux dalles d'une table partagent leur fond sans
+ * aucun etat partage a maintenir.
+ */
+export async function resolveEffectiveDesign(tableNumber?: string | null): Promise<ResolvedDesign> {
   const { data } = await supabaseAdmin.from('design_configs').select('*').eq('active', true);
   const configs = (data ?? []) as DesignConfigRow[];
-  if (configs.length === 0) return null;
+  if (configs.length === 0) return { design: null, group: [] };
 
   const now = new Date();
   const paris = parisNow();
@@ -98,10 +138,25 @@ export async function resolveEffectiveDesign(): Promise<DesignConfigRow | null> 
   // toujours sur les configs 'always'. On applique la stickiness a l'interieur
   // de ce groupe uniquement.
   const topGroup = ranged.length > 0 ? ranged : always;
-  if (topGroup.length === 0) return null;
+  if (topGroup.length === 0) return { design: null, group: [] };
+
+  // Ordre d'attribution : celui affiche dans le back-office (created_at), pour
+  // que la regle reste lisible par le staff. `id` departage les ex aequo.
+  const ordered = [...topGroup].sort((a, b) => {
+    const d = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return d !== 0 ? d : a.id.localeCompare(b.id);
+  });
+
   if (topGroup.length === 1) {
     await persistPick(topGroup[0].id, now, /*resetTimer*/ false);
-    return topGroup[0];
+    return { design: topGroup[0], group: ordered };
+  }
+
+  // Mode « un design par table » : deterministe, donc aucune ecriture en base
+  // et aucune derive au fil des sondages de 60 s des bornes.
+  const index = tableIndexOf(tableNumber);
+  if (index !== null && (await isPerTableMode())) {
+    return { design: ordered[(index - 1) % ordered.length], group: ordered };
   }
 
   // Plusieurs configs a egalite : on garde le choix courant s'il est encore
@@ -117,13 +172,13 @@ export async function resolveEffectiveDesign(): Promise<DesignConfigRow | null> 
     const current = topGroup.find((c) => c.id === state.current_config_id);
     const ageMs = now.getTime() - new Date(state.chosen_at).getTime();
     if (current && ageMs < STICKY_WINDOW_MS) {
-      return current;
+      return { design: current, group: ordered };
     }
   }
 
   const pick = topGroup[Math.floor(Math.random() * topGroup.length)];
   await persistPick(pick.id, now, /*resetTimer*/ true);
-  return pick;
+  return { design: pick, group: ordered };
 }
 
 /**

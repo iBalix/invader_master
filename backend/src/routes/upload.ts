@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
+import { formatBytes, ImageTooLargeError, optimizeImage } from '../lib/imageOptimizer.js';
 
 const BUCKET = 'invader-assets';
 // Limite globale a 50 MB pour permettre les videos courtes (mp4/webm).
@@ -39,18 +40,40 @@ uploadRoutes.post('/', upload.single('file'), async (req, res) => {
       return;
     }
 
-    const ext = path.extname(file.originalname).toLowerCase();
+    const originalExt = path.extname(file.originalname).toLowerCase();
     const folder = file.mimetype.startsWith('image/')
       ? 'images'
       : file.mimetype.startsWith('video/')
         ? 'videos'
         : 'audio';
-    const storagePath = `${folder}/${randomUUID()}${ext}`;
+
+    // Compression des images. L'extension et le type suivent le format retenu :
+    // une photo PNG ressort en .jpg, un logo transparent reste en .png.
+    let optimized;
+    try {
+      optimized = await optimizeImage(file.buffer, file.mimetype, originalExt);
+    } catch (err) {
+      if (err instanceof ImageTooLargeError) {
+        res.status(413).json({ status: 'error', message: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    if (optimized.changed) {
+      const saved = Math.round((1 - optimized.buffer.length / file.buffer.length) * 100);
+      console.log(
+        `[upload] ${file.originalname} : ${formatBytes(file.buffer.length)} -> ` +
+          `${formatBytes(optimized.buffer.length)} (-${saved}%, ${optimized.contentType})`,
+      );
+    }
+
+    const storagePath = `${folder}/${randomUUID()}${optimized.ext}`;
 
     const { error: uploadError } = await supabaseAdmin.storage
       .from(BUCKET)
-      .upload(storagePath, file.buffer, {
-        contentType: file.mimetype,
+      .upload(storagePath, optimized.buffer, {
+        contentType: optimized.contentType,
         upsert: false,
       });
 
@@ -68,6 +91,9 @@ uploadRoutes.post('/', upload.single('file'), async (req, res) => {
       status: 'success',
       url: urlData.publicUrl,
       path: storagePath,
+      // Exposés pour que le back-office puisse dire ce qui a été gagné.
+      originalBytes: file.buffer.length,
+      bytes: optimized.buffer.length,
     });
   } catch (err) {
     console.error('Upload error:', err);

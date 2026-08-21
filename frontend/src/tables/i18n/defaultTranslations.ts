@@ -50,6 +50,7 @@ export const DEFAULT_TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'table.home.liveGame.sub': 'Touche ici pour rejoindre la partie depuis cette table',
     'table.home.liveGame.cta': 'Rejoindre',
     'table.home.liveGame.resume': 'Reprendre',
+    'table.home.design.switch': 'Changer de fond',
 
     // carte
     'table.menu.title': 'Carte',
@@ -262,6 +263,7 @@ export const DEFAULT_TRANSLATIONS: Record<Locale, Record<string, string>> = {
     'table.home.liveGame.sub': 'Tap here to join the game from this table',
     'table.home.liveGame.cta': 'Join',
     'table.home.liveGame.resume': 'Resume',
+    'table.home.design.switch': 'Change background',
 
     'table.menu.title': 'Menu',
     'table.menu.cart': 'Cart',

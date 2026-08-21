@@ -38,6 +38,7 @@ interface TablesSettings {
   games_button_image_url: string | null;
   menu_button_color: string;
   games_button_color: string;
+  design_per_table: boolean;
 }
 
 type SubTab = 'general' | 'featured' | 'design';
@@ -108,6 +109,7 @@ function GeneralSettings() {
       await api.put('/api/tables-settings', {
         screensaver_timeout_ms: settings.screensaver_timeout_ms,
         home_featured_interval_ms: settings.home_featured_interval_ms,
+        design_per_table: settings.design_per_table,
       });
       toast.success('Réglages enregistrés');
     } catch (err: unknown) {
@@ -167,6 +169,27 @@ function GeneralSettings() {
             Le bandeau affiche le prochain évènement en permanence ; toutes les X secondes, une mise en avant apparaît brièvement puis l'évènement reprend sa place. Minimum 5 s.
           </p>
         </div>
+      </section>
+
+      <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700">Attribution des designs</h3>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.design_per_table !== false}
+            onChange={(e) => set('design_per_table', e.target.checked)}
+          />
+          <span className="text-sm">Un design différent par table</span>
+        </label>
+        <p className="text-xs text-gray-400">
+          Coché : chaque table reçoit un fond qui lui est propre, dans l'ordre de l'onglet Design
+          (le 1<sup>er</sup> design pour la table 01, le 2<sup>e</sup> pour la table 02, etc.). Les deux écrans
+          d'une même table affichent toujours le même fond. Décoché : toutes les tables partagent un
+          fond tiré au hasard parmi les designs actifs, comme avant.
+          <br />
+          Dans les deux cas, un client peut changer le fond de sa table depuis l'accueil, et ce choix
+          ne concerne que cet écran.
+        </p>
       </section>
 
       <div className="flex justify-end">
