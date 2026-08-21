@@ -9,6 +9,7 @@
  */
 
 import { useState } from 'react';
+import { HelpCircle, X } from 'lucide-react';
 import ArcadeButton from '../../../components/ui/ArcadeButton';
 import ArcadeModal from '../../../components/ui/ArcadeModal';
 import { useT } from '../../../i18n/useT';
@@ -104,6 +105,7 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
   const [allowDouble, setAllowDouble] = useState(true);
   const [allowSplit, setAllowSplit] = useState(true);
   const [jokerFrequency, setJokerFrequency] = useState<'rare' | 'normal' | 'generous'>('normal');
+  const [jokerHelp, setJokerHelp] = useState(false);
   const [jokers, setJokers] = useState<Record<JokerType, boolean>>({
     force: true,
     lock: true,
@@ -199,7 +201,19 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
         </Section>
 
         {/* jokers */}
-        <Section title={t('table.bj.create.jokers')}>
+        <Section>
+          <div className="mb-3 flex items-center gap-4">
+            <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-table-cyan/80">
+              {t('table.bj.create.jokers')}
+            </span>
+            <button
+              className="flex h-9 items-center gap-1.5 rounded-full border border-table-cyan/40 bg-table-cyan/10 px-3.5 text-sm font-bold uppercase text-table-cyan active:scale-95"
+              onClick={() => setJokerHelp(true)}
+            >
+              <HelpCircle className="h-4.5 w-4.5" />
+              {t('table.bj.create.jokersHelp')}
+            </button>
+          </div>
           <div className="flex items-center justify-between gap-6">
             {/* tuiles de largeur identique, label sur hauteur fixe : la
                 rangée reste régulière quel que soit le nom du joker */}
@@ -262,6 +276,45 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
         >
           {t('table.bj.create.submit')}
         </ArcadeButton>
+
+        {/* aide à la demande : ce que fait chaque joker (dalles tactiles,
+            pas de survol possible) */}
+        {jokerHelp && (
+          <div className="absolute inset-0 z-20 flex flex-col justify-center gap-6 rounded-3xl bg-table-bg-elev/[0.98] p-10">
+            <div className="flex items-center justify-between">
+              <span className="font-display text-3xl font-black uppercase tracking-wide text-table-cyan">
+                {t('table.bj.create.jokersHelpTitle')}
+              </span>
+              <button
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white/5 text-white active:scale-95"
+                onClick={() => setJokerHelp(false)}
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-12 gap-y-6">
+              {JOKER_TYPES.map((type) => (
+                <div key={type} className="flex items-center gap-4">
+                  <JokerGlyph type={type} theme={selectedTheme} width={64} t={t} compact />
+                  <div>
+                    <div className="font-display text-xl font-bold uppercase text-table-cyan">
+                      {t(`table.bj.joker.${type}`)}
+                    </div>
+                    <div className="max-w-[380px] text-base leading-snug text-white/75">
+                      {t(`table.bj.joker.${type}.desc`)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/30 px-5 py-3 text-center text-base font-semibold text-white/65">
+              {t('table.bj.tuto.jokersAll')}
+            </div>
+            <ArcadeButton variant="cyan" size="lg" fullWidth onClick={() => setJokerHelp(false)}>
+              {t('table.bj.close')}
+            </ArcadeButton>
+          </div>
+        )}
       </div>
     </ArcadeModal>
   );
