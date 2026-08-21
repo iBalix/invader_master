@@ -91,14 +91,18 @@ export default function ChessLobbyPage() {
         title={t('table.chess.title').toUpperCase()}
         left={<BackButton to="/table/games" label={t('table.games.title')} />}
         right={
-          <ArcadeButton
-            variant="accent"
-            size="md"
-            icon={<Plus className="h-5 w-5" />}
-            onClick={() => setCreateOpen(true)}
-          >
-            {t('table.chess.lobby.create')}
-          </ArcadeButton>
+          // l'état vide porte déjà son propre gros CTA : pas deux boutons
+          // identiques à l'écran
+          items.length > 0 ? (
+            <ArcadeButton
+              variant="accent"
+              size="md"
+              icon={<Plus className="h-5 w-5" />}
+              onClick={() => setCreateOpen(true)}
+            >
+              {t('table.chess.lobby.create')}
+            </ArcadeButton>
+          ) : null
         }
       />
 
