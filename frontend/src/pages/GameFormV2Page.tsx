@@ -12,6 +12,9 @@ interface GameForm {
   subtitle_en: string;
   description: string;
   description_en: string;
+  /** 'emulator' = ROM lancée par l'agent ; 'web' = route interne du SPA tables */
+  game_type: 'emulator' | 'web';
+  game_url: string;
   file_name: string;
   console_id: string;
   platform: string[];
@@ -44,6 +47,8 @@ const EMPTY: GameForm = {
   subtitle_en: '',
   description: '',
   description_en: '',
+  game_type: 'emulator',
+  game_url: '',
   file_name: '',
   console_id: '',
   platform: [],
@@ -152,6 +157,8 @@ export default function GameFormV2Page() {
         subtitle_en: g.subtitle_en ?? '',
         description: g.description ?? '',
         description_en: g.description_en ?? '',
+        game_type: g.game_type === 'web' ? 'web' : 'emulator',
+        game_url: g.game_url ?? '',
         file_name: g.file_name ?? '',
         console_id: g.console_id ?? '',
         platform: g.platform ?? [],
@@ -201,8 +208,18 @@ export default function GameFormV2Page() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.file_name.trim() || !form.console_id) {
-      toast.error('Nom, nom fichier et console requis');
+    if (!form.name.trim()) {
+      toast.error('Nom requis');
+      return;
+    }
+    if (form.game_type === 'web') {
+      // un jeu web n'a ni ROM ni console : il lui faut une route interne
+      if (!form.game_url.trim().startsWith('/table/')) {
+        toast.error('Un jeu web exige une URL interne commençant par /table/');
+        return;
+      }
+    } else if (!form.file_name.trim() || !form.console_id) {
+      toast.error('Nom fichier et console requis');
       return;
     }
     if (form.youtube_url && !form.youtube_video_id) {
@@ -219,8 +236,10 @@ export default function GameFormV2Page() {
         subtitle_en: form.subtitle_en || null,
         description: form.description || null,
         description_en: form.description_en || null,
-        file_name: form.file_name,
-        console_id: form.console_id,
+        game_type: form.game_type,
+        game_url: form.game_type === 'web' ? form.game_url.trim() : null,
+        file_name: form.game_type === 'web' ? null : form.file_name,
+        console_id: form.game_type === 'web' ? null : form.console_id,
         platform: form.platform,
         display_order: form.display_order,
         competition: form.competition,
@@ -331,27 +350,52 @@ export default function GameFormV2Page() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom fichier *</label>
-              <input type="text" value={form.file_name} onChange={(e) => set('file_name', e.target.value)}
-                placeholder="Ex : street_fighter_2"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" required />
-              <p className="mt-1 text-xs text-gray-400">Nom du fichier ROM / dossier du jeu</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Console *</label>
-              <select value={form.console_id} onChange={(e) => set('console_id', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" required>
-                <option value="">— Sélectionner —</option>
-                {allConsoles.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.display_name && c.display_name !== c.name ? ` (${c.display_name})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Type de jeu *</label>
+            <select value={form.game_type} onChange={(e) => set('game_type', e.target.value as 'emulator' | 'web')}
+              className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+              <option value="emulator">Émulateur (ROM lancée sur la table)</option>
+              <option value="web">Jeu web (joué dans l'app des tables)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              Un jeu web n'a ni ROM ni console : la table ouvre directement une page de l'app
+              (ex. les échecs en réseau).
+            </p>
           </div>
+
+          {form.game_type === 'web' ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">URL interne *</label>
+              <input type="text" value={form.game_url} onChange={(e) => set('game_url', e.target.value)}
+                placeholder="/table/games/chess"
+                className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" />
+              <p className="mt-1 text-xs text-gray-400">
+                Doit commencer par <code>/table/</code> : la borne ne doit jamais sortir du kiosque.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nom fichier *</label>
+                <input type="text" value={form.file_name} onChange={(e) => set('file_name', e.target.value)}
+                  placeholder="Ex : street_fighter_2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" />
+                <p className="mt-1 text-xs text-gray-400">Nom du fichier ROM / dossier du jeu</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Console *</label>
+                <select value={form.console_id} onChange={(e) => set('console_id', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                  <option value="">— Sélectionner —</option>
+                  {allConsoles.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.display_name && c.display_name !== c.name ? ` (${c.display_name})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
