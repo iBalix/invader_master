@@ -287,18 +287,6 @@
 
 .bj-font-pixel { font-family: 'Courier New', monospace; letter-spacing: 0.02em; }
 
-/* fond du feutre : arc de marquage dessiné en CSS (pas d'image) */
-.bj-felt-arc {
-  position: absolute;
-  left: 50%;
-  top: -46%;
-  width: 128%;
-  aspect-ratio: 1;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  border: 2px solid var(--bj-felt-line, rgba(255,255,255,0.2));
-  pointer-events: none;
-}
 
 /* ---- séparation d'une paire ------------------------------------------------ */
 

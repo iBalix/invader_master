@@ -11,6 +11,7 @@ import BetPanel from './BetPanel';
 import BigMomentLayer from './BigMomentLayer';
 import ChipFlyLayer, { type ChipFlight } from './ChipFlyLayer';
 import DealerPod from './DealerPod';
+import FeltLayer from './FeltLayer';
 import JokerFxLayer from './JokerFxLayer';
 import JokerHand from './JokerHand';
 import JokerLegend from './JokerLegend';
@@ -131,20 +132,8 @@ export default function BjTable({
 
   return (
     <div className="relative h-full w-full overflow-hidden" style={{ background: theme.feltBg }}>
-      {/* marquages du feutre */}
-      <div className="bj-felt-arc" style={{ ['--bj-felt-line' as string]: theme.feltLine }} />
-      <div
-        className="pointer-events-none absolute left-1/2 top-[31%] -translate-x-1/2 select-none whitespace-nowrap font-display text-xl font-bold uppercase tracking-[0.5em]"
-        style={{ color: theme.feltText, opacity: 0.55 }}
-      >
-        {t('table.bj.felt.blackjack32')}
-      </div>
-      <div
-        className="pointer-events-none absolute left-1/2 top-[36.5%] -translate-x-1/2 select-none whitespace-nowrap text-base font-semibold uppercase tracking-[0.4em]"
-        style={{ color: theme.feltText, opacity: 0.4 }}
-      >
-        {t('table.bj.felt.dealerRule')}
-      </div>
+      {/* le tapis dessiné : arcs, règles en courbe, branding Invader */}
+      <FeltLayer theme={theme} t={t} />
 
       {/* croupier */}
       <div className="absolute left-1/2 top-[3.5%] -translate-x-1/2">
