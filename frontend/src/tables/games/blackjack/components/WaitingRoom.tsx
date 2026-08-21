@@ -80,9 +80,6 @@ export default function WaitingRoom({ state, you, theme, busy, onLaunch, onLeave
           ) : (
             <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">{t('table.bj.waiting.jokersOff')}</span>
           )}
-          {state.config.lateJoin && (
-            <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">{t('table.bj.waiting.lateJoin')}</span>
-          )}
         </div>
 
         {isCreator ? (
