@@ -5,6 +5,7 @@
  * Les deltas par main flottent déjà sur les sièges ; ici, le collectif.
  */
 
+import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import ChipGlyph from '../themes/ChipGlyph';
 import type { BjPublicState } from '../lib/bjTypes';
@@ -19,7 +20,23 @@ interface Props {
 
 export default function RoundResultOverlay({ state, theme, t }: Props) {
   const round = state.lastRound;
-  if (!round || state.status !== 'payout') return null;
+  const inPayout = state.status === 'payout';
+  const roundIndex = round?.roundIndex ?? -1;
+  const dealerBust = round?.dealerBust ?? false;
+  // le récap attend son tour : quand le croupier saute, la bannière plein
+  // écran joue d'abord (~2,6 s), sinon un court battement suffit
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (!inPayout || roundIndex < 0) {
+      setShown(false);
+      return undefined;
+    }
+    setShown(false);
+    const timer = window.setTimeout(() => setShown(true), dealerBust ? 2500 : 500);
+    return () => window.clearTimeout(timer);
+  }, [inPayout, roundIndex, dealerBust]);
+
+  if (!round || !inPayout || !shown) return null;
   const winners = round.hands
     .filter((h) => round.primeWinners.includes(h.playerId))
     .map((h) => h.pseudo);

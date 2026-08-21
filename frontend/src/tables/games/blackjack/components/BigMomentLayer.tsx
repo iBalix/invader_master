@@ -95,6 +95,15 @@ export default function BigMomentLayer({ state, theme, reduced, t }: Props) {
         }
       }
       if (status === 'betting') {
+        if (state.nextIsLast && !state.isLastRound && !state.endAfterRound) {
+          enqueue({
+            key: `nextlast:${round}`,
+            text: t('table.bj.moment.nextLast'),
+            color: theme.hudAccent,
+            shockwave: false,
+            holdMs: 1800,
+          });
+        }
         if (state.shoeRefilled) {
           enqueue({
             key: `shoe:${round}`,
@@ -114,15 +123,6 @@ export default function BigMomentLayer({ state, theme, reduced, t }: Props) {
             holdMs: 2400,
           });
         }
-      }
-      if (status === 'payout' && state.nextIsLast && !state.isLastRound && !state.endAfterRound) {
-        enqueue({
-          key: `nextlast:${round}`,
-          text: t('table.bj.moment.nextLast'),
-          color: theme.hudAccent,
-          shockwave: false,
-          holdMs: 1800,
-        });
       }
       prevStatus.current = status;
     }
