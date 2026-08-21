@@ -84,6 +84,9 @@ html.tables-kiosk body {
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
+  /* pas de zoom au double-tap ni au pincement : sur une borne le zoom
+     navigateur casse tout le plein-ecran (constate en test blackjack) */
+  touch-action: manipulation;
 }
 
 html.tables-kiosk input,

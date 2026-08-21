@@ -1,18 +1,18 @@
 /**
- * Siège d'un joueur autour de la table : pseudo + table d'origine, mains,
- * jetons, score en direct, jokers (compte public, contenu privé), bouclier,
- * chrono du tour. Le pod du joueur actif s'allume, les autres s'estompent
- * légèrement pendant son tour. Tailles pensées pour des dalles vues de
- * biais : la largeur des cartes vient de la table (densité adaptative).
+ * Siège d'un joueur autour de la table, volontairement épuré : le pseudo
+ * (couronne si premier), la ou les mains, le score de la course, le compte
+ * de jokers (mini-carte face cachée ×N) et, SOUS le pod, le tapis de jetons
+ * en piles physiques. Mon propre pod est teinté à la couleur du thème, et
+ * s'embrase quand c'est à moi de jouer.
  */
 
 import { forwardRef } from 'react';
-import { Crown, Shield, Star } from 'lucide-react';
+import { Crown, Shield, Trophy } from 'lucide-react';
 import AnimatedNumber from './AnimatedNumber';
+import ChipPiles from './ChipPiles';
 import ChipStack from './ChipStack';
 import HandFan from './HandFan';
 import TimerRing from './TimerRing';
-import { tableOriginLabel } from '../lib/ring';
 import type { BjPublicState, BjSeatView } from '../lib/bjTypes';
 import type { BjTheme } from '../themes/types';
 import type { AnchorRegistry } from '../lib/anchors';
@@ -63,6 +63,7 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
   const payout = state.status === 'payout';
   const someoneActing = state.status === 'acting' && state.turn !== null;
   const faded = someoneActing && !isTurn && !isViewer;
+  const split = seat.hands.length >= 2;
 
   // chrono du tour : deadline serveur, plafonnée par le cap de la main
   const deadline =
@@ -71,6 +72,14 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
         ? Math.min(state.phaseEndsAt, state.turn.capAt)
         : state.phaseEndsAt
       : null;
+
+  // mon pod porte la couleur du thème en permanence, encore plus à mon tour
+  const borderColor = isTurn ? theme.hudAccent : primeWinner ? theme.gold : isViewer ? `${theme.hudAccent}99` : theme.seatBorder;
+  const glow = isTurn
+    ? `0 0 26px ${theme.hudAccent}66`
+    : isViewer && !reduced
+      ? `0 0 16px ${theme.hudAccent}33`
+      : undefined;
 
   return (
     <div
@@ -82,14 +91,14 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
         className={`relative flex flex-col items-center gap-1.5 rounded-3xl border px-4 pb-3 pt-2 ${isTurn && !reduced ? 'bj-seat-ping' : ''}`}
         style={{
           background: theme.seatBg,
-          borderColor: isTurn ? theme.hudAccent : primeWinner ? theme.gold : theme.seatBorder,
-          borderWidth: isTurn || primeWinner ? 2.5 : 1.5,
+          borderColor,
+          borderWidth: isTurn || primeWinner ? 2.5 : isViewer ? 2 : 1.5,
           // proportionnelle aux cartes : la densité s'adapte au nombre de sièges
           minWidth: Math.round(cardWidth * 3.3),
-          boxShadow: isTurn ? `0 0 22px ${theme.hudAccent}44` : undefined,
+          boxShadow: glow,
         }}
       >
-        {/* entête : pseudo, origine, couronne, bouclier, badge créateur */}
+        {/* entête : pseudo, couronne du premier, bouclier armé */}
         <div className="flex max-w-[340px] items-center gap-2">
           {isLeader && <Crown className="h-6 w-6 shrink-0" style={{ color: theme.gold }} />}
           <span
@@ -98,12 +107,6 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
           >
             {seat.pseudo}
           </span>
-          {tableOriginLabel(seat.device) && (
-            <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-sm font-bold text-white/70">
-              {tableOriginLabel(seat.device)}
-            </span>
-          )}
-          {seat.isCreator && <Star className="h-4.5 w-4.5 shrink-0 text-white/50" />}
           {seat.shield && <Shield className="h-6 w-6 shrink-0" style={{ color: theme.hudAccent }} />}
         </div>
 
@@ -111,17 +114,18 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
         {seat.hands.length > 0 ? (
           <div className="flex items-start gap-3">
             {seat.hands.map((hand, hi) => (
-              <div key={hi} className={seat.hands.length > 1 ? (turnHand === hi ? '' : 'opacity-75') : ''}>
+              <div key={hi} className={split ? (turnHand === hi ? '' : 'opacity-75') : ''}>
                 <HandFan
                   hand={hand}
                   theme={theme}
-                  cardWidth={seat.hands.length > 1 ? Math.round(cardWidth * 0.85) : cardWidth}
+                  cardWidth={split ? Math.round(cardWidth * 0.85) : cardWidth}
                   active={turnHand === hi}
                   dealDelays={dealDelays?.[hi]}
                   animate={animate}
                   anchors={anchors}
                   reduced={reduced}
                   showOutcome={payout}
+                  splitPhase={split ? (hi === 0 ? 'kept' : 'new') : null}
                   t={t}
                 />
               </div>
@@ -143,14 +147,22 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
           <div className="h-[10px]" />
         )}
 
-        {/* pied : jetons, score, manches gagnées, jokers */}
+        {/* pied : jokers en main (compte public) et score de la course */}
         <div className="flex w-full items-center justify-between gap-3 border-t border-white/8 pt-1.5">
-          <div className="flex items-center gap-1.5 text-xl font-bold" style={{ color: '#D7DCEA' }}>
-            <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden>
-              <circle cx="24" cy="24" r="21" fill="none" stroke={theme.hudAccent} strokeWidth="6" strokeDasharray="10 7" />
-              <circle cx="24" cy="24" r="10" fill={theme.hudAccent} />
-            </svg>
-            <AnimatedNumber value={seat.chips} />
+          <div className="flex items-center gap-1.5">
+            {seat.jokerCount > 0 && (
+              <>
+                <span
+                  className="bj-pop flex h-[30px] w-[21px] items-center justify-center rounded-[4px] border-2 font-display text-sm font-black"
+                  style={{ background: theme.seatBg, borderColor: theme.hudAccent, color: theme.hudAccent }}
+                >
+                  ?
+                </span>
+                <span className="font-display text-lg font-bold" style={{ color: theme.hudAccent }}>
+                  ×{seat.jokerCount}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {seat.roundsWon > 0 && (
@@ -158,24 +170,15 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
                 {seat.roundsWon}★
               </span>
             )}
-            <span className="rounded-full px-3 py-1 font-display text-xl font-extrabold" style={{ background: `${theme.hudAccent}1E`, color: theme.hudAccent }}>
+            <span
+              className="flex items-center gap-1.5 rounded-full px-3 py-1 font-display text-xl font-extrabold"
+              style={{ background: `${theme.hudAccent}1E`, color: theme.hudAccent }}
+            >
+              <Trophy className="h-4 w-4" />
               <AnimatedNumber value={seat.score} />
             </span>
           </div>
         </div>
-
-        {/* jokers : compte public en pastilles face cachée */}
-        {seat.jokerCount > 0 && (
-          <div className="absolute -bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5">
-            {Array.from({ length: seat.jokerCount }, (_, i) => (
-              <span
-                key={i}
-                className="bj-pop h-[26px] w-[18px] rounded-[3px] border-2"
-                style={{ background: theme.seatBg, borderColor: theme.hudAccent, animationDelay: `${i * 60}ms` }}
-              />
-            ))}
-          </div>
-        )}
 
         {/* badges d'état */}
         {seat.lanterne && (
@@ -205,6 +208,13 @@ const SeatPod = forwardRef<HTMLDivElement, Props>(function SeatPod(
               size={64}
               reduced={reduced}
             />
+          </div>
+        )}
+
+        {/* le tapis de jetons du joueur, en piles physiques sous le siège */}
+        {!seat.joinPending && (
+          <div className="absolute left-1/2 top-full mt-1.5 -translate-x-1/2">
+            <ChipPiles amount={seat.chips} theme={theme} chipSize={isViewer ? 32 : 27} />
           </div>
         )}
       </div>

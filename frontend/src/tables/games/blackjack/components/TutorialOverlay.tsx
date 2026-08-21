@@ -1,12 +1,20 @@
 /**
- * Présentation animée avant la première mise (~66 s, 11 chapitres de 6 s),
- * identique et synchronisée sur toutes les dalles (horloge serveur).
- * Progressive : l'évident d'abord, les jokers à la fin. Personnalisée avec
+ * Présentation avant la première mise (~66 s, 11 temps de 6 s), identique et
+ * synchronisée sur toutes les dalles (horloge serveur).
+ *
+ * C'est une MANCHE À BLANC : une mini-table joue une manche automatisée sous
+ * les yeux des joueurs (mises, donne en cascade, tirer ou rester, croupier,
+ * paiement, prime, score), chaque étape étant expliquée d'une phrase. Deux
+ * encarts pédagogiques (doubler, jokers) s'intercalent. Personnalisée avec
  * les pseudos réellement assis. « Passer » au vote unanime.
+ *
+ * L'échelonnement (cascade de cartes, badges) est piloté par le TEMPS écoulé
+ * et non par des délais CSS : une dalle qui se réveille en cours d'intro
+ * retombe toujours sur l'état exact du moment.
  */
 
-import { useEffect, useState, type ReactNode } from 'react';
-import { FastForward } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { FastForward, Sparkles } from 'lucide-react';
 import CardGlyph from '../themes/CardGlyph';
 import ChipGlyph from '../themes/ChipGlyph';
 import JokerGlyph from './JokerGlyph';
@@ -29,36 +37,99 @@ interface Props {
 const CHAPTER_MS = 6_000;
 const CHAPTERS = 11;
 
-function Cards({ cards, theme, width = 84, flip }: { cards: string[]; theme: BjTheme; width?: number; flip?: boolean }) {
+/** carte de la manche à blanc, apparition dédiée (transform uniquement) */
+function TutoCard({ card, theme, width }: { card: string; theme: BjTheme; width: number }) {
   return (
-    <div className="flex">
-      {cards.map((c, i) => (
-        <div key={i} style={{ marginLeft: i === 0 ? 0 : -width * 0.34, zIndex: i }} className={flip && i === cards.length - 1 ? 'bj-tuto-flip' : ''}>
-          <CardGlyph card={c} theme={theme} width={width} />
-        </div>
-      ))}
+    <div className="bj-tuto-deal">
+      <CardGlyph card={card} theme={theme} width={width} />
     </div>
   );
 }
 
-function Total({ value, color }: { value: number | string; color: string }) {
+function TotalBadge({ label, color }: { label: string; color: string }) {
   return (
-    <span className="rounded-full px-4 py-1.5 font-display text-3xl font-extrabold" style={{ background: 'rgba(0,0,0,0.6)', color }}>
-      {value}
+    <span className="bj-tuto-pop whitespace-nowrap rounded-full px-3.5 py-1 font-display text-2xl font-extrabold leading-none" style={{ background: 'rgba(0,0,0,0.6)', color }}>
+      {label}
     </span>
+  );
+}
+
+interface TimedCard {
+  card: string;
+  /** ms depuis le début de l'intro à partir desquelles la carte est posée */
+  at: number;
+}
+
+interface TutoSeatProps {
+  pseudo: string;
+  theme: BjTheme;
+  cards: TimedCard[];
+  elapsed: number;
+  totalLabel: string | null;
+  totalColor: string;
+  bet: boolean;
+  /** bandeau de résultat (paiement) */
+  result: { text: string; color: string } | null;
+  prime: boolean;
+  score: number | null;
+  t: TFunction;
+}
+
+function TutoSeat({ pseudo, theme, cards, elapsed, totalLabel, totalColor, bet, result, prime, score, t }: TutoSeatProps) {
+  const visible = cards.filter((c) => elapsed >= c.at);
+  const overlap = 30;
+  return (
+    <div
+      className="relative flex min-h-[248px] w-[350px] flex-col items-center justify-start gap-2 rounded-3xl border-2 px-5 pb-4 pt-3"
+      style={{ background: theme.seatBg, borderColor: prime ? theme.gold : theme.seatBorder }}
+    >
+      <span className="font-display text-2xl font-bold uppercase tracking-wide text-white/95">{pseudo}</span>
+      <div className="flex min-h-[112px] items-center" style={{ paddingLeft: overlap / 2 }}>
+        {visible.map(({ card }, i) => (
+          <div key={`${i}-${card}`} style={{ marginLeft: i === 0 ? 0 : -overlap, zIndex: i }}>
+            <TutoCard card={card} theme={theme} width={78} />
+          </div>
+        ))}
+      </div>
+      <div className="flex min-h-[40px] items-center gap-2">
+        {totalLabel && visible.length > 0 && <TotalBadge label={totalLabel} color={totalColor} />}
+        {bet && (
+          <span className="bj-tuto-pop flex items-center gap-1.5">
+            <ChipGlyph value={20} theme={theme} size={34} />
+            <span className="font-display text-xl font-bold text-white/85">20</span>
+          </span>
+        )}
+      </div>
+      {score !== null && (
+        <span className="bj-tuto-pop flex items-center gap-1.5 rounded-full px-4 py-1.5 font-display text-2xl font-extrabold" style={{ background: `${theme.hudAccent}1E`, color: theme.hudAccent }}>
+          <AnimatedNumber value={score} />
+        </span>
+      )}
+      {result && (
+        <span className="bj-tuto-pop absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-1.5 font-display text-xl font-extrabold" style={{ background: 'rgba(0,0,0,0.85)', color: result.color }}>
+          {result.text}
+        </span>
+      )}
+      {prime && (
+        <span className="bj-tuto-pop absolute -bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1 font-display text-lg font-extrabold uppercase" style={{ background: theme.gold, color: '#241A05' }}>
+          <Sparkles className="h-4 w-4" />
+          {t('table.bj.seat.prime')} +200
+        </span>
+      )}
+    </div>
   );
 }
 
 export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t }: Props) {
   const [, forceTick] = useState(0);
   useEffect(() => {
-    const interval = setInterval(() => forceTick((v) => v + 1), 400);
+    const interval = setInterval(() => forceTick((v) => v + 1), 350);
     return () => clearInterval(interval);
   }, []);
 
   const startedAt = state.phaseStartedAt ?? serverNow();
   const elapsed = Math.max(0, serverNow() - startedAt);
-  const chapter = Math.min(CHAPTERS - 1, Math.floor(elapsed / CHAPTER_MS));
+  const step = Math.min(CHAPTERS - 1, Math.floor(elapsed / CHAPTER_MS));
   const progress = Math.min(1, elapsed / (CHAPTERS * CHAPTER_MS));
 
   const seats = state.seats;
@@ -74,178 +145,167 @@ export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t
       .replace('{p2}', p2)
       .replace('{prime}', String(state.config.prime));
 
-  const scenes: ReactNode[] = [
-    // 1. le but
-    <div key="goal" className="flex items-center gap-10">
-      <div className="flex flex-col items-center gap-2">
-        <Cards cards={['Kh', '9s']} theme={theme} />
-        <Total value={19} color={theme.hudAccent} />
-        <span className="text-xl font-bold text-white/70">{p1}</span>
-      </div>
-      <span className="font-display text-6xl font-black text-white/60">VS</span>
-      <div className="flex flex-col items-center gap-2">
-        <Cards cards={['Td', '7c']} theme={theme} />
-        <Total value={17} color="#EDF0F7" />
-        <span className="text-xl font-bold text-white/70">{t('table.bj.dealer')}</span>
-      </div>
-    </div>,
-    // 2. valeur des cartes
-    <div key="values" className="flex items-end gap-6">
-      {[
-        ['As', '1 / 11'],
-        ['Kd', '10'],
-        ['Qc', '10'],
-        ['7h', '7'],
-      ].map(([card, value]) => (
-        <div key={card} className="flex flex-col items-center gap-2">
-          <CardGlyph card={card} theme={theme} width={88} />
-          <Total value={value} color={theme.hudAccent} />
-        </div>
-      ))}
-    </div>,
-    // 3. tirer ou rester
-    <div key="hitstand" className="flex items-center gap-12">
-      <div className="flex flex-col items-center gap-2">
-        <Cards cards={['9s', '7d', '4h']} theme={theme} flip />
-        <Total value={20} color={theme.hudAccent} />
-        <span className="text-lg font-bold uppercase text-white/60">{t('table.bj.tuto.hitGood')}</span>
-      </div>
-      <div className="flex flex-col items-center gap-2 opacity-90">
-        <Cards cards={['Th', '6c', 'Kd']} theme={theme} />
-        <Total value={26} color={theme.danger} />
-        <span className="text-lg font-bold uppercase" style={{ color: theme.danger }}>
-          {t('table.bj.tuto.hitBust')}
-        </span>
-      </div>
-    </div>,
-    // 4. le croupier
-    <div key="dealer" className="flex flex-col items-center gap-3">
-      <Cards cards={['??', '8s']} theme={theme} width={96} />
-      <div className="rounded-full px-6 py-2.5 font-display text-2xl font-bold uppercase" style={{ background: 'rgba(0,0,0,0.6)', color: theme.feltText }}>
-        {t('table.bj.felt.dealerRule')}
-      </div>
-    </div>,
-    // 5. le score
-    <div key="score" className="flex items-center gap-5">
-      <div className="flex items-center gap-2">
-        <ChipGlyph value={100} theme={theme} size={68} />
-        <span className="font-display text-3xl font-bold text-white/85">{t('table.bj.tuto.chipsWord')}</span>
-      </div>
-      <span className="font-display text-5xl text-white/50">+</span>
-      <span className="font-display text-3xl font-bold" style={{ color: theme.gold }}>
-        {t('table.bj.tuto.roundsWord')}
-      </span>
-      <span className="font-display text-5xl text-white/50">=</span>
-      <span className="rounded-2xl px-6 py-3 font-display text-5xl font-black" style={{ background: `${theme.hudAccent}22`, color: theme.hudAccent }}>
-        <AnimatedNumber value={chapter >= 4 ? 900 : 500} durationMs={1600} />
-      </span>
-    </div>,
-    // 6. la prime de manche
-    <div key="prime" className="flex items-center gap-8">
-      <div className="flex flex-col items-center gap-1.5">
-        <Cards cards={['Ks', 'Jd']} theme={theme} width={76} />
-        <Total value={20} color={theme.gold} />
-        <span className="text-lg font-bold text-white/70">{p1} · 2 {t('table.bj.tuto.cardsWord')}</span>
-      </div>
-      <div className="flex flex-col items-center gap-1.5 opacity-75">
-        <Cards cards={['5h', '8c', '3s', '4d']} theme={theme} width={76} />
-        <Total value={20} color="#EDF0F7" />
-        <span className="text-lg font-bold text-white/60">{p2} · 4 {t('table.bj.tuto.cardsWord')}</span>
-      </div>
-      <span className="rounded-full px-6 py-3 font-display text-3xl font-black uppercase" style={{ background: `${theme.gold}26`, color: theme.gold }}>
-        +{state.config.prime}
-      </span>
-    </div>,
-    // 7. doubler
-    <div key="double" className="flex items-center gap-6">
-      <div className="flex items-center gap-2">
-        <ChipGlyph value={50} theme={theme} size={60} />
-        <span className="font-display text-5xl font-black" style={{ color: theme.gold }}>
-          x2
-        </span>
-      </div>
-      <Cards cards={['6h', '5s', '??']} theme={theme} flip />
-    </div>,
-    // 8. sauter n'est pas mourir
-    <div key="bust" className="flex items-center gap-8">
-      <div className="flex flex-col items-center gap-2">
-        <div className="bj-hand-dimmed">
-          <Cards cards={['Kh', '8d', '9c']} theme={theme} width={72} />
-        </div>
-        <Total value={27} color={theme.danger} />
-      </div>
-      <div className="flex items-center gap-2">
-        {enabledJokers.slice(0, 2).map((type) => (
-          <JokerGlyph key={type} type={type} theme={theme} width={72} t={t} compact />
-        ))}
-        <span className="ml-2 max-w-[300px] font-display text-2xl font-bold uppercase leading-tight" style={{ color: theme.hudAccent }}>
-          {t('table.bj.tuto.bustKeep')}
-        </span>
-      </div>
-    </div>,
-    // 9. les jokers (principe)
-    <div key="jokers" className="flex items-center gap-6">
-      <div className="flex gap-1.5">
-        {Array.from({ length: 3 }, (_, i) => (
-          <span key={i} className="h-12 w-9 rounded-[4px] border-2" style={{ background: theme.seatBg, borderColor: theme.hudAccent }} />
-        ))}
-      </div>
-      <span className="max-w-[520px] text-center font-display text-2xl font-bold uppercase leading-snug text-white/85">
-        {t('table.bj.tuto.jokersAnytime')}
-      </span>
-    </div>,
-    // 10. les six jokers
-    <div key="six" className="grid grid-cols-3 gap-5">
-      {enabledJokers.map((type, i) => (
-        <div key={type} className="bj-pop flex items-center gap-2" style={{ animationDelay: `${i * 350}ms` }}>
-          <JokerGlyph type={type} theme={theme} width={64} t={t} compact />
-          <div>
-            <div className="font-display text-xl font-bold uppercase" style={{ color: theme.hudAccent }}>
-              {t(`table.bj.joker.${type}`)}
-            </div>
-            <div className="max-w-[280px] text-base leading-tight text-white/65">{t(`table.bj.joker.${type}.desc`)}</div>
-          </div>
-        </div>
-      ))}
-    </div>,
-    // 11. à vous
-    <div key="go" className="flex flex-col items-center gap-3">
-      <div className="flex flex-wrap justify-center gap-2">
-        {seats.map((s, i) => (
-          <span
-            key={s.playerId}
-            className="bj-pop rounded-full px-6 py-2.5 font-display text-2xl font-bold uppercase"
-            style={{ background: `${theme.hudAccent}1E`, color: theme.hudAccent, animationDelay: `${i * 240}ms` }}
-          >
-            {s.pseudo}
-          </span>
-        ))}
-      </div>
-    </div>,
-  ];
+  const TITLES = ['goal', 'bets', 'deal', 'values', 'hit', 'double', 'dealer', 'payout', 'score', 'jokersAll', 'go'] as const;
 
-  const titles = ['goal', 'values', 'hitstand', 'dealer', 'score', 'prime', 'double', 'bust', 'jokers', 'six', 'go'];
+  // la timeline de la manche à blanc (ms depuis le début de l'intro)
+  const DEAL = 2 * CHAPTER_MS;
+  const HIT = 4 * CHAPTER_MS;
+  const REVEAL = 6 * CHAPTER_MS;
+  const PAY = 7 * CHAPTER_MS;
+  const SCORE = 8 * CHAPTER_MS;
+
+  const betsIn = elapsed >= CHAPTER_MS;
+  const revealed = elapsed >= REVEAL + 700;
+  const paid = elapsed >= PAY + 400;
+  const scored = elapsed >= SCORE;
+
+  const p1Cards: TimedCard[] = [
+    { card: '9h', at: DEAL + 200 },
+    { card: '7s', at: DEAL + 500 },
+    { card: '4h', at: HIT + 700 },
+  ];
+  const p2Cards: TimedCard[] = [
+    { card: 'Ah', at: DEAL + 800 },
+    { card: 'Kd', at: DEAL + 1100 },
+  ];
+  const dealerCards: TimedCard[] = revealed
+    ? [
+        { card: '8c', at: 0 },
+        { card: '9d', at: REVEAL + 700 },
+      ]
+    : [
+        { card: '8c', at: DEAL + 1500 },
+        { card: '??', at: DEAL + 1800 },
+      ];
+  const dealerVisible = dealerCards.filter((c) => elapsed >= c.at);
+  const p1HasHit = elapsed >= HIT + 700;
 
   return (
-    <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center justify-center" style={{ background: 'rgba(3,5,12,0.93)' }}>
+    <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center justify-center gap-6" style={{ background: 'rgba(3,5,12,0.94)' }}>
       {/* progression */}
-      <div className="absolute left-1/2 top-8 w-[760px] -translate-x-1/2">
+      <div className="absolute left-1/2 top-6 w-[760px] -translate-x-1/2">
         <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
           <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${progress * 100}%`, background: theme.hudAccent }} />
         </div>
         <div className="mt-2 flex justify-between">
           {Array.from({ length: CHAPTERS }, (_, i) => (
-            <span key={i} className="h-2.5 w-2.5 rounded-full" style={{ background: i <= chapter ? theme.hudAccent : 'rgba(255,255,255,0.18)' }} />
+            <span key={i} className="h-2.5 w-2.5 rounded-full" style={{ background: i <= step ? theme.hudAccent : 'rgba(255,255,255,0.18)' }} />
           ))}
         </div>
       </div>
 
-      {/* chapitre courant */}
-      <div key={chapter} className="bj-chapter-in flex flex-col items-center gap-8 px-10">
-        <div className="flex min-h-[260px] items-center justify-center">{scenes[chapter]}</div>
-        <div className="max-w-[1240px] text-center font-display text-5xl font-bold leading-snug text-white">
-          {text(titles[chapter])}
+      {/* la manche à blanc */}
+      <div
+        className="relative flex w-[1150px] flex-col items-center rounded-[40px] border-2 px-14 pb-8 pt-5"
+        style={{ background: theme.feltBg, borderColor: theme.seatBorder }}
+      >
+        {/* croupier */}
+        <div className="flex min-h-[190px] flex-col items-center gap-2">
+          <span className="font-display text-xl font-bold uppercase tracking-[0.25em]" style={{ color: theme.feltText }}>
+            {t('table.bj.dealer')}
+          </span>
+          <div className="flex min-h-[112px] items-center">
+            {dealerVisible.map(({ card }, i) => (
+              <div key={`${i}-${card}`} style={{ marginLeft: i === 0 ? 0 : -30, zIndex: i }}>
+                <TutoCard card={card} theme={theme} width={78} />
+              </div>
+            ))}
+          </div>
+          {revealed && <TotalBadge label="17" color="#EDF0F7" />}
         </div>
+
+        {/* les deux joueurs de la démonstration */}
+        <div className="mt-2 flex w-full items-start justify-between px-6">
+          <TutoSeat
+            pseudo={p1}
+            theme={theme}
+            cards={p1Cards}
+            elapsed={elapsed}
+            totalLabel={p1HasHit ? '20' : '16'}
+            totalColor={p1HasHit ? theme.hudAccent : '#FF9F3D'}
+            bet={betsIn}
+            result={paid ? { text: `${t('table.bj.outcome.win')} +20`, color: theme.gold } : null}
+            prime={false}
+            score={scored ? 540 : null}
+            t={t}
+          />
+          <TutoSeat
+            pseudo={p2}
+            theme={theme}
+            cards={p2Cards}
+            elapsed={elapsed}
+            totalLabel="21"
+            totalColor={theme.gold}
+            bet={betsIn}
+            result={paid ? { text: `${t('table.bj.outcome.blackjack')} +30`, color: theme.gold } : null}
+            prime={paid}
+            score={scored ? 750 : null}
+            t={t}
+          />
+        </div>
+
+        {/* encart pédagogique : doubler */}
+        {step === 5 && (
+          <div className="bj-tuto-pop absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-6 rounded-3xl border-2 px-12 py-8" style={{ background: 'rgba(4,6,14,0.94)', borderColor: theme.gold }}>
+            <ChipGlyph value={50} theme={theme} size={64} />
+            <span className="font-display text-6xl font-black" style={{ color: theme.gold }}>
+              x2
+            </span>
+            <div className="flex items-center">
+              <CardGlyph card="6h" theme={theme} width={72} />
+              <div style={{ marginLeft: -28 }}>
+                <CardGlyph card="5s" theme={theme} width={72} />
+              </div>
+              {elapsed >= 5 * CHAPTER_MS + 900 && (
+                <div className="bj-tuto-deal" style={{ marginLeft: 10 }}>
+                  <CardGlyph card="back" theme={theme} width={72} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* encart pédagogique : les jokers */}
+        {step === 9 && (
+          <div className="bj-tuto-pop absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 grid-cols-3 gap-x-8 gap-y-4 rounded-3xl border-2 px-12 py-8" style={{ background: 'rgba(4,6,14,0.95)', borderColor: theme.hudAccent }}>
+            {enabledJokers.map((type, i) => (
+              <div key={type} className="flex items-center gap-3" style={{ opacity: elapsed >= 9 * CHAPTER_MS + i * 300 ? 1 : 0, transition: 'opacity 250ms ease' }}>
+                <JokerGlyph type={type} theme={theme} width={62} t={t} compact />
+                <div>
+                  <div className="font-display text-xl font-bold uppercase" style={{ color: theme.hudAccent }}>
+                    {t(`table.bj.joker.${type}`)}
+                  </div>
+                  <div className="max-w-[260px] text-base leading-tight text-white/70">{t(`table.bj.joker.${type}.desc`)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* dernier temps : les vrais joueurs s'allument */}
+        {step === 10 && (
+          <div className="bj-tuto-pop absolute left-1/2 top-1/2 flex max-w-[900px] -translate-x-1/2 -translate-y-1/2 flex-wrap items-center justify-center gap-3 rounded-3xl border-2 px-12 py-9" style={{ background: 'rgba(4,6,14,0.94)', borderColor: theme.hudAccent }}>
+            {seats.map((s, i) => (
+              <span
+                key={s.playerId}
+                className="rounded-full px-6 py-2.5 font-display text-2xl font-bold uppercase"
+                style={{
+                  background: `${theme.hudAccent}1E`,
+                  color: theme.hudAccent,
+                  opacity: elapsed >= 10 * CHAPTER_MS + i * 240 ? 1 : 0,
+                  transition: 'opacity 250ms ease',
+                }}
+              >
+                {s.pseudo}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* l'explication de l'étape */}
+      <div key={step} className="bj-chapter-in max-w-[1240px] px-10 text-center font-display text-4xl font-bold leading-snug text-white">
+        {text(TITLES[step])}
       </div>
 
       {/* vote passer */}
