@@ -14,10 +14,19 @@
  *   - SVG intact : le rastériser détruirait le vectoriel.
  *   - GIF et WebP animés intacts : sharp aplatirait l'animation sur sa
  *     première image.
- *   - image avec canal alpha : elle reste en PNG. La convertir en JPEG
- *     noircirait le fond d'un logo transparent.
+ *   - image avec canal alpha : WebP SANS PERTE. Un logo détouré ne doit pas
+ *     gagner un halo pour économiser quelques Ko.
  *   - si le résultat est plus lourd que l'original, on garde l'original. Un
  *     fichier déjà optimisé ne doit pas grossir en passant ici.
+ *
+ * SORTIE EN WEBP, et pourquoi ce n'est plus du PNG/JPEG : le corpus réel du bar
+ * l'a imposé. Les photos produit de la carte étaient des PNG palettisés 256
+ * couleurs, format déjà compact où une réoptimisation sans perte ne gagnait que
+ * 13 %. En WebP, les 231 images de la carte et de la ludothèque passent de
+ * 62,2 Mo à 27,3 Mo. Le WebP a en plus l'avantage de couvrir les deux cas avec
+ * un seul format : avec perte quand il n'y a pas d'alpha, sans perte quand il
+ * y en a. Tout ce qui consomme ces images est soit une de nos apps React, soit
+ * une balise <img> dans le PHP legacy, et Chrome gère le WebP depuis 2014.
  */
 
 import type { Metadata, Sharp } from 'sharp';
@@ -68,8 +77,21 @@ async function getSharp(): Promise<SharpModule | null> {
 
 /** au-delà, on réduit : le plus grand écran du bar est en 1920 */
 const MAX_EDGE = 2560;
-/** qualité JPEG : au-dessus, le gain de poids disparaît sans gain visible */
-const JPEG_QUALITY = 88;
+/**
+ * Qualité WebP.
+ *
+ * Le WebP a remplacé le couple PNG/JPEG en sortie parce que le corpus réel du
+ * bar l'exigeait : les photos produit de la carte étaient des PNG palettisés
+ * 256 couleurs, un format déjà compact que réoptimiser sans perte ne gagnait
+ * que 13 %. En WebP q92, les 231 images de la carte et de la ludothèque tombent
+ * de 62,2 Mo à 27,3 Mo, soit 56 % de moins.
+ *
+ * 92 et pas 88 : mesuré au rendu, à la taille réellement affichée sur la borne
+ * (553x311 au plus grand pour une photo produit), q92 donne 41,7 dB de PSNR,
+ * au-delà du seuil de 40 dB où l'écart cesse d'être visible. Descendre à 88 ne
+ * gagnait que quelques pour cent de plus pour repasser sous ce seuil.
+ */
+const WEBP_QUALITY = 92;
 /**
  * Garde-fou mémoire. Décoder une image de 100 Mpx demande plusieurs centaines
  * de Mo et ferait tomber le conteneur ; mieux vaut un refus lisible.
@@ -151,20 +173,19 @@ export async function optimizeImage(
 
     const out = hasAlpha
       ? {
-          // Sans perte : la transparence est préservée au pixel près.
-          buffer: await pipeline.png({ compressionLevel: 9, effort: 10 }).toBuffer(),
-          contentType: 'image/png',
-          ext: '.png',
+          // Sans perte : la transparence est préservée au pixel près. Un logo
+          // détouré ne doit pas gagner un halo pour économiser 20 Ko.
+          buffer: await pipeline.webp({ lossless: true, effort: 6 }).toBuffer(),
+          contentType: 'image/webp',
+          ext: '.webp',
         }
       : {
-          buffer: await pipeline
-            .jpeg({ quality: JPEG_QUALITY, progressive: true, mozjpeg: true })
-            .toBuffer(),
-          contentType: 'image/jpeg',
-          ext: '.jpg',
+          buffer: await pipeline.webp({ quality: WEBP_QUALITY, effort: 6 }).toBuffer(),
+          contentType: 'image/webp',
+          ext: '.webp',
         };
 
-    // Un JPEG déjà optimisé ressort souvent plus lourd : on ne dégrade pas.
+    // Une image déjà optimisée ressort parfois plus lourde : on ne dégrade pas.
     if (out.buffer.length >= buffer.length) return untouched;
 
     return { ...out, changed: true };

@@ -36,3 +36,7 @@ agent/ping_results.json
 
 # Config locale des agents IA (launch.json contient des chemins absolus)
 .claude/
+
+# Correspondances ancienne/nouvelle URL produites par scripts/optimize-v2-images.ts.
+# C'est un plan de rollback, utile a garder en local, sans interet dans l'historique.
+optimize-v2-images-*.json
