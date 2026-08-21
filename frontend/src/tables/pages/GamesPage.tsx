@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useHostname } from '../hooks/useHostname';
 import { useGamesV2, type GameV2 } from '../hooks/useGamesV2';
 import { useDesignConfig } from '../hooks/useDesignConfig';
@@ -29,6 +30,7 @@ const PLAYER_FILTERS = [1, 2, 3, 4] as const;
 
 export default function GamesPage() {
   useHostname();
+  const navigate = useNavigate();
   const { loading, data, error } = useGamesV2();
   const { design } = useDesignConfig();
   const gamesColor = design.gamesButtonColor;
@@ -180,7 +182,16 @@ export default function GamesPage() {
                           disabled={isDisabled}
                           disabledReason={isDisabled ? `Min. ${playerFilter} joueurs` : null}
                           onClick={() => {
-                            if (!isDisabled) setSelected(g);
+                            if (isDisabled) return;
+                            // jeu web (échecs, ...) : navigation interne dans
+                            // le SPA, pas d'ordre de lancement. Le garde
+                            // /table/ empêche toute sortie du kiosque par une
+                            // URL mal saisie en base.
+                            if (g.gameType === 'web' && g.gameUrl?.startsWith('/table/')) {
+                              navigate(g.gameUrl);
+                              return;
+                            }
+                            setSelected(g);
                           }}
                         />
                       </AnimatedGridItem>

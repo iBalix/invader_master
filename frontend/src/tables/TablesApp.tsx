@@ -26,6 +26,8 @@ import MenuPage from './pages/MenuPage';
 import GamesPage from './pages/GamesPage';
 import InGamePage from './pages/InGamePage';
 import TablePlayPage from './pages/TablePlayPage';
+import ChessLobbyPage from './games/chess/pages/ChessLobbyPage';
+import ChessGamePage from './games/chess/pages/ChessGamePage';
 import { useHostname } from './hooks/useHostname';
 
 function HostnameGuard({ children }: { children: React.ReactNode }) {
@@ -54,6 +56,8 @@ export default function TablesApp() {
         <Route path="home" element={<HomePage />} />
         <Route path="menu" element={<MenuPage />} />
         <Route path="games" element={<GamesPage />} />
+        <Route path="games/chess" element={<ChessLobbyPage />} />
+        <Route path="games/chess/:sessionId" element={<ChessGamePage />} />
         <Route path="in-game" element={<InGamePage />} />
         <Route path="play" element={<TablePlayPage />} />
       </Route>

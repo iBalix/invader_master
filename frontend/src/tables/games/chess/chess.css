@@ -1,0 +1,207 @@
+/**
+ * Animations du jeu d'échecs (keyframes CSS, transform/opacity uniquement :
+ * contrainte perf mini-PC). Les ambiances de thème sont des one-shots
+ * déclenchés par timer, jamais des boucles infinies au repos.
+ */
+
+/* ---- couche pièces ------------------------------------------------------ */
+
+.chess-piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 12.5%;
+  height: 12.5%;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.chess-piece-inner {
+  position: absolute;
+  inset: 5%;
+  transition: transform 140ms ease-out;
+}
+
+.chess-piece-inner[data-selected='true'] {
+  transform: scale(1.1);
+}
+
+/* mode perf lite : aucun glow SVG */
+.chess-reduced .chess-piece svg,
+.chess-reduced .chess-fx svg {
+  filter: none !important;
+}
+
+@keyframes chess-shake {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-7%); }
+  70% { transform: translateX(7%); }
+}
+.chess-shake {
+  animation: chess-shake 160ms ease-in-out 1;
+}
+
+/* ---- marqueurs de cases -------------------------------------------------- */
+
+@keyframes chess-marker-in {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.chess-marker-in {
+  animation: chess-marker-in 140ms ease-out 1;
+}
+
+@keyframes chess-check-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.9; }
+}
+.chess-check {
+  opacity: 0.55;
+  animation: chess-check-pulse 0.9s ease-in-out 3;
+}
+
+/* sélection : variantes par thème */
+@keyframes chess-elec-spark {
+  0%, 100% { box-shadow: inset 0 0 0 4px currentColor, 0 0 6px 1px currentColor; }
+  50% { box-shadow: inset 0 0 0 4px currentColor, 0 0 16px 4px currentColor; }
+}
+.chess-selected-electric {
+  border: 2px dashed currentColor;
+  animation: chess-elec-spark 480ms ease-in-out 2;
+}
+
+@keyframes chess-blink {
+  50% { opacity: 0.35; }
+}
+.chess-selected-pixel {
+  animation: chess-blink 600ms steps(2, end) 3;
+}
+
+/* ---- zone des prises ------------------------------------------------------ */
+
+@keyframes chess-slot-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.chess-slot-pop {
+  animation: chess-slot-pop 220ms ease-out 1;
+}
+
+/* ---- FX de capture -------------------------------------------------------- */
+
+.chess-fx {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 70;
+  will-change: transform, opacity;
+}
+
+@keyframes chess-particle {
+  from { transform: translate(0, 0) scale(1); opacity: 1; }
+  to { transform: translate(var(--px, 0px), var(--py, -30px)) scale(0.3); opacity: 0; }
+}
+.chess-particle {
+  position: absolute;
+  border-radius: 9999px;
+  animation: chess-particle var(--dur, 500ms) ease-out 1 forwards;
+}
+
+@keyframes chess-chunk {
+  0% { transform: translate(0, 0); opacity: 1; }
+  70% { opacity: 1; }
+  100% { transform: translate(var(--px, 0px), var(--py, 40px)); opacity: 0; }
+}
+.chess-chunk {
+  position: absolute;
+  animation: chess-chunk var(--dur, 450ms) steps(5, end) 1 forwards;
+}
+
+@keyframes chess-flash {
+  from { opacity: 0.85; }
+  to { opacity: 0; }
+}
+.chess-flash {
+  animation: chess-flash 180ms ease-out 1 forwards;
+}
+
+@keyframes chess-zap-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.chess-zap-victim {
+  animation: chess-zap-out 260ms steps(3, end) 1 forwards;
+}
+
+@keyframes chess-fade-out {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.6); opacity: 0; }
+}
+.chess-fade-victim {
+  animation: chess-fade-out var(--dur, 220ms) ease-in 1 forwards;
+}
+
+/* ---- ambiances de thème (one-shots) --------------------------------------- */
+
+@keyframes chess-pulse-run-h {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(725%); }
+}
+.chess-neon-pulse-h {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 16%;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  animation: chess-pulse-run-h 900ms linear 1 forwards;
+}
+
+@keyframes chess-pulse-run-v {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(725%); }
+}
+.chess-neon-pulse-v {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 16%;
+  background: linear-gradient(180deg, transparent, currentColor, transparent);
+  animation: chess-pulse-run-v 900ms linear 1 forwards;
+}
+
+@keyframes chess-invader-run {
+  from { transform: translateX(-44px); }
+  to { transform: translateX(var(--fly-dist, 1100px)); }
+}
+.chess-invader-fly {
+  animation: chess-invader-run 2.6s steps(26, end) 1 forwards;
+}
+
+@keyframes chess-star-run {
+  from { transform: translate(0, 0) rotate(14deg); opacity: 1; }
+  to { transform: translate(var(--fly-dist, 1200px), calc(var(--fly-dist, 1200px) * 0.3)) rotate(14deg); opacity: 0; }
+}
+.chess-shooting-star {
+  width: 84px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #eaf9ff);
+  animation: chess-star-run 1.1s ease-in 1 forwards;
+}
+
+/* ---- pendule --------------------------------------------------------------- */
+
+@keyframes chess-clock-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+.chess-clock-warn {
+  animation: chess-clock-pulse 1.6s ease-in-out infinite;
+}
+.chess-clock-danger {
+  animation: chess-clock-pulse 0.7s ease-in-out infinite;
+}
