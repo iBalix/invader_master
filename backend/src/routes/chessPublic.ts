@@ -60,10 +60,23 @@ function deviceOf(req: { header(name: string): string | undefined }, body?: { de
   return fromHeader ? fromHeader.slice(0, 32) : 'unknown';
 }
 
+/**
+ * Présence : une écriture au plus toutes les 30 s par joueur. Le sondage de
+ * secours est passé à 2,5 s pendant une partie ; sans ce garde-fou, chaque
+ * dalle écrirait en base 24 fois par minute pour rien.
+ */
+const HEARTBEAT_MIN_INTERVAL_MS = 30_000;
+const lastHeartbeat = new Map<string, number>();
+
 function touchHeartbeat(playerId: string): void {
+  const now = Date.now();
+  if (now - (lastHeartbeat.get(playerId) ?? 0) < HEARTBEAT_MIN_INTERVAL_MS) return;
+  // borne mémoire : la table ne sert que de cache d'anti-rebond
+  if (lastHeartbeat.size > 500) lastHeartbeat.clear();
+  lastHeartbeat.set(playerId, now);
   void supabaseAdmin
     .from('game_players')
-    .update({ last_seen_at: new Date().toISOString() })
+    .update({ last_seen_at: new Date(now).toISOString() })
     .eq('id', playerId)
     .then(() => undefined);
 }

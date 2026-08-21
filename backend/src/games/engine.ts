@@ -194,6 +194,24 @@ export function registerAdvancer(mode: string, fn: AdvanceFn): void {
 }
 
 /**
+ * Enrichissement du signal 'sync' par mode.
+ *
+ * Le signal RESTE un signal : tout client doit savoir se reconstruire depuis
+ * /state, et c'est ce qui rend le systeme insensible a une perte d'evenement.
+ * Mais y agrafer de quoi peindre immediatement la derniere mutation economise
+ * un aller-retour HTTP complet depuis le bar. C'etait la latence la plus
+ * visible aux echecs : l'adversaire ne voyait le coup qu'apres son GET /state.
+ * Le client verifie que le payload suit exactement sa version ; sinon il
+ * refetch comme avant.
+ */
+type SyncPayloadFn = (session: SessionRow) => Record<string, unknown>;
+const syncPayloads = new Map<string, SyncPayloadFn>();
+
+export function registerSyncPayload(mode: string, fn: SyncPayloadFn): void {
+  syncPayloads.set(mode, fn);
+}
+
+/**
  * Une transition auto est-elle due ? Check pur, sans effet de bord.
  * À utiliser dans les routes de lecture : si true, passer par withSession()
  * pour appliquer (et persister) la transition. Ne JAMAIS appeler advanceIfDue
@@ -285,10 +303,21 @@ export async function withSession<T>(
       session.state_version = beforeVersion; // saveSession fait l'incrément
       await saveSession(session);
       scheduleNext(session);
-      await broadcast(session.id, 'sync', {
+      let extra: Record<string, unknown> = {};
+      try {
+        extra = syncPayloads.get(session.mode)?.(session) ?? {};
+      } catch (err) {
+        // un payload d'accelération rate ne doit jamais casser un commit
+        console.error('[game] sync payload error', err);
+        extra = {};
+      }
+      // JAMAIS attendu : le POST vers Supabase partait avant la reponse HTTP
+      // du joueur qui vient de jouer, et la retardait d'autant pour rien.
+      void broadcast(session.id, 'sync', {
         v: session.state_version,
         status: session.status,
         qi: session.current_question_index,
+        ...extra,
       });
       // Cue lumière : fire-and-forget STRICT. Jamais await, jamais de rejet
       // remonté — une panne de lumière ne doit ni casser ni ralentir une partie.

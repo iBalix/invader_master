@@ -22,6 +22,7 @@ import {
   listOpenSessions,
   markDirty,
   registerAdvancer,
+  registerSyncPayload,
   validatePseudo,
   withSession,
 } from '../engine.js';
@@ -554,3 +555,31 @@ function chessAdvance(session: SessionRow): boolean {
 }
 
 registerAdvancer('chess', chessAdvance);
+
+/**
+ * Payload d'accélération du signal 'sync' : de quoi peindre le coup tout de
+ * suite chez l'adversaire, sans attendre son GET /state (un aller-retour HTTP
+ * de moins depuis le wifi du bar, c'est la moitié de la latence ressentie).
+ *
+ * Les pendules sont envoyées telles quelles avec l'instant de référence `at` :
+ * le coup vient d'être joué, donc le camp au trait n'a encore rien consommé.
+ * Le client n'applique ce raccourci que si la version suit exactement la
+ * sienne, sinon il refetch : l'état reste dérivable de /state seul.
+ */
+function chessSyncPayload(session: SessionRow): Record<string, unknown> {
+  const state = chessStateOf(session);
+  const last = state.moves.length > 0 ? state.moves[state.moves.length - 1] : null;
+  return {
+    ply: state.moves.length,
+    uci: last?.uci ?? null,
+    fen: state.fen,
+    turn: state.turn,
+    wMs: state.clocks?.wMs ?? null,
+    bMs: state.clocks?.bMs ?? null,
+    at: Date.now(),
+    result: state.result,
+    phaseEndsAt: session.phase_ends_at ? new Date(session.phase_ends_at).getTime() : null,
+  };
+}
+
+registerSyncPayload('chess', chessSyncPayload);

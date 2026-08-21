@@ -25,6 +25,7 @@ import DrawOfferBanner from '../components/DrawOfferBanner';
 import JoinPseudoModal from '../components/JoinPseudoModal';
 import PlayerPanel from '../components/PlayerPanel';
 import SpectatorBadge from '../components/SpectatorBadge';
+import SyncDebugBadge from '../components/SyncDebugBadge';
 import WaitingOverlay from '../components/WaitingOverlay';
 import { useBoardInteraction } from '../hooks/useBoardInteraction';
 import { useChessSession } from '../hooks/useChessSession';
@@ -68,6 +69,8 @@ export default function ChessGamePage() {
   const t = useT();
   const perf = usePerfMode();
   const isDemo = sessionId === 'demo';
+  // ?debug=1 : affiche la latence réelle des coups reçus (mesure sur place)
+  const debug = searchParams.get('debug') === '1';
 
   // ----- identité + sources d'état (online / démo)
   const [identity, setIdentity] = useState(() => (isDemo ? null : getChessIdentity(sessionId)));
@@ -414,6 +417,7 @@ export default function ChessGamePage() {
           {t('table.chess.quit')}
         </button>
         {!isSeatedViewer && !isDemo && <SpectatorBadge />}
+        {debug && !isDemo && <SyncDebugBadge info={online.syncInfo} />}
       </div>
 
       <div
