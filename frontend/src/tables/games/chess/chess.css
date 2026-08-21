@@ -51,6 +51,16 @@
   animation: chess-marker-in 140ms ease-out 1;
 }
 
+/* Marque du dernier coup : visible le temps d'être vue (le coup de l'adversaire
+   doit se remarquer), puis le plateau redevient propre. */
+@keyframes chess-lastmove-fade {
+  0%, 45% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.chess-lastmove {
+  animation: chess-lastmove-fade 1.5s ease-out 1 forwards;
+}
+
 @keyframes chess-check-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 0.9; }

@@ -40,10 +40,25 @@ import '../chess.css';
 
 const EMPTY_MOVES: string[] = [];
 
-function computeBoardSize(): number {
-  const h = window.innerHeight - 110;
-  const w = window.innerWidth - 900;
-  return Math.max(430, Math.min(1100, Math.min(h, w)));
+/**
+ * Le plateau mange tout l'espace disponible : ce sont des dalles tactiles, on
+ * joue au doigt. Les colonnes latérales s'adaptent à l'écran (au lieu de
+ * réserver une largeur fixe qui écrasait le plateau sur les écrans moyens),
+ * et la marge autour du plateau reste minimale.
+ */
+const PAGE_PAD = 12;
+const COL_GAP = 16;
+
+function computeLayout(): { boardSize: number; panelWidth: number } {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const panelWidth = Math.round(Math.min(340, Math.max(206, vw * 0.16)));
+  const widthLeft = vw - 2 * panelWidth - 2 * COL_GAP - 2 * PAGE_PAD;
+  const heightLeft = vh - 2 * PAGE_PAD;
+  return {
+    boardSize: Math.max(360, Math.min(heightLeft, widthLeft)),
+    panelWidth,
+  };
 }
 
 export default function ChessGamePage() {
@@ -69,12 +84,13 @@ export default function ChessGamePage() {
 
   // ----- géométrie
   const boardRef = useRef<HTMLDivElement>(null);
-  const [boardSize, setBoardSize] = useState(computeBoardSize);
+  const [layout, setLayout] = useState(computeLayout);
   useEffect(() => {
-    const onResize = () => setBoardSize(computeBoardSize());
+    const onResize = () => setLayout(computeLayout());
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+  const { boardSize, panelWidth } = layout;
 
   // ----- coups affichés = serveur + coup optimiste éventuel
   const serverMoves = state?.moves ?? EMPTY_MOVES;
@@ -318,6 +334,7 @@ export default function ChessGamePage() {
 
   const panel = (side: ChessColor) => (
     <PlayerPanel
+      width={panelWidth}
       seat={state.seats[side]}
       color={side}
       isYou={isSeatedViewer && side === mySide && !isDemo}
@@ -373,7 +390,10 @@ export default function ChessGamePage() {
         </div>
       )}
 
-      <div className="grid h-full grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 py-4">
+      <div
+        className="grid h-full grid-cols-[1fr_auto_1fr] items-center"
+        style={{ gap: COL_GAP, padding: PAGE_PAD }}
+      >
         <div className="flex justify-end">{panel(oppSide)}</div>
         <ChessBoard
           boardRef={boardRef}

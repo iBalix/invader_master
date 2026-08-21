@@ -15,6 +15,8 @@ import type { ChessColor, ChessSeatView } from '../lib/chessTypes';
 import type { ChessTheme } from '../themes/types';
 
 interface Props {
+  /** largeur imposée par la page : le plateau est prioritaire sur l'espace */
+  width: number;
   seat: ChessSeatView | null;
   color: ChessColor;
   isYou: boolean;
@@ -41,6 +43,7 @@ function tableLabel(device: string): string | null {
 }
 
 export default function PlayerPanel({
+  width,
   seat,
   color,
   isYou,
@@ -64,8 +67,9 @@ export default function PlayerPanel({
 
   return (
     <div
-      className="flex w-full max-w-[24rem] flex-col gap-4 rounded-3xl border bg-table-bg-elev/80 p-5 transition-colors duration-300"
+      className="flex flex-col gap-4 rounded-3xl border bg-table-bg-elev/80 p-4 transition-colors duration-300"
       style={{
+        width,
         borderColor: highlight ? theme.hudAccent : 'rgba(255,255,255,0.12)',
         boxShadow: highlight ? `0 0 0 2px ${theme.hudAccent}66, 0 0 26px ${theme.hudAccent}55` : undefined,
       }}

@@ -41,8 +41,9 @@ export default function BoardSquares({ orientation, theme, selection, lastMove, 
         >
           {isLast && (
             <div
+              key={`last-${lastMove?.from}${lastMove?.to}`}
               aria-hidden
-              className="pointer-events-none absolute inset-0"
+              className="chess-lastmove pointer-events-none absolute inset-0"
               style={{ background: theme.lastMoveTint }}
             />
           )}
@@ -64,10 +65,13 @@ export default function BoardSquares({ orientation, theme, selection, lastMove, 
             />
           )}
           {target && !target.capture && (
+            // centrage par inset (et NON par -translate-x/y) : la keyframe
+            // d'apparition anime `transform`, elle écraserait un translate de
+            // centrage et la pastille naîtrait décalée avant de sauter en place
             <div
               aria-hidden
               className={[
-                'chess-marker-in pointer-events-none absolute left-1/2 top-1/2 h-[30%] w-[30%] -translate-x-1/2 -translate-y-1/2',
+                'chess-marker-in pointer-events-none absolute inset-[35%]',
                 roundMarker ? 'rounded-full' : '',
               ].join(' ')}
               style={{ background: theme.legalDot }}
