@@ -199,6 +199,43 @@ export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t
         className="relative flex w-[1150px] flex-col items-center rounded-[40px] border-2 px-14 pb-8 pt-5"
         style={{ background: theme.feltBg, borderColor: theme.seatBorder }}
       >
+        {step >= 9 ? (
+          <div className="flex min-h-[452px] w-full items-center justify-center">
+            {step === 9 ? (
+              <div className="grid grid-cols-3 gap-x-12 gap-y-7">
+                {enabledJokers.map((type, i) => (
+                  <div key={type} className="flex items-center gap-3" style={{ opacity: elapsed >= 9 * CHAPTER_MS + i * 300 ? 1 : 0, transition: 'opacity 250ms ease' }}>
+                    <JokerGlyph type={type} theme={theme} width={64} t={t} compact />
+                    <div>
+                      <div className="font-display text-xl font-bold uppercase" style={{ color: theme.hudAccent }}>
+                        {t(`table.bj.joker.${type}`)}
+                      </div>
+                      <div className="max-w-[280px] text-base leading-tight text-white/70">{t(`table.bj.joker.${type}.desc`)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex max-w-[900px] flex-wrap items-center justify-center gap-3">
+                {seats.map((s, i) => (
+                  <span
+                    key={s.playerId}
+                    className="rounded-full px-6 py-2.5 font-display text-2xl font-bold uppercase"
+                    style={{
+                      background: `${theme.hudAccent}1E`,
+                      color: theme.hudAccent,
+                      opacity: elapsed >= 10 * CHAPTER_MS + i * 240 ? 1 : 0,
+                      transition: 'opacity 250ms ease',
+                    }}
+                  >
+                    {s.pseudo}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
         {/* croupier */}
         <div className="flex min-h-[190px] flex-col items-center gap-2">
           <span className="font-display text-xl font-bold uppercase tracking-[0.25em]" style={{ color: theme.feltText }}>
@@ -265,41 +302,7 @@ export default function TutorialOverlay({ state, you, theme, busy, onSkipVote, t
           </div>
         )}
 
-        {/* encart pédagogique : les jokers */}
-        {step === 9 && (
-          <div className="bj-tuto-pop absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 grid-cols-3 gap-x-8 gap-y-4 rounded-3xl border-2 px-12 py-8" style={{ background: 'rgba(4,6,14,0.95)', borderColor: theme.hudAccent }}>
-            {enabledJokers.map((type, i) => (
-              <div key={type} className="flex items-center gap-3" style={{ opacity: elapsed >= 9 * CHAPTER_MS + i * 300 ? 1 : 0, transition: 'opacity 250ms ease' }}>
-                <JokerGlyph type={type} theme={theme} width={62} t={t} compact />
-                <div>
-                  <div className="font-display text-xl font-bold uppercase" style={{ color: theme.hudAccent }}>
-                    {t(`table.bj.joker.${type}`)}
-                  </div>
-                  <div className="max-w-[260px] text-base leading-tight text-white/70">{t(`table.bj.joker.${type}.desc`)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* dernier temps : les vrais joueurs s'allument */}
-        {step === 10 && (
-          <div className="bj-tuto-pop absolute left-1/2 top-1/2 flex max-w-[900px] -translate-x-1/2 -translate-y-1/2 flex-wrap items-center justify-center gap-3 rounded-3xl border-2 px-12 py-9" style={{ background: 'rgba(4,6,14,0.94)', borderColor: theme.hudAccent }}>
-            {seats.map((s, i) => (
-              <span
-                key={s.playerId}
-                className="rounded-full px-6 py-2.5 font-display text-2xl font-bold uppercase"
-                style={{
-                  background: `${theme.hudAccent}1E`,
-                  color: theme.hudAccent,
-                  opacity: elapsed >= 10 * CHAPTER_MS + i * 240 ? 1 : 0,
-                  transition: 'opacity 250ms ease',
-                }}
-              >
-                {s.pseudo}
-              </span>
-            ))}
-          </div>
+          </>
         )}
       </div>
 

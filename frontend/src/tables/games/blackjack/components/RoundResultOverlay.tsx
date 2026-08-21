@@ -1,10 +1,12 @@
 /**
  * Bandeau de résolution de manche (phase payout, ~9 s) : total du croupier,
- * prime de manche, jokers gagnés. Les deltas par main flottent déjà sur les
- * sièges ; ici, le collectif.
+ * prime de manche, puis la LISTE des gains de jokers, un par ligne avec son
+ * picto (carte face cachée = joker gagné, jeton = converti en jetons).
+ * Les deltas par main flottent déjà sur les sièges ; ici, le collectif.
  */
 
 import { Sparkles } from 'lucide-react';
+import ChipGlyph from '../themes/ChipGlyph';
 import type { BjPublicState } from '../lib/bjTypes';
 import type { BjTheme } from '../themes/types';
 import type { TFunction } from '../../../i18n/useT';
@@ -27,7 +29,7 @@ export default function RoundResultOverlay({ state, theme, t }: Props) {
     <div className="pointer-events-none absolute left-1/2 top-[30%] z-20 -translate-x-1/2">
       <div
         className="bj-pop flex flex-col items-center gap-3 rounded-3xl border-2 px-12 py-6"
-        style={{ background: 'rgba(4,6,14,0.82)', borderColor: theme.seatBorder }}
+        style={{ background: 'rgba(4,6,14,0.86)', borderColor: theme.seatBorder }}
       >
         <div className="font-display text-xl font-bold uppercase tracking-[0.18em] text-white/60">
           {t('table.bj.result.dealer')} {round.dealerTotal}
@@ -48,17 +50,34 @@ export default function RoundResultOverlay({ state, theme, t }: Props) {
             {t('table.bj.result.noPrime')}
           </div>
         )}
+
+        {/* les gains de jokers : une ligne claire par gain */}
         {round.jokerAwards.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {round.jokerAwards.slice(0, 4).map((award, i) => (
-              <span
+          <div className="mt-1 flex flex-col items-start gap-2 border-t border-white/10 pt-3">
+            {round.jokerAwards.slice(0, 5).map((award, i) => (
+              <div
                 key={i}
-                className="bj-pop rounded-full px-4 py-1.5 text-lg font-bold"
-                style={{ background: `${theme.hudAccent}1C`, color: theme.hudAccent, animationDelay: `${300 + i * 220}ms` }}
+                className="bj-pop flex items-center gap-3 text-xl"
+                style={{ animationDelay: `${300 + i * 220}ms` }}
               >
-                {award.pseudo} {award.toChips ? t('table.bj.result.jokerChips') : t('table.bj.result.jokerGain')} ·{' '}
-                {t(`table.bj.award.${award.reason}`)}
-              </span>
+                {award.toChips ? (
+                  <ChipGlyph value={25} theme={theme} size={30} />
+                ) : (
+                  <span
+                    className="flex h-[30px] w-[21px] shrink-0 items-center justify-center rounded-[4px] border-2 font-display text-sm font-black"
+                    style={{ background: theme.seatBg, borderColor: theme.hudAccent, color: theme.hudAccent }}
+                  >
+                    ?
+                  </span>
+                )}
+                <span className="text-white/90">
+                  <span className="font-display font-bold" style={{ color: theme.hudAccent }}>
+                    {award.pseudo}
+                  </span>{' '}
+                  {award.toChips ? t('table.bj.result.jokerChips') : t('table.bj.result.jokerGain')}
+                  <span className="text-white/55"> · {t(`table.bj.award.${award.reason}`)}</span>
+                </span>
+              </div>
             ))}
           </div>
         )}
