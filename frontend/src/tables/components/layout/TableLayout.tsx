@@ -21,6 +21,7 @@ import { useMemo, useRef } from 'react';
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useInactivity } from '../../hooks/useInactivity';
 import { useHeartbeat } from '../../hooks/useHeartbeat';
+import { useWakeLock } from '../../hooks/useWakeLock';
 import { useLaunchNavigation } from '../../hooks/useLaunchOrder';
 import { usePerfMode } from '../../hooks/usePerfMode';
 import { useTablesSettings } from '../../hooks/useTablesSettings';
@@ -123,6 +124,10 @@ export default function TableLayout() {
     enabled: inactivityEnabled,
     onIdle: () => navigate('/table/screensaver', { replace: true }),
   });
+
+  // en partie plein écran, l'ÉCRAN lui-même ne doit pas s'éteindre : une
+  // dalle qui part en veille OS gèle le navigateur et casse la partie
+  useWakeLock(routeKind === 'fullscreen');
 
   useHeartbeat();
   // Bascule vers / depuis l'ecran de jeu, pilotee par l'ordre de lancement
