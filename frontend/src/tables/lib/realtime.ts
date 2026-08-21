@@ -49,7 +49,18 @@ export interface TableEvent {
  * Si la configuration est absente, ne fait rien : les hooks appelants ont tous
  * un sondage de secours, la borne reste operationnelle.
  */
-export function subscribeTopic(topic: string, onEvent: (e: TableEvent) => void): () => void {
+export type TopicStatus = 'SUBSCRIBED' | 'TIMED_OUT' | 'CLOSED' | 'CHANNEL_ERROR';
+
+export function subscribeTopic(
+  topic: string,
+  onEvent: (e: TableEvent) => void,
+  /**
+   * Etat de l'abonnement. Indispensable en bar : un canal peut mourir apres
+   * une coupure wifi et rester muet, sans que rien ne le signale. L'appelant
+   * peut alors se reabonner au lieu de dependre de son seul sondage.
+   */
+  onStatus?: (status: TopicStatus) => void,
+): () => void {
   const client = getSupabase();
   if (!client) return () => undefined;
   const channel: RealtimeChannel = client
@@ -57,7 +68,7 @@ export function subscribeTopic(topic: string, onEvent: (e: TableEvent) => void):
     .on('broadcast', { event: '*' }, (msg) => {
       onEvent({ event: msg.event, payload: (msg.payload ?? {}) as Record<string, unknown> });
     })
-    .subscribe();
+    .subscribe((status) => onStatus?.(status as TopicStatus));
   return () => {
     void client.removeChannel(channel);
   };

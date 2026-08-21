@@ -7,8 +7,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { subscribeTopic } from '../../../lib/realtime';
 import { chessApi } from '../lib/chessApi';
+import { useRealtimeTopic } from './useRealtimeTopic';
 import type {
   ChessColor,
   ChessPublicState,
@@ -78,10 +78,6 @@ export function useChessSession(
   // s'il peut peindre, sans attendre un re-render
   const stateRef = useRef<ChessPublicState | null>(null);
   const [syncInfo, setSyncInfo] = useState<SyncInfo | null>(null);
-  // incrémenté au retour du réseau / de la veille : force un réabonnement au
-  // temps réel. Le wifi d'un bar coupe, et un canal peut rester muet après
-  // coup — sans ça tout retomberait sur le sondage de secours.
-  const [channelEpoch, setChannelEpoch] = useState(0);
   const tokenRef = useRef(playerToken);
   tokenRef.current = playerToken;
   const refreshing = useRef(false);
@@ -209,14 +205,9 @@ export function useChessSession(
     void refresh();
     const interval = setInterval(() => void refresh(), pollMs);
     const onVisible = () => {
-      if (document.visibilityState !== 'visible') return;
-      void refresh();
-      setChannelEpoch((n) => n + 1);
+      if (document.visibilityState === 'visible') void refresh();
     };
-    const onOnline = () => {
-      void refresh();
-      setChannelEpoch((n) => n + 1);
-    };
+    const onOnline = () => void refresh();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
     return () => {
@@ -226,36 +217,35 @@ export function useChessSession(
     };
   }, [sessionId, refresh, pollMs]);
 
-  // realtime : 'sync' porte la version ET, pour un coup, de quoi le peindre
-  useEffect(() => {
-    if (!sessionId) return;
-    return subscribeTopic(`game:${sessionId}`, (e) => {
-      if (e.event !== 'sync') return;
-      const payload = e.payload as unknown as ChessSyncPayload;
-      const v = payload.v ?? 0;
-      const age = payload.at ? Date.now() - payload.at : null;
-      if (v <= versionRef.current) {
-        if (debugEnabled()) {
-          console.debug(`[chess] signal v${v} deja connu (local v${versionRef.current})`, { age });
-        }
-        return;
-      }
-      // un coup qui suit exactement notre état : on peint sans attendre
-      if (applyFastPatch(payload)) {
-        if (debugEnabled()) console.debug(`[chess] signal v${v} peint DIRECT en ${age} ms`);
-        return;
-      }
+  // realtime : 'sync' porte la version ET, pour un coup, de quoi le peindre.
+  // Abonnement auto-réparant : un canal muet après coupure wifi laisserait le
+  // plateau figé jusqu'au sondage suivant.
+  useRealtimeTopic(sessionId ? `game:${sessionId}` : null, (e) => {
+    if (e.event !== 'sync') return;
+    const payload = e.payload as unknown as ChessSyncPayload;
+    const v = payload.v ?? 0;
+    const age = payload.at ? Date.now() - payload.at : null;
+    if (v <= versionRef.current) {
       if (debugEnabled()) {
-        console.debug(`[chess] signal v${v} incomplet ou desynchronise -> GET /state`, {
-          uci: payload.uci,
-          ply: payload.ply,
-          localPly: stateRef.current?.moves.length,
-          localV: versionRef.current,
-        });
+        console.debug(`[chess] signal v${v} deja connu (local v${versionRef.current})`, { age });
       }
-      void refresh();
-    });
-  }, [sessionId, refresh, applyFastPatch, channelEpoch]);
+      return;
+    }
+    // un coup qui suit exactement notre état : on peint sans attendre
+    if (applyFastPatch(payload)) {
+      if (debugEnabled()) console.debug(`[chess] signal v${v} peint DIRECT en ${age} ms`);
+      return;
+    }
+    if (debugEnabled()) {
+      console.debug(`[chess] signal v${v} incomplet ou desynchronise -> GET /state`, {
+        uci: payload.uci,
+        ply: payload.ply,
+        localPly: stateRef.current?.moves.length,
+        localV: versionRef.current,
+      });
+    }
+    void refresh();
+  });
 
   return { state, you, error, refresh, applyResponse, syncInfo };
 }

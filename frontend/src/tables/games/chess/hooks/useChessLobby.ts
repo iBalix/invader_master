@@ -4,11 +4,17 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { subscribeTopic } from '../../../lib/realtime';
 import { chessApi } from '../lib/chessApi';
+import { useRealtimeTopic } from './useRealtimeTopic';
 import type { ChessLobbyItem } from '../lib/chessTypes';
 
-const POLL_MS = 15_000;
+/**
+ * Filet de secours si le signal temps réel n'arrive pas. Court volontairement :
+ * on regarde le lobby en attendant qu'une partie apparaisse, et personne
+ * n'attend 15 s avant de recharger la page. La requête est légère (une liste
+ * de parties ouvertes).
+ */
+const POLL_MS = 4_000;
 
 export function useChessLobby() {
   const [items, setItems] = useState<ChessLobbyItem[]>([]);
@@ -27,6 +33,10 @@ export function useChessLobby() {
     }
   }, []);
 
+  // signal "la liste a changé" : abonnement auto-réparant (le canal peut
+  // mourir après une coupure wifi et rester muet)
+  useRealtimeTopic('chess:lobby', () => void reload());
+
   useEffect(() => {
     void reload();
     const interval = setInterval(() => void reload(), POLL_MS);
@@ -34,11 +44,11 @@ export function useChessLobby() {
       if (document.visibilityState === 'visible') void reload();
     };
     document.addEventListener('visibilitychange', onVisible);
-    const unsubscribe = subscribeTopic('chess:lobby', () => void reload());
+    window.addEventListener('online', onVisible);
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
-      unsubscribe();
+      window.removeEventListener('online', onVisible);
     };
   }, [reload]);
 
