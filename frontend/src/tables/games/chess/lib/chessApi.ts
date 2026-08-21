@@ -4,7 +4,7 @@
  */
 
 import { publicApi } from '../../../lib/tablesApi';
-import { updateClock } from './clockSync';
+import { updateClock } from '../../../lib/clockSync';
 import type {
   ChessLobbyItem,
   ChessStateResponse,

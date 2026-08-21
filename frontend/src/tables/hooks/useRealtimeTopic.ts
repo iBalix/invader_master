@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { subscribeTopic, type TableEvent } from '../../../lib/realtime';
+import { subscribeTopic, type TableEvent } from '../lib/realtime';
 
 const RETRY_DELAY_MS = 3_000;
 

@@ -51,8 +51,9 @@ function getRouteKind(pathname: string): RouteKind {
   // au bout de 90 s en pleine partie.
   if (pathname.startsWith('/table/play')) return 'fullscreen';
   // page de PARTIE d'échecs (avec sessionId) : plein écran, veille coupée.
-  // Le lobby /table/games/chess reste une page 'sub' classique.
+  // Les lobbys /table/games/chess et /table/games/blackjack restent des pages 'sub' classiques.
   if (pathname.startsWith('/table/games/chess/')) return 'fullscreen';
+  if (pathname.startsWith('/table/games/blackjack/')) return 'fullscreen';
   if (pathname.startsWith('/table/setup')) return 'setup';
   return 'sub';
 }

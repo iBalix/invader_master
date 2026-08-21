@@ -1,29 +1,23 @@
 /**
- * Liste des parties du bar : topic realtime 'chess:lobby' (signal de relecture)
- * + poll de secours 15 s + relecture au retour de veille.
+ * Liste des tables de blackjack du bar : topic realtime 'blackjack:lobby'
+ * (signal de relecture) + poll de secours 4 s + relecture au retour de veille.
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { chessApi } from '../lib/chessApi';
 import { useRealtimeTopic } from '../../../hooks/useRealtimeTopic';
-import type { ChessLobbyItem } from '../lib/chessTypes';
+import { bjApi } from '../lib/bjApi';
+import type { BjLobbyItem } from '../lib/bjTypes';
 
-/**
- * Filet de secours si le signal temps réel n'arrive pas. Court volontairement :
- * on regarde le lobby en attendant qu'une partie apparaisse, et personne
- * n'attend 15 s avant de recharger la page. La requête est légère (une liste
- * de parties ouvertes).
- */
 const POLL_MS = 4_000;
 
-export function useChessLobby() {
-  const [items, setItems] = useState<ChessLobbyItem[]>([]);
+export function useBjLobby() {
+  const [items, setItems] = useState<BjLobbyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     try {
-      const list = await chessApi.lobby();
+      const list = await bjApi.lobby();
       setItems(list);
       setError(null);
     } catch (err) {
@@ -33,9 +27,7 @@ export function useChessLobby() {
     }
   }, []);
 
-  // signal "la liste a changé" : abonnement auto-réparant (le canal peut
-  // mourir après une coupure wifi et rester muet)
-  useRealtimeTopic('chess:lobby', () => void reload());
+  useRealtimeTopic('blackjack:lobby', () => void reload());
 
   useEffect(() => {
     void reload();

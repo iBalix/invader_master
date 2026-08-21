@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { serverNow } from '../lib/clockSync';
+import { serverNow } from '../../../lib/clockSync';
 import type { ChessColor } from '../lib/chessTypes';
 
 export interface ClockBaseline {

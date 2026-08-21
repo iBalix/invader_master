@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { chessApi } from '../lib/chessApi';
-import { useRealtimeTopic } from './useRealtimeTopic';
+import { useRealtimeTopic } from '../../../hooks/useRealtimeTopic';
 import type {
   ChessColor,
   ChessPublicState,

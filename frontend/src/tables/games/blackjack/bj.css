@@ -1,0 +1,299 @@
+/**
+ * Animations du blackjack (keyframes CSS, transform/opacity en priorité :
+ * contrainte perf mini-PC). Les quatre gestes de base (carte distribuée,
+ * carte retournée, jeton qui voyage, compteur qui grimpe) restent intacts en
+ * mode réduit ; les effets spectaculaires y sont coupés.
+ */
+
+/* ---- cartes -------------------------------------------------------------- */
+
+.bj-card {
+  position: relative;
+  will-change: transform;
+}
+
+/* retournement 3D : le dos s'efface, la face se révèle */
+.bj-flip {
+  position: relative;
+  perspective: 700px;
+}
+.bj-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform var(--bj-flip-ms, 300ms) cubic-bezier(0.3, 0.9, 0.4, 1);
+}
+.bj-flip-inner[data-facedown='true'] {
+  transform: rotateY(180deg);
+}
+.bj-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+}
+.bj-face-back {
+  transform: rotateY(180deg);
+}
+
+/* distribution : la carte part du sabot (--dx/--dy mesurés au montage) */
+@keyframes bj-deal-trail {
+  0% { transform: translate(var(--dx), var(--dy)) rotate(-10deg) scale(0.92); opacity: 0.25; }
+  70% { opacity: 1; }
+  88% { transform: translate(0, 0) rotate(1.5deg) scale(1.02); }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+}
+@keyframes bj-deal-slide {
+  0% { transform: translate(var(--dx), var(--dy)) rotate(-7deg); opacity: 0.45; }
+  80% { transform: translate(0, 0) rotate(0.8deg); opacity: 1; }
+  100% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+}
+@keyframes bj-deal-step {
+  0% { transform: translate(var(--dx), var(--dy)); opacity: 0.4; }
+  100% { transform: translate(0, 0); opacity: 1; }
+}
+.bj-deal-trail { animation: bj-deal-trail var(--bj-deal-ms, 420ms) cubic-bezier(0.2, 0.8, 0.3, 1) var(--bj-deal-delay, 0ms) 1 backwards; }
+.bj-deal-slide { animation: bj-deal-slide var(--bj-deal-ms, 460ms) cubic-bezier(0.25, 0.9, 0.35, 1) var(--bj-deal-delay, 0ms) 1 backwards; }
+.bj-deal-step { animation: bj-deal-step var(--bj-deal-ms, 380ms) steps(5, end) var(--bj-deal-delay, 0ms) 1 backwards; }
+
+/* mode réduit : distribution en fondu court, pas de trajet */
+.bj-reduced .bj-deal-trail,
+.bj-reduced .bj-deal-slide,
+.bj-reduced .bj-deal-step {
+  animation: bj-fade-in 160ms ease-out var(--bj-deal-delay, 0ms) 1 backwards;
+}
+@keyframes bj-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* aucun halo SVG en mode réduit */
+.bj-reduced .bj-card svg,
+.bj-reduced .bj-fx svg {
+  filter: none !important;
+}
+
+/* ---- dépassement (bust), selon le thème ---------------------------------- */
+
+@keyframes bj-bust-dissolve {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.12) translateY(-6%); opacity: 0.16; }
+}
+@keyframes bj-bust-sag {
+  0% { transform: rotate(0deg) translateY(0); opacity: 1; }
+  100% { transform: rotate(5deg) translateY(7%); opacity: 0.4; }
+}
+@keyframes bj-bust-burst {
+  0% { transform: scale(1); opacity: 1; }
+  55% { transform: scale(1.16); opacity: 0.7; }
+  100% { transform: scale(0.94); opacity: 0.22; }
+}
+.bj-bust-dissolve { animation: bj-bust-dissolve 620ms ease-in 1 forwards; }
+.bj-bust-sag { animation: bj-bust-sag 560ms cubic-bezier(0.4, 0, 0.7, 1) 1 forwards; }
+.bj-bust-burst { animation: bj-bust-burst 480ms steps(6, end) 1 forwards; }
+.bj-hand-dimmed { opacity: 0.42; }
+
+/* particules d'explosion (one-shot, 10 max par effet) */
+@keyframes bj-particle {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--px), var(--py)) scale(0.3); opacity: 0; }
+}
+.bj-particle {
+  position: absolute;
+  border-radius: 2px;
+  pointer-events: none;
+  animation: bj-particle var(--bj-particle-ms, 640ms) ease-out 1 forwards;
+}
+
+/* ---- jetons -------------------------------------------------------------- */
+
+@keyframes bj-chip-fly {
+  0% { transform: translate(var(--fx), var(--fy)) scale(0.9); opacity: 0; }
+  12% { opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(1); opacity: 1; }
+}
+.bj-chip-fly {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+  animation: bj-chip-fly var(--bj-chip-ms, 620ms) cubic-bezier(0.3, 0.7, 0.3, 1) var(--bj-chip-delay, 0ms) 1 both;
+}
+@keyframes bj-chip-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.bj-chip-pop { animation: bj-chip-pop 260ms ease-out 1 backwards; }
+
+/* ---- sièges -------------------------------------------------------------- */
+
+.bj-seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  transition: opacity 300ms ease;
+}
+
+/* arrivée en salle d'attente : le siège s'allume */
+@keyframes bj-seat-arrive {
+  0% { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  60% { transform: translate(-50%, -50%) scale(1.06); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+.bj-seat-arrive { animation: bj-seat-arrive 460ms cubic-bezier(0.3, 1.1, 0.4, 1) 1 backwards; }
+
+/* tour actif : anneau qui respire (2 itérations, pas de boucle infinie) */
+@keyframes bj-seat-ping {
+  0% { box-shadow: 0 0 0 0 var(--bj-accent-soft, rgba(51,226,255,0.5)); }
+  100% { box-shadow: 0 0 0 14px rgba(0, 0, 0, 0); }
+}
+.bj-seat-ping { animation: bj-seat-ping 900ms ease-out 2; }
+
+@keyframes bj-shake {
+  0%, 100% { transform: translate(-50%, -50%); }
+  25% { transform: translate(calc(-50% - 5px), -50%); }
+  75% { transform: translate(calc(-50% + 5px), -50%); }
+}
+.bj-shake { animation: bj-shake 180ms ease-in-out 2; }
+
+/* ---- chrono -------------------------------------------------------------- */
+
+@keyframes bj-timer-danger {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.bj-timer-danger { animation: bj-timer-danger 500ms ease-in-out infinite; }
+.bj-reduced .bj-timer-danger { animation: none; opacity: 1; }
+
+/* ---- temps forts ---------------------------------------------------------- */
+
+/* bannière plein écran (blackjack, prime, croupier saute...) */
+@keyframes bj-banner-in {
+  0% { transform: scale(0.7); opacity: 0; }
+  55% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes bj-banner-out {
+  to { transform: scale(1.04); opacity: 0; }
+}
+.bj-banner {
+  animation:
+    bj-banner-in 340ms cubic-bezier(0.25, 1.2, 0.4, 1) 1 backwards,
+    bj-banner-out 300ms ease-in calc(var(--bj-banner-hold, 1900ms)) 1 forwards;
+}
+
+/* onde de choc (blackjack, thèmes lumineux) */
+@keyframes bj-shockwave {
+  0% { transform: translate(-50%, -50%) scale(0.15); opacity: 0.75; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.bj-shockwave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(120vw, 1400px);
+  height: min(120vw, 1400px);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: bj-shockwave 800ms ease-out 1 forwards;
+}
+.bj-reduced .bj-shockwave { display: none; }
+
+/* halo de victoire depuis un siège */
+@keyframes bj-win-halo {
+  0% { box-shadow: 0 0 0 0 var(--bj-accent-soft, rgba(51,226,255,0.55)); }
+  100% { box-shadow: 0 0 0 26px rgba(0, 0, 0, 0); }
+}
+.bj-win-halo { animation: bj-win-halo 760ms ease-out 2; }
+
+/* ---- jokers -------------------------------------------------------------- */
+
+/* révélation en grand au centre de toutes les dalles */
+@keyframes bj-joker-reveal {
+  0% { transform: scale(0.25) rotate(-14deg); opacity: 0; }
+  50% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  68% { transform: scale(1) rotate(0deg); }
+  84% { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.9) rotate(0deg); opacity: 0; }
+}
+.bj-joker-reveal { animation: bj-joker-reveal var(--bj-joker-ms, 2400ms) cubic-bezier(0.3, 0.9, 0.4, 1) 1 both; }
+
+/* impact sur la cible : cadenas qui claque, poussée, filet... */
+@keyframes bj-impact-slam {
+  0% { transform: scale(2.1); opacity: 0; }
+  55% { transform: scale(0.94); opacity: 1; }
+  75% { transform: scale(1.06); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.bj-impact-slam { animation: bj-impact-slam 420ms cubic-bezier(0.3, 1.2, 0.4, 1) 1 both; }
+@keyframes bj-impact-fade {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.bj-impact-hold { animation: bj-impact-fade 1600ms ease-in 1 460ms both; }
+
+/* bouclier : éclat circulaire sur le siège protégé */
+@keyframes bj-shield-flash {
+  0% { transform: scale(0.5); opacity: 0.9; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.bj-shield-flash { animation: bj-shield-flash 640ms ease-out 1 forwards; }
+
+/* pioche de joker : la carte vole vers la main (var --tx/--ty) */
+@keyframes bj-joker-gain {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0.35); opacity: 0.2; }
+}
+.bj-joker-gain { animation: bj-joker-gain 700ms cubic-bezier(0.4, 0, 0.6, 1) 1 forwards; }
+
+/* ---- compteurs / textes --------------------------------------------------- */
+
+@keyframes bj-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.14); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.bj-pop { animation: bj-pop 260ms cubic-bezier(0.3, 1.2, 0.4, 1) 1 backwards; }
+
+@keyframes bj-float-up {
+  0% { transform: translateY(6px); opacity: 0; }
+  18% { transform: translateY(0); opacity: 1; }
+  78% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(-10px); opacity: 0; }
+}
+.bj-float-up { animation: bj-float-up var(--bj-float-ms, 2200ms) ease-out 1 both; }
+
+/* ---- présentation (tutoriel) ---------------------------------------------- */
+
+@keyframes bj-chapter-in {
+  0% { transform: translateY(18px) scale(0.97); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.bj-chapter-in { animation: bj-chapter-in 420ms cubic-bezier(0.25, 1, 0.4, 1) 1 backwards; }
+
+/* démo de retournement en boucle LENTE, uniquement dans le tutoriel */
+@keyframes bj-tuto-flip {
+  0%, 34% { transform: rotateY(180deg); }
+  48%, 86% { transform: rotateY(0deg); }
+  100% { transform: rotateY(180deg); }
+}
+.bj-tuto-flip { animation: bj-tuto-flip 3400ms ease-in-out infinite; }
+.bj-reduced .bj-tuto-flip { animation-duration: 5000ms; }
+
+/* ---- divers --------------------------------------------------------------- */
+
+.bj-font-pixel { font-family: 'Courier New', monospace; letter-spacing: 0.02em; }
+
+/* fond du feutre : arc de marquage dessiné en CSS (pas d'image) */
+.bj-felt-arc {
+  position: absolute;
+  left: 50%;
+  top: -46%;
+  width: 128%;
+  aspect-ratio: 1;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  border: 2px solid var(--bj-felt-line, rgba(255,255,255,0.2));
+  pointer-events: none;
+}
