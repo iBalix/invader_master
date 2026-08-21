@@ -94,7 +94,6 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
   const t = useT();
   const [pseudo, setPseudo] = useState<string>(() => getLastPseudo());
   const [theme, setTheme] = useState('neon');
-  const [maxSeats, setMaxSeats] = useState(6);
   const [rounds, setRounds] = useState(8);
   const [startChips, setStartChips] = useState(500);
   const [minBet, setMinBet] = useState(10);
@@ -146,9 +145,6 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
         <div className="grid grid-cols-2 gap-4">
           {/* table */}
           <Section title={t('table.bj.create.sectionTable')} className="flex flex-col gap-3">
-            <Row label={t('table.bj.create.seats')}>
-              <Segment options={[2, 3, 4, 5, 6, 7, 8]} value={maxSeats} onChange={setMaxSeats} />
-            </Row>
             <Row label={t('table.bj.create.decks')}>
               <Segment options={[2, 4, 6]} value={decks} onChange={setDecks} />
             </Row>
@@ -240,7 +236,9 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
           onClick={() =>
             onCreate({
               pseudo: pseudo.trim(),
-              maxSeats,
+              // le groupe qui rejoint fait la table : la seule borne est la
+              // limite du jeu, ce n'est pas un choix à faire peser au créateur
+              maxSeats: 8,
               lateJoin,
               decks,
               startChips,
