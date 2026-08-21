@@ -37,7 +37,7 @@ function Segment<T extends string | number>({
       {options.map((option) => (
         <button
           key={String(option)}
-          className={`min-w-[52px] rounded-xl px-3.5 py-2 font-display text-base font-bold transition-colors ${
+          className={`min-w-[68px] rounded-xl px-5 py-3 font-display text-xl font-bold transition-colors ${
             option === value ? 'bg-table-cyan text-black' : 'bg-white/8 text-white/75'
           }`}
           onClick={() => onChange(option)}
@@ -52,12 +52,12 @@ function Segment<T extends string | number>({
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
-      className={`flex items-center gap-2 rounded-xl px-3.5 py-2 font-display text-sm font-bold uppercase ${
+      className={`flex items-center gap-2.5 rounded-xl px-5 py-3 font-display text-lg font-bold uppercase ${
         value ? 'bg-table-cyan/20 text-table-cyan' : 'bg-white/8 text-white/55'
       }`}
       onClick={() => onChange(!value)}
     >
-      <span className={`h-2.5 w-2.5 rounded-full ${value ? 'bg-table-cyan' : 'bg-white/30'}`} />
+      <span className={`h-3.5 w-3.5 rounded-full ${value ? 'bg-table-cyan' : 'bg-white/30'}`} />
       {label}
     </button>
   );
@@ -89,7 +89,7 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
 
   const anyJoker = JOKER_TYPES.some((type) => jokers[type]);
 
-  const label = 'font-display text-xs font-bold uppercase tracking-wider text-white/55';
+  const label = 'font-display text-base font-bold uppercase tracking-wider text-white/55';
 
   return (
     <ArcadeModal open={open} onClose={onClose} title={t('table.bj.create.title')} size="2xl">
@@ -100,7 +100,7 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
           onChange={(e) => setPseudo(e.target.value)}
           maxLength={16}
           placeholder={t('table.bj.create.pseudoPlaceholder')}
-          className="w-full rounded-2xl border border-white/15 bg-black/40 px-5 py-3.5 text-xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
+          className="w-full rounded-2xl border border-white/15 bg-black/40 px-6 py-4 text-2xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
         />
 
         {/* thème */}
@@ -109,8 +109,8 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
           <div className="flex flex-wrap gap-3">
             {BJ_THEMES.map((th) => (
               <button key={th.id} className="flex flex-col items-center gap-1.5" onClick={() => setTheme(th.id)}>
-                <BjThemePreview theme={th} size={86} selected={theme === th.id} />
-                <span className={`text-xs font-bold uppercase ${theme === th.id ? 'text-table-cyan' : 'text-white/55'}`}>
+                <BjThemePreview theme={th} size={104} selected={theme === th.id} />
+                <span className={`text-base font-bold uppercase ${theme === th.id ? 'text-table-cyan' : 'text-white/55'}`}>
                   {t(th.labelKey)}
                 </span>
               </button>
@@ -133,9 +133,9 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
           <div className="col-span-2 flex flex-col gap-2">
             <span className={label}>{t('table.bj.create.rounds')}</span>
             <Segment options={[6, 8, 10, 12]} value={rounds} onChange={setRounds} />
-            <div className="flex gap-2 text-xs text-white/55">
+            <div className="flex gap-2.5 text-base text-white/55">
               {[2, 5, 8].map((p) => (
-                <span key={p} className="rounded-full bg-white/6 px-2.5 py-1">
+                <span key={p} className="rounded-full bg-white/6 px-3.5 py-1.5">
                   {t('table.bj.create.estimate').replace('{players}', String(p)).replace('{min}', String(estimateMinutes(rounds, p)))}
                 </span>
               ))}
@@ -188,8 +188,8 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
                 style={{ opacity: jokers[type] ? 1 : 0.32, background: jokers[type] ? 'rgba(255,255,255,0.06)' : 'transparent' }}
                 onClick={() => setJokers((prev) => ({ ...prev, [type]: !prev[type] }))}
               >
-                <JokerGlyph type={type} theme={BJ_THEMES.find((th) => th.id === theme) ?? BJ_THEMES[0]} width={48} t={t} compact />
-                <span className="text-[10px] font-bold uppercase text-white/65">{t(`table.bj.joker.${type}`)}</span>
+                <JokerGlyph type={type} theme={BJ_THEMES.find((th) => th.id === theme) ?? BJ_THEMES[0]} width={64} t={t} compact />
+                <span className="text-sm font-bold uppercase text-white/65">{t(`table.bj.joker.${type}`)}</span>
               </button>
             ))}
             <div className="ml-3 flex flex-col gap-1.5">
@@ -202,12 +202,12 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
               />
             </div>
           </div>
-          {!anyJoker && <span className="text-xs font-bold uppercase text-white/45">{t('table.bj.create.noJokers')}</span>}
+          {!anyJoker && <span className="text-base font-bold uppercase text-white/45">{t('table.bj.create.noJokers')}</span>}
         </div>
 
         <ArcadeButton
           variant="accent"
-          size="lg"
+          size="xl"
           fullWidth
           disabled={busy || !isValidPseudo(pseudo)}
           onClick={() =>

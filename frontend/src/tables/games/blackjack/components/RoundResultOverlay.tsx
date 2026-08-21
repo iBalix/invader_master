@@ -26,25 +26,25 @@ export default function RoundResultOverlay({ state, theme, t }: Props) {
   return (
     <div className="pointer-events-none absolute left-1/2 top-[30%] z-20 -translate-x-1/2">
       <div
-        className="bj-pop flex flex-col items-center gap-2 rounded-3xl border px-8 py-4"
+        className="bj-pop flex flex-col items-center gap-3 rounded-3xl border-2 px-12 py-6"
         style={{ background: 'rgba(4,6,14,0.82)', borderColor: theme.seatBorder }}
       >
-        <div className="font-display text-sm font-bold uppercase tracking-[0.18em] text-white/60">
+        <div className="font-display text-xl font-bold uppercase tracking-[0.18em] text-white/60">
           {t('table.bj.result.dealer')} {round.dealerTotal}
           {round.dealerBust ? ` · ${t('table.bj.dealer.bust')}` : ''}
         </div>
         {uniqueWinners.length > 0 ? (
-          <div className="flex items-center gap-2.5 font-display text-2xl font-extrabold uppercase" style={{ color: theme.gold }}>
-            <Sparkles className="h-6 w-6" />
+          <div className="flex items-center gap-3 font-display text-4xl font-extrabold uppercase" style={{ color: theme.gold }}>
+            <Sparkles className="h-9 w-9" />
             <span>
               {t('table.bj.result.prime')
                 .replace('{pseudo}', uniqueWinners.join(' + '))
                 .replace('{amount}', String(Math.floor(round.primeAmount / Math.max(1, round.primeWinners.length))))}
             </span>
-            <Sparkles className="h-6 w-6" />
+            <Sparkles className="h-9 w-9" />
           </div>
         ) : (
-          <div className="font-display text-xl font-bold uppercase text-white/55">
+          <div className="font-display text-3xl font-bold uppercase text-white/55">
             {t('table.bj.result.noPrime')}
           </div>
         )}
@@ -53,7 +53,7 @@ export default function RoundResultOverlay({ state, theme, t }: Props) {
             {round.jokerAwards.slice(0, 4).map((award, i) => (
               <span
                 key={i}
-                className="bj-pop rounded-full px-2.5 py-1 text-xs font-bold"
+                className="bj-pop rounded-full px-4 py-1.5 text-lg font-bold"
                 style={{ background: `${theme.hudAccent}1C`, color: theme.hudAccent, animationDelay: `${300 + i * 220}ms` }}
               >
                 {award.pseudo} {award.toChips ? t('table.bj.result.jokerChips') : t('table.bj.result.jokerGain')} ·{' '}

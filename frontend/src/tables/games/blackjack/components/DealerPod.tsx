@@ -23,7 +23,7 @@ interface Props {
 
 export default function DealerPod({ state, theme, anchors, dealDelays, animate, reduced, t }: Props) {
   const { dealer } = state;
-  const cardWidth = 64;
+  const cardWidth = 96;
   const overlap = Math.round(cardWidth * 0.36);
   const playing = state.status === 'dealer';
   const busted = dealer.total !== null && dealer.total > 21;
@@ -45,7 +45,7 @@ export default function DealerPod({ state, theme, anchors, dealDelays, animate, 
             </div>
           ))}
           <span
-            className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider"
+            className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-sm font-bold uppercase tracking-wider"
             style={{ color: theme.feltText }}
           >
             {state.shoeCount}
@@ -72,12 +72,12 @@ export default function DealerPod({ state, theme, anchors, dealDelays, animate, 
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="font-display text-sm font-bold uppercase tracking-[0.2em]" style={{ color: theme.feltText }}>
+        <span className="font-display text-xl font-bold uppercase tracking-[0.2em]" style={{ color: theme.feltText }}>
           {t('table.bj.dealer')}
         </span>
         {dealer.total !== null && (
           <span
-            className={`rounded-full px-2.5 py-0.5 font-display text-base font-extrabold ${playing ? 'bj-pop' : ''}`}
+            className={`rounded-full px-4 py-1 font-display text-3xl font-extrabold ${playing ? 'bj-pop' : ''}`}
             style={{
               background: 'rgba(0,0,0,0.55)',
               color: busted ? theme.danger : dealer.total >= 17 ? '#EDF0F7' : theme.hudAccent,
@@ -87,7 +87,7 @@ export default function DealerPod({ state, theme, anchors, dealDelays, animate, 
           </span>
         )}
         {busted && (
-          <span className="bj-pop rounded-full px-2 py-0.5 font-display text-sm font-extrabold uppercase" style={{ background: `${theme.danger}2E`, color: theme.danger }}>
+          <span className="bj-pop rounded-full px-3 py-1 font-display text-xl font-extrabold uppercase" style={{ background: `${theme.danger}2E`, color: theme.danger }}>
             {t('table.bj.dealer.bust')}
           </span>
         )}

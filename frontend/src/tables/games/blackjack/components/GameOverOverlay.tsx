@@ -20,7 +20,7 @@ interface Props {
   t: TFunction;
 }
 
-const STEP_HEIGHT = [96, 64, 44];
+const STEP_HEIGHT = [150, 104, 72];
 
 export default function GameOverOverlay({ state, you, theme, busy, onRematch, onExit, t }: Props) {
   const result = state.result;
@@ -35,8 +35,8 @@ export default function GameOverOverlay({ state, you, theme, busy, onRematch, on
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center justify-center gap-7" style={{ background: 'rgba(3,5,12,0.93)' }}>
-      <div className="flex items-center gap-3 font-display text-4xl font-black uppercase tracking-wider" style={{ color: theme.gold }}>
-        <Trophy className="h-9 w-9" />
+      <div className="flex items-center gap-4 font-display text-6xl font-black uppercase tracking-wider" style={{ color: theme.gold }}>
+        <Trophy className="h-14 w-14" />
         {t('table.bj.end.title')}
       </div>
 
@@ -46,14 +46,14 @@ export default function GameOverOverlay({ state, you, theme, busy, onRematch, on
           const rank = podium.indexOf(entry);
           return (
             <div key={entry.playerId} className="bj-pop flex flex-col items-center gap-2" style={{ animationDelay: `${(2 - vi) * 260}ms` }}>
-              <span className="max-w-[190px] truncate font-display text-xl font-extrabold uppercase" style={{ color: rank === 0 ? theme.gold : '#EDF0F7' }}>
+              <span className="max-w-[280px] truncate font-display text-3xl font-extrabold uppercase" style={{ color: rank === 0 ? theme.gold : '#EDF0F7' }}>
                 {entry.pseudo}
               </span>
-              <span className="font-display text-2xl font-black" style={{ color: theme.hudAccent }}>
+              <span className="font-display text-4xl font-black" style={{ color: theme.hudAccent }}>
                 {entry.score}
               </span>
               <div
-                className="flex w-32 items-start justify-center rounded-t-xl pt-2 font-display text-2xl font-black"
+                className="flex w-52 items-start justify-center rounded-t-2xl pt-3 font-display text-4xl font-black"
                 style={{ height: STEP_HEIGHT[rank] ?? 40, background: `${medals[rank]}30`, border: `2px solid ${medals[rank]}`, color: medals[rank] }}
               >
                 {rank + 1}
@@ -67,7 +67,7 @@ export default function GameOverOverlay({ state, you, theme, busy, onRematch, on
       {podium.length > 3 && (
         <div className="flex flex-wrap justify-center gap-2">
           {podium.slice(3).map((entry, i) => (
-            <span key={entry.playerId} className="rounded-full bg-white/8 px-3.5 py-1.5 text-sm font-bold text-white/75">
+            <span key={entry.playerId} className="rounded-full bg-white/8 px-5 py-2.5 text-xl font-bold text-white/75">
               {i + 4}. {entry.pseudo} · {entry.score}
             </span>
           ))}
@@ -80,7 +80,7 @@ export default function GameOverOverlay({ state, you, theme, busy, onRematch, on
           {result.titles.map((title, i) => (
             <span
               key={`${title.playerId}-${title.titleKey}`}
-              className="bj-pop rounded-full px-3.5 py-1.5 text-sm font-bold"
+              className="bj-pop rounded-full px-5 py-2.5 text-xl font-bold"
               style={{ background: `${theme.hudAccent}18`, color: theme.hudAccent, animationDelay: `${900 + i * 180}ms` }}
             >
               {title.pseudo} · {t(title.titleKey)}
@@ -94,7 +94,7 @@ export default function GameOverOverlay({ state, you, theme, busy, onRematch, on
         {you && (
           <ArcadeButton
             variant="accent"
-            size="lg"
+            size="xl"
             icon={<RotateCcw className="h-5 w-5" />}
             disabled={busy || offered}
             onClick={onRematch}
@@ -103,7 +103,7 @@ export default function GameOverOverlay({ state, you, theme, busy, onRematch, on
             {offerCount > 0 ? ` (${offerCount})` : ''}
           </ArcadeButton>
         )}
-        <ArcadeButton variant="ghost" size="lg" icon={<LogOut className="h-5 w-5" />} onClick={onExit}>
+        <ArcadeButton variant="ghost" size="xl" icon={<LogOut className="h-6 w-6" />} onClick={onExit}>
           {t('table.bj.end.exit')}
         </ArcadeButton>
       </div>

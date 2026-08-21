@@ -26,42 +26,42 @@ export default function LobbyTableCard({ item, isMine, onJoin, onResume, onWatch
   const freeSeats = item.maxSeats - item.seatCount;
 
   return (
-    <div className="flex items-center gap-5 rounded-3xl border border-white/12 bg-table-bg-elev/80 p-4">
-      <BjThemePreview theme={theme} size={88} />
+    <div className="flex items-center gap-6 rounded-3xl border border-white/12 bg-table-bg-elev/80 p-5">
+      <BjThemePreview theme={theme} size={112} />
       <div className="min-w-0 flex-1">
-        <div className="truncate font-display text-2xl uppercase tracking-wide text-table-ink">
+        <div className="truncate font-display text-3xl uppercase tracking-wide text-table-ink">
           {item.pseudos.length > 0 ? item.pseudos.join(' · ') : t('table.bj.lobby.emptyTable')}
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-table-ink-soft">
+        <div className="mt-2 flex flex-wrap items-center gap-2.5 text-lg text-table-ink-soft">
           <span
-            className="rounded-full px-2.5 py-0.5 font-display uppercase tracking-wider"
+            className="rounded-full px-3.5 py-1 font-display uppercase tracking-wider"
             style={{ background: `${theme.hudAccent}22`, color: theme.hudAccent }}
           >
             {item.status === 'lobby'
               ? t('table.bj.lobby.seatsFree').replace('{count}', String(freeSeats))
               : t('table.bj.lobby.roundOf').replace('{round}', String(item.roundIndex + 1)).replace('{rounds}', String(item.rounds))}
           </span>
-          <span className="rounded-full bg-white/8 px-2.5 py-0.5 font-display uppercase tracking-wider text-table-ink-muted">
+          <span className="rounded-full bg-white/8 px-3.5 py-1 font-display uppercase tracking-wider text-table-ink-muted">
             {t('table.bj.lobby.bets').replace('{min}', String(item.minBet)).replace('{max}', String(item.maxBet))}
           </span>
-          <span className="rounded-full bg-white/8 px-2.5 py-0.5 font-display uppercase tracking-wider text-table-ink-muted">
+          <span className="rounded-full bg-white/8 px-3.5 py-1 font-display uppercase tracking-wider text-table-ink-muted">
             {t('table.bj.lobby.estimate').replace('{rounds}', String(item.rounds)).replace('{min}', String(est))}
           </span>
-          <span className="rounded-full bg-white/8 px-2.5 py-0.5 font-display uppercase tracking-wider text-table-ink-muted">
+          <span className="rounded-full bg-white/8 px-3.5 py-1 font-display uppercase tracking-wider text-table-ink-muted">
             {t(theme.labelKey)}
           </span>
         </div>
       </div>
       {isMine ? (
-        <ArcadeButton variant="primary" size="lg" icon={<Play className="h-5 w-5" />} onClick={onResume}>
+        <ArcadeButton variant="primary" size="xl" icon={<Play className="h-6 w-6" />} onClick={onResume}>
           {t('table.bj.lobby.resume')}
         </ArcadeButton>
       ) : item.joinable ? (
-        <ArcadeButton variant="accent" size="lg" icon={<Armchair className="h-5 w-5" />} onClick={onJoin}>
+        <ArcadeButton variant="accent" size="xl" icon={<Armchair className="h-6 w-6" />} onClick={onJoin}>
           {t('table.bj.lobby.join')}
         </ArcadeButton>
       ) : (
-        <ArcadeButton variant="cyan" size="lg" icon={<Eye className="h-5 w-5" />} onClick={onWatch}>
+        <ArcadeButton variant="cyan" size="xl" icon={<Eye className="h-6 w-6" />} onClick={onWatch}>
           {t('table.bj.lobby.watch')}
         </ArcadeButton>
       )}

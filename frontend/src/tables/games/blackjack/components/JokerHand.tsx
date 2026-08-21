@@ -43,7 +43,7 @@ export default function JokerHand({ state, me, jokers, theme, busy, onPlay, t }:
         className="pointer-events-auto flex items-end gap-2 rounded-2xl border px-3 py-2"
         style={{ background: theme.seatBg, borderColor: theme.seatBorder }}
       >
-        <span className="mb-1 mr-1 font-display text-[11px] font-bold uppercase tracking-wider" style={{ color: theme.feltText }}>
+        <span className="mb-1 mr-1 font-display text-base font-bold uppercase tracking-wider" style={{ color: theme.feltText }}>
           {t('table.bj.jokers.mine')}
         </span>
         {jokers.map((type, i) => {
@@ -55,12 +55,12 @@ export default function JokerHand({ state, me, jokers, theme, busy, onPlay, t }:
               style={{ opacity: playable ? 1 : 0.45, transform: playable ? undefined : 'translateY(4px)' }}
               onClick={() => tap(type)}
             >
-              <JokerGlyph type={type} theme={theme} width={62} t={t} />
+              <JokerGlyph type={type} theme={theme} width={88} t={t} />
             </button>
           );
         })}
         {me.playedThisRound >= 2 && (
-          <span className="mb-1 ml-1 text-[10px] font-bold uppercase" style={{ color: theme.danger }}>
+          <span className="mb-1 ml-1 text-sm font-bold uppercase" style={{ color: theme.danger }}>
             {t('table.bj.jokers.roundLimit')}
           </span>
         )}
@@ -75,36 +75,36 @@ export default function JokerHand({ state, me, jokers, theme, busy, onPlay, t }:
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-4">
-              <JokerGlyph type={picking} theme={theme} width={84} t={t} />
-              <div className="max-w-[380px]">
-                <div className="font-display text-2xl font-extrabold uppercase" style={{ color: theme.hudAccent }}>
+              <JokerGlyph type={picking} theme={theme} width={120} t={t} />
+              <div className="max-w-[480px]">
+                <div className="font-display text-4xl font-extrabold uppercase" style={{ color: theme.hudAccent }}>
                   {t(`table.bj.joker.${picking}`)}
                 </div>
-                <div className="mt-1 text-sm text-white/75">{t(`table.bj.joker.${picking}.desc`)}</div>
+                <div className="mt-1.5 text-xl text-white/75">{t(`table.bj.joker.${picking}.desc`)}</div>
               </div>
             </div>
             <div className="flex flex-wrap justify-center gap-3">
               {targets.map((seat) => (
                 <button
                   key={seat.playerId}
-                  className="flex min-w-[150px] flex-col items-center gap-0.5 rounded-2xl border px-5 py-3 active:scale-95"
+                  className="flex min-w-[220px] flex-col items-center gap-1 rounded-2xl border-2 px-8 py-5 active:scale-95"
                   style={{ background: 'rgba(0,0,0,0.4)', borderColor: theme.danger }}
                   onClick={() => {
                     setPicking(null);
                     onPlay(picking, seat.playerId);
                   }}
                 >
-                  <span className="font-display text-lg font-bold uppercase text-white">{seat.pseudo}</span>
-                  <span className="text-xs text-white/60">
+                  <span className="font-display text-2xl font-bold uppercase text-white">{seat.pseudo}</span>
+                  <span className="text-base text-white/60">
                     {tableOriginLabel(seat.device) ?? ''} · {seat.hands.map((h) => h.total).join(' / ')}
                   </span>
                 </button>
               ))}
               {targets.length === 0 && (
-                <span className="text-sm text-white/60">{t('table.bj.jokers.noTarget')}</span>
+                <span className="text-xl text-white/60">{t('table.bj.jokers.noTarget')}</span>
               )}
             </div>
-            <button className="rounded-xl border border-white/25 px-6 py-2.5 font-display text-sm font-bold uppercase text-white/85" onClick={() => setPicking(null)}>
+            <button className="rounded-2xl border border-white/25 px-9 py-4 font-display text-xl font-bold uppercase text-white/85" onClick={() => setPicking(null)}>
               {t('table.bj.cancel')}
             </button>
           </div>

@@ -43,11 +43,11 @@ function ringIndexOf(device: string): number {
 }
 
 /** position (x, y) sur l'arc bas pour un angle en degrés
- * (0° = bas centre y=76 %, ±74° = bords y=40 % : la moitié basse de l'écran,
- * en laissant la place du dock d'actions sous le siège du joueur local) */
+ * (0° = bas centre y=71 %, ±70° = bords y=40 % : la moitié basse de l'écran,
+ * en laissant la place du dock d'actions géant sous le siège du joueur local) */
 function arcPoint(angleDeg: number): { x: number; y: number } {
   const a = (angleDeg * Math.PI) / 180;
-  return { x: 50 + 42 * Math.sin(a), y: 26.3 + 49.7 * Math.cos(a) };
+  return { x: 50 + 40 * Math.sin(a), y: 23.9 + 47.1 * Math.cos(a) };
 }
 
 /**
@@ -58,7 +58,7 @@ function slotAngles(count: number, centerIndex: number): number[] {
   if (count <= 1) return [0];
   const left = centerIndex;
   const right = count - 1 - centerIndex;
-  const step = Math.min(44, 148 / (2 * Math.max(left, right, 1)));
+  const step = Math.min(44, 140 / (2 * Math.max(left, right, 1)));
   return Array.from({ length: count }, (_, i) => (i - centerIndex) * step);
 }
 

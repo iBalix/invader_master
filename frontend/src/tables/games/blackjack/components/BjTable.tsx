@@ -90,6 +90,11 @@ export default function BjTable({
   const bestScore = Math.max(0, ...scores);
   const uniqueLeader = scores.filter((v) => v === bestScore).length === 1;
 
+  // densité adaptative : les cartes rétrécissent quand la table se remplit
+  const seatCount = state.seats.length;
+  const cardWidthOthers = seatCount <= 4 ? 72 : seatCount <= 6 ? 60 : 50;
+  const cardWidthViewer = seatCount <= 4 ? 92 : seatCount <= 6 ? 78 : 66;
+
   // jetons qui voyagent au paiement
   const [flights, setFlights] = useState<ChipFlight[]>([]);
   const paidRound = useRef(-1);
@@ -129,13 +134,13 @@ export default function BjTable({
       {/* marquages du feutre */}
       <div className="bj-felt-arc" style={{ ['--bj-felt-line' as string]: theme.feltLine }} />
       <div
-        className="pointer-events-none absolute left-1/2 top-[31%] -translate-x-1/2 select-none whitespace-nowrap font-display text-sm font-bold uppercase tracking-[0.5em]"
+        className="pointer-events-none absolute left-1/2 top-[31%] -translate-x-1/2 select-none whitespace-nowrap font-display text-xl font-bold uppercase tracking-[0.5em]"
         style={{ color: theme.feltText, opacity: 0.55 }}
       >
         {t('table.bj.felt.blackjack32')}
       </div>
       <div
-        className="pointer-events-none absolute left-1/2 top-[36%] -translate-x-1/2 select-none whitespace-nowrap text-xs font-semibold uppercase tracking-[0.4em]"
+        className="pointer-events-none absolute left-1/2 top-[36.5%] -translate-x-1/2 select-none whitespace-nowrap text-base font-semibold uppercase tracking-[0.4em]"
         style={{ color: theme.feltText, opacity: 0.4 }}
       >
         {t('table.bj.felt.dealerRule')}
@@ -165,6 +170,7 @@ export default function BjTable({
             state={state}
             theme={theme}
             isViewer={p.isViewer}
+            cardWidth={p.isViewer ? cardWidthViewer : cardWidthOthers}
             isLeader={uniqueLeader && p.seat.score === bestScore && state.roundIndex >= 0}
             dealDelays={dealDelays.bySeat[p.seat.playerId]}
             animate={animate}

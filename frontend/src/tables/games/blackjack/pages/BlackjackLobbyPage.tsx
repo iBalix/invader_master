@@ -96,7 +96,7 @@ export default function BlackjackLobbyPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-6">
-            <div className="font-display text-2xl uppercase tracking-wide text-table-ink-muted">
+            <div className="font-display text-3xl uppercase tracking-wide text-table-ink-muted">
               {t('table.bj.lobby.empty')}
             </div>
             <ArcadeButton variant="accent" size="xl" icon={<Plus className="h-6 w-6" />} onClick={() => setCreateOpen(true)}>
@@ -107,7 +107,7 @@ export default function BlackjackLobbyPage() {
           <AnimatedGrid resetKey={`bj${items.length}`} className="flex flex-col gap-4">
             {waiting.length > 0 && (
               <AnimatedGridItem>
-                <div className="mb-2 font-display text-sm font-bold uppercase tracking-[0.2em] text-table-ink-muted">
+                <div className="mb-2 font-display text-lg font-bold uppercase tracking-[0.2em] text-table-ink-muted">
                   {t('table.bj.lobby.waiting')}
                 </div>
               </AnimatedGridItem>
@@ -125,7 +125,7 @@ export default function BlackjackLobbyPage() {
             ))}
             {running.length > 0 && (
               <AnimatedGridItem>
-                <div className="mb-2 mt-4 font-display text-sm font-bold uppercase tracking-[0.2em] text-table-ink-muted">
+                <div className="mb-2 mt-5 font-display text-lg font-bold uppercase tracking-[0.2em] text-table-ink-muted">
                   {t('table.bj.lobby.playing')}
                 </div>
               </AnimatedGridItem>

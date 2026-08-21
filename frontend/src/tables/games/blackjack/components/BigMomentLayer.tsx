@@ -159,7 +159,7 @@ export default function BigMomentLayer({ state, theme, reduced, t }: Props) {
         <div className="bj-shockwave" style={{ border: `3px solid ${current.color}`, background: `radial-gradient(circle, ${current.color}14 0%, transparent 65%)` }} />
       )}
       <div
-        className="bj-banner flex flex-col items-center gap-1 rounded-3xl border-2 px-14 py-6"
+        className="bj-banner flex flex-col items-center gap-2 rounded-3xl border-2 px-16 py-8"
         style={{
           background: 'rgba(4,6,14,0.88)',
           borderColor: current.color,
@@ -167,11 +167,11 @@ export default function BigMomentLayer({ state, theme, reduced, t }: Props) {
           ['--bj-banner-hold' as string]: `${current.holdMs}ms`,
         }}
       >
-        <span className="font-display text-6xl font-black uppercase tracking-wider" style={{ color: current.color, textShadow: reduced ? undefined : `0 0 22px ${current.color}88` }}>
+        <span className="font-display text-7xl font-black uppercase tracking-wider" style={{ color: current.color, textShadow: reduced ? undefined : `0 0 22px ${current.color}88` }}>
           {current.text}
         </span>
         {current.sub && (
-          <span className="font-display text-2xl font-bold uppercase tracking-wide text-white/90">{current.sub}</span>
+          <span className="font-display text-4xl font-bold uppercase tracking-wide text-white/90">{current.sub}</span>
         )}
       </div>
     </div>

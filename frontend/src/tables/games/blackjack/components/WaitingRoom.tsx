@@ -34,73 +34,73 @@ export default function WaitingRoom({ state, you, theme, busy, onLaunch, onLeave
   return (
     <div className="pointer-events-auto absolute left-1/2 top-[44%] z-30 -translate-x-1/2 -translate-y-1/2">
       <div
-        className="bj-pop flex flex-col items-center gap-4 rounded-3xl border-2 px-10 py-7"
-        style={{ background: 'rgba(4,6,14,0.88)', borderColor: theme.seatBorder, minWidth: 480 }}
+        className="bj-pop flex flex-col items-center gap-6 rounded-3xl border-2 px-14 py-9"
+        style={{ background: 'rgba(4,6,14,0.88)', borderColor: theme.seatBorder, minWidth: 660 }}
       >
-        <div className="font-display text-3xl font-black uppercase tracking-wide" style={{ color: theme.hudAccent }}>
+        <div className="font-display text-5xl font-black uppercase tracking-wide" style={{ color: theme.hudAccent }}>
           {t('table.bj.waiting.title')}
         </div>
-        <div className="font-display text-xl font-bold text-white/90">
+        <div className="font-display text-3xl font-bold text-white/90">
           {t('table.bj.waiting.count')
             .replace('{count}', String(seatCount))
             .replace('{max}', String(state.config.maxSeats))}
         </div>
 
         {/* rappel des réglages */}
-        <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
-          <span className="rounded-full bg-white/8 px-3 py-1 font-semibold text-white/80">
+        <div className="flex max-w-[640px] flex-wrap items-center justify-center gap-2.5 text-lg">
+          <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">
             {t('table.bj.waiting.rounds').replace('{rounds}', String(state.config.rounds)).replace('{min}', String(est))}
           </span>
-          <span className="rounded-full bg-white/8 px-3 py-1 font-semibold text-white/80">
+          <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">
             {t('table.bj.waiting.bets').replace('{min}', String(state.config.minBet)).replace('{max}', String(state.config.maxBet))}
           </span>
-          <span className="rounded-full bg-white/8 px-3 py-1 font-semibold text-white/80">
+          <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">
             {t('table.bj.waiting.chips').replace('{chips}', String(state.config.startChips))}
           </span>
-          <span className="rounded-full px-3 py-1 font-semibold" style={{ background: `${theme.hudAccent}1C`, color: theme.hudAccent }}>
+          <span className="rounded-full px-4 py-1.5 font-semibold" style={{ background: `${theme.hudAccent}1C`, color: theme.hudAccent }}>
             {t(theme.labelKey)}
           </span>
           {Object.values(state.config.jokersEnabled ?? {}).some((v) => v !== false) ? (
-            <span className="rounded-full bg-white/8 px-3 py-1 font-semibold text-white/80">{t('table.bj.waiting.jokersOn')}</span>
+            <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">{t('table.bj.waiting.jokersOn')}</span>
           ) : (
-            <span className="rounded-full bg-white/8 px-3 py-1 font-semibold text-white/80">{t('table.bj.waiting.jokersOff')}</span>
+            <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">{t('table.bj.waiting.jokersOff')}</span>
           )}
           {state.config.lateJoin && (
-            <span className="rounded-full bg-white/8 px-3 py-1 font-semibold text-white/80">{t('table.bj.waiting.lateJoin')}</span>
+            <span className="rounded-full bg-white/8 px-4 py-1.5 font-semibold text-white/80">{t('table.bj.waiting.lateJoin')}</span>
           )}
         </div>
 
         {isCreator ? (
           <ArcadeButton
             variant="accent"
-            size="lg"
-            icon={<Play className="h-5 w-5" />}
+            size="xl"
+            icon={<Play className="h-6 w-6" />}
             disabled={busy || !canLaunch}
             onClick={onLaunch}
           >
             {canLaunch ? t('table.bj.waiting.launch') : t('table.bj.waiting.needTwo')}
           </ArcadeButton>
         ) : seated ? (
-          <div className="font-display text-base font-bold uppercase tracking-wide text-white/70">
+          <div className="font-display text-2xl font-bold uppercase tracking-wide text-white/70">
             {t('table.bj.waiting.forCreator').replace('{pseudo}', creator?.pseudo ?? '?')}
           </div>
         ) : canSit ? (
-          <ArcadeButton variant="accent" size="lg" icon={<Armchair className="h-5 w-5" />} disabled={busy} onClick={onSit}>
+          <ArcadeButton variant="accent" size="xl" icon={<Armchair className="h-6 w-6" />} disabled={busy} onClick={onSit}>
             {t('table.bj.waiting.sit')}
           </ArcadeButton>
         ) : (
-          <div className="font-display text-base font-bold uppercase tracking-wide text-white/70">
+          <div className="font-display text-2xl font-bold uppercase tracking-wide text-white/70">
             {t('table.bj.waiting.full')}
           </div>
         )}
 
         {seated && (
           <button
-            className="flex items-center gap-2 rounded-xl border border-white/20 px-5 py-2 text-sm font-bold uppercase text-white/75 active:scale-95"
+            className="flex items-center gap-2.5 rounded-2xl border border-white/20 px-8 py-3.5 text-xl font-bold uppercase text-white/75 active:scale-95"
             disabled={busy}
             onClick={onLeave}
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-6 w-6" />
             {t('table.bj.waiting.leave')}
           </button>
         )}

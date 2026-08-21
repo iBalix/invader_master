@@ -27,11 +27,11 @@ export default function JoinPseudoModal({ open, busy, onClose, onJoin }: Props) 
           onChange={(e) => setPseudo(e.target.value)}
           maxLength={16}
           placeholder={t('table.bj.create.pseudoPlaceholder')}
-          className="w-full rounded-2xl border border-white/15 bg-black/40 px-5 py-3.5 text-xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
+          className="w-full rounded-2xl border border-white/15 bg-black/40 px-6 py-4 text-2xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
         />
         <ArcadeButton
           variant="accent"
-          size="lg"
+          size="xl"
           fullWidth
           disabled={busy || !isValidPseudo(pseudo)}
           onClick={() => onJoin(pseudo.trim())}

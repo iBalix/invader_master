@@ -141,7 +141,9 @@
   60% { transform: translate(-50%, -50%) scale(1.06); opacity: 1; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
-.bj-seat-arrive { animation: bj-seat-arrive 460ms cubic-bezier(0.3, 1.1, 0.4, 1) 1 backwards; }
+/* pas de fill backwards : sans délai il est inutile, et une animation figée
+   (onglet caché, veille) laisserait le siège invisible */
+.bj-seat-arrive { animation: bj-seat-arrive 460ms cubic-bezier(0.3, 1.1, 0.4, 1) 1; }
 
 /* tour actif : anneau qui respire (2 itérations, pas de boucle infinie) */
 @keyframes bj-seat-ping {

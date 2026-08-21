@@ -179,13 +179,13 @@ export default function BlackjackGamePage() {
       <BjNotice message={notice} />
 
       {/* barre du haut, fine */}
-      <div className="relative z-30 flex h-12 shrink-0 items-center justify-between px-4">
+      <div className="relative z-30 flex h-16 shrink-0 items-center justify-between px-5">
         <div className="flex items-center gap-3">
-          <span className="font-display text-lg font-black uppercase tracking-wider" style={{ color: theme.hudAccent }}>
+          <span className="font-display text-3xl font-black uppercase tracking-wider" style={{ color: theme.hudAccent }}>
             {t('table.bj.title')}
           </span>
           {inRound && state.roundIndex >= 0 && (
-            <span className="rounded-full bg-black/45 px-3 py-1 font-display text-sm font-bold uppercase text-white/80">
+            <span className="rounded-full bg-black/45 px-4 py-1.5 font-display text-xl font-bold uppercase text-white/80">
               {t('table.bj.header.round')
                 .replace('{round}', String(state.roundIndex + 1))
                 .replace('{rounds}', String(state.config.rounds))}
@@ -193,12 +193,12 @@ export default function BlackjackGamePage() {
             </span>
           )}
           {state.isLastRound && inRound && (
-            <span className="bj-pop rounded-full px-3 py-1 font-display text-sm font-black uppercase" style={{ background: `${theme.gold}26`, color: theme.gold }}>
+            <span className="bj-pop rounded-full px-4 py-1.5 font-display text-xl font-black uppercase" style={{ background: `${theme.gold}26`, color: theme.gold }}>
               {t('table.bj.header.lastRound')}
             </span>
           )}
           {state.endAfterRound && inRound && !state.isLastRound && (
-            <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-bold uppercase text-white/65">
+            <span className="rounded-full bg-black/45 px-4 py-1.5 text-base font-bold uppercase text-white/65">
               {t('table.bj.header.endAfter')}
             </span>
           )}
@@ -206,29 +206,29 @@ export default function BlackjackGamePage() {
         <div className="flex items-center gap-2">
           {canSitLate && (
             <button
-              className="rounded-xl px-4 py-1.5 font-display text-sm font-bold uppercase active:scale-95"
+              className="rounded-2xl px-6 py-3 font-display text-xl font-bold uppercase active:scale-95"
               style={{ background: `${theme.hudAccent}22`, color: theme.hudAccent, border: `1px solid ${theme.hudAccent}` }}
               onClick={() => setSitOpen(true)}
             >
               {t('table.bj.header.sit')}
             </button>
           )}
-          {!seated && <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase text-white/60">{t('table.bj.header.spectator')}</span>}
+          {!seated && <span className="rounded-full bg-white/10 px-4 py-1.5 text-base font-bold uppercase text-white/60">{t('table.bj.header.spectator')}</span>}
           {isCreator && inRound && !state.isLastRound && !state.endAfterRound && (
             <button
-              className="flex items-center gap-1.5 rounded-xl border border-white/20 px-3.5 py-1.5 text-xs font-bold uppercase text-white/75 active:scale-95"
+              className="flex items-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-base font-bold uppercase text-white/75 active:scale-95"
               disabled={busy}
               onClick={() => meta('end-after-round')}
             >
-              <Flag className="h-3.5 w-3.5" />
+              <Flag className="h-5 w-5" />
               {t('table.bj.header.endAfterBtn')}
             </button>
           )}
           <button
-            className="flex items-center gap-1.5 rounded-xl border border-white/20 px-3.5 py-1.5 text-xs font-bold uppercase text-white/75 active:scale-95"
+            className="flex items-center gap-2 rounded-2xl border border-white/20 px-5 py-3 text-base font-bold uppercase text-white/75 active:scale-95"
             onClick={handleLeave}
           >
-            <LogOut className="h-3.5 w-3.5" />
+            <LogOut className="h-5 w-5" />
             {t('table.bj.header.quit')}
           </button>
         </div>

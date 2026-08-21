@@ -25,19 +25,19 @@ export default function JokerLegend({ state, theme, t }: Props) {
   return (
     <div className="pointer-events-auto absolute left-2 top-1/2 z-20 -translate-y-1/2">
       <button
-        className="flex flex-col gap-1.5 rounded-2xl border p-2"
+        className="flex flex-col gap-2 rounded-2xl border p-2.5"
         style={{ background: `${theme.seatBg}`, borderColor: theme.seatBorder, opacity: open ? 1 : 0.82 }}
         onClick={() => setOpen((v) => !v)}
       >
         {enabled.map((type) => (
           <div key={type} className="flex items-center gap-2">
-            <JokerGlyph type={type} theme={theme} width={30} t={t} compact />
+            <JokerGlyph type={type} theme={theme} width={44} t={t} compact />
             {open && (
-              <div className="w-52 pr-1 text-left">
-                <div className="font-display text-xs font-bold uppercase" style={{ color: theme.hudAccent }}>
+              <div className="w-72 pr-1 text-left">
+                <div className="font-display text-base font-bold uppercase" style={{ color: theme.hudAccent }}>
                   {t(`table.bj.joker.${type}`)}
                 </div>
-                <div className="text-[11px] leading-tight text-white/70">{t(`table.bj.joker.${type}.desc`)}</div>
+                <div className="text-sm leading-tight text-white/70">{t(`table.bj.joker.${type}.desc`)}</div>
               </div>
             )}
           </div>

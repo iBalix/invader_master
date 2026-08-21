@@ -1,8 +1,8 @@
 /**
  * Décisions de la main active : TIRER / RESTER / DOUBLER / SÉPARER.
- * Gros boutons tactiles ; doubler et séparer n'apparaissent que quand la
- * règle ET les fonds le permettent. windowSeq protège contre un double
- * appui à cheval sur deux fenêtres.
+ * Très gros boutons : dalles tactiles de bar vues de biais. Doubler et
+ * séparer n'apparaissent que quand la règle ET les fonds le permettent.
+ * windowSeq protège contre un double appui à cheval sur deux fenêtres.
  */
 
 import { sameRankPair } from '../lib/rules';
@@ -39,10 +39,10 @@ export default function ActionBar({ state, seat, theme, busy, onAct, t }: Props)
   const canHit = !hand.locked;
 
   const base =
-    'pointer-events-auto flex h-16 items-center justify-center rounded-2xl px-6 font-display text-xl font-extrabold uppercase tracking-wide text-white shadow-lg active:scale-95 disabled:opacity-40';
+    'pointer-events-auto flex h-24 items-center justify-center rounded-3xl px-12 font-display text-4xl font-extrabold uppercase tracking-wide text-white shadow-lg active:scale-95 disabled:opacity-40';
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-4">
       <button
         className={base}
         style={{ background: `linear-gradient(180deg, ${theme.hudAccent}, ${theme.hudAccent}99)`, color: '#0A0D18' }}
@@ -62,7 +62,7 @@ export default function ActionBar({ state, seat, theme, busy, onAct, t }: Props)
       {canDouble && (
         <button
           className={base}
-          style={{ background: `${theme.gold}2A`, border: `1.5px solid ${theme.gold}`, color: theme.gold }}
+          style={{ background: `${theme.gold}2A`, border: `2px solid ${theme.gold}`, color: theme.gold }}
           disabled={busy || !doubleAffordable || hand.locked}
           onClick={() => onAct('double')}
         >
@@ -72,7 +72,7 @@ export default function ActionBar({ state, seat, theme, busy, onAct, t }: Props)
       {canSplit && (
         <button
           className={base}
-          style={{ background: 'rgba(255,255,255,0.08)', border: `1.5px solid ${theme.hudAccent}`, color: theme.hudAccent }}
+          style={{ background: 'rgba(255,255,255,0.08)', border: `2px solid ${theme.hudAccent}`, color: theme.hudAccent }}
           disabled={busy || hand.locked}
           onClick={() => onAct('split')}
         >

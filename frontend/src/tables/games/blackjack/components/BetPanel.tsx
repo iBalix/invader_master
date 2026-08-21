@@ -1,5 +1,5 @@
 /**
- * Mise de la manche : paliers tactiles (min, -, +, x2, max), envoi
+ * Mise de la manche : gros paliers tactiles (min, -, +, x2, max), envoi
  * automatique avec un léger debounce (le dernier montant posé avant la fin
  * du chrono fait foi côté serveur). Qui ne touche à rien rejoue sa mise
  * précédente.
@@ -67,11 +67,11 @@ export default function BetPanel({ state, theme, myChips, serverBet, lastBet, on
   const step = minBet;
 
   const btn =
-    'flex h-14 min-w-[64px] items-center justify-center rounded-xl border border-white/15 bg-black/45 px-3 font-display text-lg font-bold text-white active:scale-95';
+    'flex h-20 min-w-[92px] items-center justify-center rounded-2xl border border-white/15 bg-black/45 px-5 font-display text-3xl font-bold text-white active:scale-95';
 
   return (
     <div
-      className="pointer-events-auto flex items-center gap-2.5 rounded-2xl border px-4 py-2.5"
+      className="pointer-events-auto flex items-center gap-4 rounded-3xl border px-6 py-4"
       style={{ background: theme.seatBg, borderColor: theme.seatBorder }}
     >
       {state.phaseEndsAt && (
@@ -80,11 +80,11 @@ export default function BetPanel({ state, theme, myChips, serverBet, lastBet, on
           totalMs={betMs}
           color={theme.hudAccent}
           dangerColor={theme.danger}
-          size={46}
+          size={64}
           reduced={reduced}
         />
       )}
-      <span className="font-display text-sm font-bold uppercase tracking-wider" style={{ color: theme.feltText }}>
+      <span className="font-display text-lg font-bold uppercase tracking-wider" style={{ color: theme.feltText }}>
         {t('table.bj.bet.title')}
       </span>
       <button className={btn} onClick={() => push(minBet)}>
@@ -93,9 +93,9 @@ export default function BetPanel({ state, theme, myChips, serverBet, lastBet, on
       <button className={btn} onClick={() => push(amount - step)} disabled={amount <= minBet} style={{ opacity: amount <= minBet ? 0.4 : 1 }}>
         -{step}
       </button>
-      <div className="flex min-w-[110px] items-center justify-center gap-2 rounded-xl px-3 py-1.5" style={{ background: `${theme.hudAccent}1A` }}>
-        <ChipGlyph value={amount} theme={theme} size={30} />
-        <AnimatedNumber value={amount} className="font-display text-2xl font-extrabold" style={{ color: theme.hudAccent }} />
+      <div className="flex min-w-[170px] items-center justify-center gap-3 rounded-2xl px-4 py-2" style={{ background: `${theme.hudAccent}1A` }}>
+        <ChipGlyph value={amount} theme={theme} size={44} />
+        <AnimatedNumber value={amount} className="font-display text-5xl font-extrabold" style={{ color: theme.hudAccent }} />
       </div>
       <button className={btn} onClick={() => push(amount + step)} disabled={amount >= ceiling} style={{ opacity: amount >= ceiling ? 0.4 : 1 }}>
         +{step}
@@ -107,7 +107,7 @@ export default function BetPanel({ state, theme, myChips, serverBet, lastBet, on
         {t('table.bj.bet.max')}
       </button>
       <span
-        className={`min-w-[74px] text-center text-xs font-bold uppercase ${confirmed ? 'bj-pop' : ''}`}
+        className={`min-w-[110px] text-center text-base font-bold uppercase ${confirmed ? 'bj-pop' : ''}`}
         style={{ color: confirmed ? theme.hudAccent : '#8B93A8' }}
       >
         {confirmed ? t('table.bj.bet.locked') : t('table.bj.bet.pending')}

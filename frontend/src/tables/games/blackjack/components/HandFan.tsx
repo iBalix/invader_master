@@ -115,7 +115,7 @@ export default function HandFan({
       {/* total + états */}
       <div className="flex items-center gap-1.5">
         <span
-          className={`rounded-full px-2 py-0.5 font-display text-sm font-bold leading-none ${danger ? 'ring-1' : ''}`}
+          className={`rounded-full px-3.5 py-1 font-display text-2xl font-bold leading-none ${danger ? 'ring-1' : ''}`}
           style={{
             color: totalColor,
             background: 'rgba(0,0,0,0.55)',
@@ -125,14 +125,14 @@ export default function HandFan({
           {hand.total}
           {hand.soft ? 's' : ''}
         </span>
-        {hand.locked && <Lock className="h-4 w-4" style={{ color: theme.danger }} />}
+        {hand.locked && <Lock className="h-6 w-6" style={{ color: theme.danger }} />}
         {hand.doubled && (
-          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase" style={{ background: `${theme.hudAccent}33`, color: theme.hudAccent }}>
+          <span className="rounded-full px-2 py-0.5 text-sm font-bold uppercase" style={{ background: `${theme.hudAccent}33`, color: theme.hudAccent }}>
             x2
           </span>
         )}
         {hand.filetUsed && (
-          <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase" style={{ background: `${theme.gold}26`, color: theme.gold }}>
+          <span className="rounded-full px-2 py-0.5 text-sm font-bold uppercase" style={{ background: `${theme.gold}26`, color: theme.gold }}>
             {t('table.bj.hand.filet')}
           </span>
         )}
@@ -141,14 +141,14 @@ export default function HandFan({
       {/* mise de la main */}
       {hand.bet > 0 && (
         <div style={{ color: '#CBD2E0' }}>
-          <ChipStack amount={hand.bet} theme={theme} chipSize={20} />
+          <ChipStack amount={hand.bet} theme={theme} chipSize={28} />
         </div>
       )}
 
       {/* résultat au paiement */}
       {showOutcome && hand.outcome && (
         <div
-          className="bj-pop pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-2.5 py-1 font-display text-sm font-extrabold"
+          className="bj-pop pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full px-4 py-1.5 font-display text-xl font-extrabold"
           style={{
             background: 'rgba(0,0,0,0.82)',
             color:
