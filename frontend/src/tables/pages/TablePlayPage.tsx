@@ -26,6 +26,30 @@ import { useLiveGame } from '../hooks/useLiveGame';
  */
 const NO_GAME_GRACE_MS = 4000;
 
+/**
+ * Agrandissement de la surface joueur sur la dalle.
+ *
+ * POURQUOI : cette surface est dessinee pour un telephone tenu a 30 cm. Mesuree
+ * telle quelle sur une borne 1920x1080, elle donnait des boutons de reponse de
+ * 54 px de haut en police 16, des libelles d'etat en 12 px, et une colonne de
+ * 544 px, soit 28 % de la largeur. Or on joue avec les doigts, sur une dalle
+ * regardee de biais et a un bras de distance.
+ *
+ * COMMENT : un zoom CSS sur le conteneur plutot que des dizaines de classes
+ * conditionnelles dans PlayerApp. Le zoom agrandit tout de facon homogene,
+ * texte ET zones tactiles, sans risquer d'oublier un endroit et sans toucher a
+ * l'experience telephone. A 1.4 : boutons de reponse a 76 px, police de
+ * question a 22 px, colonne a 762 px.
+ *
+ * Subtilite verifiee a la mesure, et contre-intuitive : sous `zoom`, les
+ * longueurs absolues (le `max-w-[34rem]`) sont bien multipliees, mais les
+ * tailles en POURCENTAGE ne le sont pas, elles se resolvent contre le parent et
+ * restent telles quelles. Donc `h-full w-full` suffit et il ne faut SURTOUT pas
+ * compenser en `100 / ECHELLE` : essaye, et la colonne s'arrete a 771 px de
+ * haut sur 1080 en laissant une bande noire en bas.
+ */
+const ECHELLE_DALLE = 1.4;
+
 export default function TablePlayPage() {
   const identity = useHostname();
   const liveGame = useLiveGame();
@@ -47,8 +71,9 @@ export default function TablePlayPage() {
 
   return (
     // Colonne centree : la surface joueur est pensee pour un telephone, elle
-    // serait illisible etiree sur une dalle 1920 en paysage.
-    <div className="mx-auto h-full w-full max-w-[34rem]">
+    // serait illisible etiree sur une dalle 1920 en paysage. Elle est en
+    // revanche agrandie (cf. ECHELLE_DALLE).
+    <div className="mx-auto h-full w-full max-w-[34rem]" style={{ zoom: ECHELLE_DALLE }}>
       <PlayerApp
         embedded
         deviceLabel={identity?.hostname}

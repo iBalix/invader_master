@@ -183,18 +183,27 @@ function Shell({ children, onResync, embedded, onExit, exitWarning }: ShellProps
   return (
     // embedded : la borne fournit deja la hauteur, min-h-dvh y creerait une
     // seconde barre de defilement. Sur telephone, min-h-dvh reste necessaire.
-    <div className={`game-bg flex flex-col text-white ${embedded ? 'h-full overflow-y-auto' : 'min-h-dvh'}`}>
+    // `relative` : sans lui, le bouton Retour en `absolute` s'ancrait sur le
+    // bloc conteneur initial, donc au coin de l'ECRAN et non de la surface de
+    // jeu. Sur une dalle, il se retrouvait orphelin a 550 px de la colonne.
+    <div className={`game-bg relative flex flex-col text-white ${embedded ? 'h-full overflow-y-auto' : 'min-h-dvh'}`}>
+      {/* Dans le flux et non en absolute : agrandi pour le tactile, il
+          recouvrait le pseudo de la barre d'etat. Ce bouton n'existe que sur la
+          borne (seul TablePlayPage passe onExit), le rendu telephone est donc
+          inchange. */}
       {onExit && (
-        <button
-          type="button"
-          onClick={requestExit}
-          className="absolute left-2 top-2 z-50 flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-3 py-1.5 text-sm font-bold text-white/70 backdrop-blur active:bg-white/20"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-          Retour
-        </button>
+        <div className="shrink-0 px-3 pt-3">
+          <button
+            type="button"
+            onClick={requestExit}
+            className="flex min-h-[48px] items-center gap-2 rounded-full border border-white/15 bg-black/60 px-5 py-3 text-base font-bold text-white/70 backdrop-blur active:bg-white/20"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            Retour
+          </button>
+        </div>
       )}
 
       {confirming && (
@@ -234,11 +243,11 @@ function Shell({ children, onResync, embedded, onExit, exitWarning }: ShellProps
             onResync();
             setTimeout(() => setSpinning(false), 700);
           }}
-          className="fixed bottom-2 right-2 z-50 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur active:bg-white/20"
+          className="fixed bottom-3 right-3 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur active:bg-white/20"
         >
           <svg
             viewBox="0 0 24 24"
-            className={`h-4 w-4 ${spinning ? 'animate-spin' : ''}`}
+            className={`h-6 w-6 ${spinning ? 'animate-spin' : ''}`}
             fill="none"
             stroke="currentColor"
             strokeWidth="2.4"
