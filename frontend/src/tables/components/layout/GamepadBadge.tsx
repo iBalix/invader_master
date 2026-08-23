@@ -32,9 +32,48 @@
  */
 
 import { Gamepad2 } from 'lucide-react';
-import { useGamepadActivity } from '../../hooks/useGamepadActivity';
+import { useGamepadActivity, useGamepadDiagnostic } from '../../hooks/useGamepadActivity';
 import { useHostname } from '../../hooks/useHostname';
 import { useT } from '../../i18n/useT';
+
+/**
+ * TEMPORAIRE : bandeau de diagnostic des manettes, en bas de la dalle.
+ *
+ * Pose pour instruire un cas precis : certaines manettes allumaient le badge
+ * des le branchement. Il montre, pour chaque manette, la valeur COURANTE de
+ * chaque axe, la valeur de REPOS relevee au branchement, les boutons presses et
+ * ceux neutralises parce que deja presses a l'arrivee. C'est ce qui permet de
+ * dire si un pad est reellement sollicite ou si c'est la detection qui se
+ * trompe.
+ *
+ * Passer DIAGNOSTIC_MANETTES a false pour le faire disparaitre, ou supprimer ce
+ * composant quand le sujet est clos. Volontairement peu contrasté : lisible en
+ * se penchant, invisible pour un client attable.
+ */
+const DIAGNOSTIC_MANETTES = true;
+
+function BandeauDiagnostic() {
+  const lignes = useGamepadDiagnostic(DIAGNOSTIC_MANETTES);
+  if (!DIAGNOSTIC_MANETTES) return null;
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex flex-col gap-0.5 px-3 pb-1 font-mono text-[11px] leading-tight text-white/35">
+      {lignes.length === 0 ? (
+        <span>manettes : aucune detectee</span>
+      ) : (
+        lignes.map((d) => (
+          <span key={`${d.index}-${d.id}`} className={d.actif ? 'text-table-yellow/70' : undefined}>
+            {`#${d.index} ${d.id.slice(0, 26)} | axes ${d.axes
+              .map((a, i) => `${a.toFixed(2)}(repos ${(d.repos[i] ?? 0).toFixed(2)})`)
+              .join(' ')} | presses [${d.boutonsPresses.join(',')}]${
+              d.boutonsIgnores.length ? ` | ignores [${d.boutonsIgnores.join(',')}]` : ''
+            } | ${d.actif ? 'APPUI' : 'repos'}`}
+          </span>
+        ))
+      )}
+    </div>
+  );
+}
 
 export default function GamepadBadge() {
   const identity = useHostname();
@@ -49,20 +88,23 @@ export default function GamepadBadge() {
   const detected = count > 0;
 
   return (
-    <div
-      aria-label={`${t('table.gamepads.label', 'Manettes détectées')} : ${count}`}
-      className={[
-        'flex h-[3.25rem] items-center gap-2.5 rounded-full border px-5',
-        'font-display uppercase tracking-wider tabular-nums',
-        active
-          ? 'border-table-yellow bg-table-yellow text-table-bg shadow-[0_0_18px_rgba(255,233,85,0.6)]'
-          : detected
-            ? 'border-table-mint/40 bg-table-mint/15 text-table-mint transition-colors duration-300'
-            : 'border-white/15 bg-table-bg-elev/85 text-table-ink-muted transition-colors duration-300',
-      ].join(' ')}
-    >
-      <Gamepad2 className="h-6 w-6" />
-      <span className="text-xl leading-none">{count}</span>
-    </div>
+    <>
+      <BandeauDiagnostic />
+      <div
+        aria-label={`${t('table.gamepads.label', 'Manettes détectées')} : ${count}`}
+        className={[
+          'flex h-[3.25rem] items-center gap-2.5 rounded-full border px-5',
+          'font-display uppercase tracking-wider tabular-nums',
+          active
+            ? 'border-table-yellow bg-table-yellow text-table-bg shadow-[0_0_18px_rgba(255,233,85,0.6)]'
+            : detected
+              ? 'border-table-mint/40 bg-table-mint/15 text-table-mint transition-colors duration-300'
+              : 'border-white/15 bg-table-bg-elev/85 text-table-ink-muted transition-colors duration-300',
+        ].join(' ')}
+      >
+        <Gamepad2 className="h-6 w-6" />
+        <span className="text-xl leading-none">{count}</span>
+      </div>
+    </>
   );
 }
