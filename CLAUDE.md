@@ -14,7 +14,7 @@ s'affiche dans le bar :
 - **Carte / menu** du bar (boissons, cocktails, food)
 - **Jeux** disponibles sur les consoles rétro (NES, SNES, N64, etc.)
 - **Écrans TV** (config par device, médias en boucle, événements live)
-- **Tables tactiles** (4 bornes au comptoir) :
+- **Tables tactiles** (une dizaine de tables, deux dalles par table) :
   - Sous-app frontend `/table/*` (publique, pas d'auth user)
   - Affiche menu / jeux / événements / mises en avant
   - Permet de commander (panier, coupons, paiement)
@@ -62,7 +62,13 @@ Il y a **2 dépôts/dossiers liés** qu'il ne faut pas confondre :
 
 - Routée sous `/table/*` **hors `AuthProvider`** (les bornes s'identifient par
   leur hostname, pas par un user)
-- Mode kiosk plein écran, 4:3 ou 16:9 selon l'écran
+- Mode kiosk plein écran. **Toutes les dalles sont en 1920x1080**, sans
+  exception : ne pas concevoir de mise en page « selon la résolution ». Les
+  joueurs, eux, sont sur téléphone (~375 px de large). Ce sont les deux seules
+  cibles.
+- Deux dalles par table : `TABLExx-1` (master, celle qui lance RetroArch et sur
+  laquelle les manettes sont branchées) et `TABLExx-2` (slave). La liste
+  faisant foi est la table `table_devices`.
 - Pages : `HomePage`, `MenuPage`, `GamesPage`, `ScreensaverPage`, `InGamePage`, `SetupPage`
 - État local via Zustand (cf. `tables/store/`)
 

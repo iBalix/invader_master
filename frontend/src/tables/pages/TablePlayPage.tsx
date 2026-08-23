@@ -48,11 +48,11 @@ const NO_GAME_GRACE_MS = 4000;
  * `100 / ECHELLE` : essaye, et la colonne s'arrete a 771 px de haut sur 1080 en
  * laissant une bande noire en bas.
  *
- * AUCUN PLAFOND DE LARGEUR ICI, et c'est deliberé : un `max-w` en rem se fait
- * multiplier par le zoom. Un plafond de 80rem donnait 1792 px, ce qui debordait
- * sur les dalles 4:3 en 1280 (le parc est mixte, 4:3 et 16:9). En pourcentage,
- * le conteneur epouse exactement la dalle quelle que soit sa resolution ; ce
- * sont les ecrans internes qui plafonnent leur propre contenu.
+ * AUCUN PLAFOND DE LARGEUR ICI : un `max-w` en rem se fait multiplier par le
+ * zoom, il faut donc le tenir a jour a la main des que l'echelle change, et un
+ * plafond de 80rem donnait deja 1792 px. En pourcentage le conteneur epouse la
+ * dalle, un parametre de moins a synchroniser. Ce sont les ecrans internes qui
+ * plafonnent leur propre largeur de lecture.
  */
 const ECHELLE_DALLE = 1.4;
 
