@@ -396,3 +396,29 @@ export function subscribeToGame(
     void client.removeChannel(channel);
   };
 }
+
+// ---------------------------------------------------------------------------
+// Chronologie de la revelation, PARTAGEE projecteur / joueurs
+// ---------------------------------------------------------------------------
+
+/**
+ * Ces constantes vivent ici, et pas dans chaque ecran, pour une raison de fond :
+ * le projecteur doit garder l'exclusivite de la revelation. Si les joueurs
+ * affichaient la bonne reponse avant la fin de l'animation, la salle
+ * l'apprendrait par les telephones voisins et tout le suspense tomberait.
+ * Un seul jeu de valeurs, donc, et REVEAL_JOUEUR_MS toujours apres
+ * REVEAL_REPONSE_MS.
+ *
+ * Toutes sont comptees depuis `phaseStartedAt` (horloge serveur) et non depuis
+ * le montage du composant : un ecran qui arrive en retard reprend la sequence au
+ * bon endroit au lieu de la rejouer depuis le debut.
+ */
+
+/** duree de montee de la barre la PLUS haute ; les autres vont a la meme vitesse */
+export const REVEAL_BARRES_MS = 3000;
+/** la bonne reponse se detache sur le projecteur */
+export const REVEAL_REPONSE_MS = 3300;
+/** le plus rapide est annonce */
+export const REVEAL_RAPIDE_MS = 4600;
+/** les joueurs decouvrent le verdict : jamais avant le projecteur */
+export const REVEAL_JOUEUR_MS = 3600;

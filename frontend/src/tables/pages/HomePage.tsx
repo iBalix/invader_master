@@ -33,6 +33,7 @@ import DesignSwitcher from '../components/layout/DesignSwitcher';
 import GamepadBadge from '../components/layout/GamepadBadge';
 import LocaleSwitcher from '../components/layout/LocaleSwitcher';
 import { EASE_OUT_QUART } from '../lib/motion';
+import type { LiveEventState } from '../types';
 
 /** Eclaircit/assombrit un hex de `amt` (-255..255). */
 function shade(hex: string, amt: number): string {
@@ -49,7 +50,7 @@ function shade(hex: string, amt: number): string {
 export default function HomePage() {
   const identity = useHostname();
   const { featured, nextEvent, settings } = useTableHome(identity?.hostname);
-  const liveEvent = useLiveEvent();
+  const liveEventLegacy = useLiveEvent();
   const liveGame = useLiveGame();
   const { design } = useDesignConfig();
   const t = useT();
@@ -66,6 +67,27 @@ export default function HomePage() {
   // la partie en cours : c'est ce qui materialise le retour apres un detour
   // par la carte ou par un jeu retro.
   const alreadyPlaying = !!liveGame && loadIdentity()?.sessionId === liveGame.sessionId;
+
+  // Le bandeau LIVE est alimente par la partie en cours d'Invader Master, et
+  // plus seulement par `live_event_state`. Cette table n'a qu'un seul ecrivain,
+  // une route pensee pour l'ancien back-office PHP qui n'a jamais ete branchee :
+  // s'en contenter voulait dire un bandeau live qui ne s'allumait jamais. On
+  // garde tout de meme la valeur legacy en repli, au cas ou cette route serve
+  // un jour.
+  //
+  // Pas de redirect_url : l'accueil a deja son gros bouton REJOINDRE, un second
+  // appel a l'action dans le bandeau ferait doublon.
+  const liveEvent: LiveEventState = liveGame
+    ? {
+        is_live: true,
+        event_type: liveGame.mode === 'battle' ? 'battle royale' : 'quiz',
+        event_label:
+          liveGame.mode === 'battle'
+            ? t('table.home.liveGame.battle', 'Battle Royale en cours')
+            : t('table.home.liveGame.quiz', 'Quiz en cours'),
+        redirect_url: null,
+      }
+    : liveEventLegacy;
 
   return (
     <div className="relative flex h-full w-full flex-col px-12 py-8">

@@ -6,6 +6,7 @@
  */
 
 import { nextDifficultyFor } from './battleFlow.js';
+import { registerSyncPayload } from './engine.js';
 import type { PlayerRow, QuestionSnapshot, SessionRow } from './types.js';
 
 function ms(iso: string | null): number | null {
@@ -287,3 +288,45 @@ function gmBattle(session: SessionRow, players: PlayerRow[]): Record<string, unk
     victoryPending: b.victoryPending ?? false,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Correctif d'etat embarque dans la diffusion temps reel
+// ---------------------------------------------------------------------------
+
+/**
+ * POURQUOI : la diffusion ne portait que `v/status/qi`, donc chaque client
+ * devait enchainer un GET /state complet pour savoir quoi afficher. Avec dix
+ * bornes et trente telephones, une simple "question suivante" declenchait
+ * quarante requetes simultanees sur la meme session : les derniers servis
+ * arrivaient plusieurs secondes en retard, assez pour rater toute la fenetre de
+ * bonus. Constat terrain : des tables qui n'avaient meme pas le temps de voir
+ * l'annonce.
+ *
+ * On embarque donc de quoi basculer de phase IMMEDIATEMENT, sans aller-retour.
+ * Le client applique ce correctif puis reconcilie tranquillement.
+ *
+ * CE QUI N'Y EST PAS, ET C'EST VOLONTAIRE : le bloc `reveal`. Il contient la
+ * bonne reponse, et le projecteur doit garder l'exclusivite de la revelation
+ * pendant son animation. Les joueurs l'obtiennent a la reconciliation, et leur
+ * interface la retient encore le temps de l'animation.
+ *
+ * Enregistre depuis ce fichier, et pas depuis engine : views connait deja la
+ * regle "ce que le public peut voir", et importer views depuis engine
+ * creerait un cycle (engine <- battleFlow <- views).
+ */
+function syncPatch(session: SessionRow): Record<string, unknown> {
+  return {
+    patch: {
+      status: session.status,
+      currentQuestionIndex: session.current_question_index,
+      phaseStartedAt: ms(session.phase_started_at),
+      phaseEndsAt: ms(session.phase_ends_at),
+      question: publicQuestion(session),
+      special: session.runtime.special ?? null,
+      judging: session.runtime.judge?.running ?? false,
+    },
+  };
+}
+
+registerSyncPayload('quiz', syncPatch);
+registerSyncPayload('battle', syncPatch);

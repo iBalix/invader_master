@@ -24,6 +24,7 @@ import {
   YoutubeClip,
 } from '../ui/bits';
 import { gameAudio } from './audio';
+import { REVEAL_BARRES_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS } from '../lib/gameClient';
 import { BattleProjectorBody } from './BattleScreens';
 import '../game.css';
 
@@ -601,7 +602,7 @@ function useCompteurAnime(cible: number, actif: boolean, dureeMs: number, delaiM
     const tick = (t: number) => {
       if (!debut) debut = t;
       const p = Math.min(1, Math.max(0, (t - debut - delaiMs) / dureeMs));
-      setValeur(Math.round(cible * (1 - Math.pow(1 - p, 3))));
+      setValeur(Math.round(cible * p));
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -633,21 +634,27 @@ function LigneReponseProjo({
   lettre,
   texte,
   pourcent,
+  pourcentMax,
   ouvert,
-  rang,
   correcte,
   devoilee,
 }: {
   lettre: string;
   texte: string;
   pourcent: number;
+  /** plus haut pourcentage de la question, sert d'echelle de temps */
+  pourcentMax: number;
   ouvert: boolean;
-  rang: number;
   correcte: boolean;
   devoilee: boolean;
 }) {
-  const delaiMs = rang * 120;
-  const affiche = useCompteurAnime(pourcent, ouvert, 1600, delaiMs);
+  // MEME VITESSE POUR TOUTES LES BARRES. La duree est proportionnelle a la
+  // cible : elles demarrent ensemble, avancent au meme rythme, et chacune
+  // s'arrete en atteignant son pourcentage. La plus haute met REVEAL_BARRES_MS.
+  // C'est ce qui donne la lecture progressive du resultat, alors qu'une duree
+  // identique pour tous ferait arriver tout le monde en meme temps.
+  const dureeMs = pourcentMax > 0 ? (pourcent / pourcentMax) * REVEAL_BARRES_MS : REVEAL_BARRES_MS;
+  const affiche = useCompteurAnime(pourcent, ouvert, dureeMs);
   return (
     <div
       className={`relative overflow-hidden rounded-2xl border-2 px-7 py-5 text-3xl font-bold transition-all duration-500 ${
@@ -662,8 +669,10 @@ function LigneReponseProjo({
         className={`absolute inset-y-0 left-0 ${devoilee && correcte ? 'bg-emerald-400/25' : 'bg-white/10'}`}
         style={{
           width: `${ouvert ? pourcent : 0}%`,
-          transition: 'width 1.6s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.5s ease-out',
-          transitionDelay: `${delaiMs}ms`,
+          // lineaire, et non easing : une courbe ferait ralentir les grandes
+          // barres en fin de course, on ne verrait plus qu'elles avancent a la
+          // meme vitesse que les petites.
+          transition: `width ${Math.round(dureeMs)}ms linear, background-color 0.5s ease-out`,
         }}
       />
       <div className="relative flex items-center justify-between">
@@ -695,8 +704,8 @@ function RevealProjo({ state }: { state: PublicState }) {
     // Sur un kiosque, la revelation serait alors restee figee a 0 %. Un timeout
     // est throttle dans ce cas, mais il finit toujours par se declencher.
     const t0 = setTimeout(() => setOuvert(true), 60);
-    const t1 = setTimeout(() => setPhase('answer'), 2200);
-    const t2 = setTimeout(() => setPhase('fastest'), 3400);
+    const t1 = setTimeout(() => setPhase('answer'), REVEAL_REPONSE_MS);
+    const t2 = setTimeout(() => setPhase('fastest'), REVEAL_RAPIDE_MS);
     return () => {
       clearTimeout(t0);
       clearTimeout(t1);
@@ -735,8 +744,8 @@ function RevealProjo({ state }: { state: PublicState }) {
               lettre={String.fromCharCode(65 + i)}
               texte={a}
               pourcent={reveal.percents?.[i] ?? 0}
+              pourcentMax={Math.max(1, ...(reveal.percents ?? [0]))}
               ouvert={ouvert}
-              rang={i}
               correcte={i === reveal.correctIndex}
               devoilee={devoilee}
             />
@@ -777,11 +786,15 @@ function RevealProjo({ state }: { state: PublicState }) {
         <div className="flex justify-center"><img src={state.question.imageAnswerUrl} alt="" className="max-h-[30vh] rounded-2xl object-contain" /></div>
       )}
 
-      <div className="mt-6 flex min-h-[56px] flex-wrap items-center justify-center gap-4">
+      <div className="mt-6 flex min-h-[120px] flex-wrap items-center justify-center gap-4">
         {rapideDevoile && reveal.fastest && (
-          <span className="anim-pop rounded-full border border-amber-400/50 bg-amber-400/15 px-6 py-2.5 text-2xl font-black text-amber-300">
-            ⚡ Le plus rapide : {reveal.fastest} (+1 pt)
-          </span>
+          <div className="anim-pop flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-amber-400/60 bg-amber-400/15 px-12 py-7">
+            <span className="text-xl font-bold uppercase tracking-[0.35em] text-amber-200/80">
+              ⚡ Le plus rapide
+            </span>
+            <span className="text-6xl font-black text-amber-300">{reveal.fastest}</span>
+            <span className="text-2xl font-bold text-amber-200/70">+1 point bonus</span>
+          </div>
         )}
         {rapideDevoile && qdWinners.length > 0 && (
           <span className="anim-pop rounded-full border border-violet-400/50 bg-violet-500/15 px-6 py-2.5 text-2xl font-bold text-violet-200">
@@ -805,21 +818,61 @@ function RevealProjo({ state }: { state: PublicState }) {
 
 // --- Classements ---------------------------------------------------------------
 
+/**
+ * Classement du projecteur.
+ *
+ * Pense pour un ecran regarde de loin, dans le bruit : le podium est detache et
+ * enorme, le reste suit en deux colonnes. Retour terrain, l'ancienne version
+ * alignait tout le monde dans des lignes de meme taille, on ne distinguait pas
+ * les trois premiers et les points n'apparaissaient pas.
+ */
 function LeaderboardProjo({ state }: { state: PublicState }) {
   const standings = state.standings ?? [];
-  const left = standings.slice(0, 10);
-  const right = standings.slice(10, 30);
+  const podium = standings.slice(0, 3);
+  const suite = standings.slice(3, 23);
   return (
-    <div className="flex flex-1 flex-col px-14 py-10">
-      <h1 className="mb-8 text-center text-5xl font-black uppercase tracking-widest">Classement</h1>
-      <div className="grid flex-1 grid-cols-2 gap-12">
-        <div className="flex flex-col gap-2">
-          {left.map((s) => <StandingRow key={s.pseudo} s={s} big />)}
+    <div className="flex flex-1 flex-col px-14 py-8">
+      <h1 className="mb-6 text-center text-6xl font-black uppercase tracking-widest">Classement</h1>
+
+      {podium.length > 0 && (
+        <div className="mb-8 grid grid-cols-3 gap-6">
+          {podium.map((s) => (
+            <PodiumCard key={s.pseudo} s={s} />
+          ))}
         </div>
-        <div className="flex flex-col gap-1.5 overflow-hidden">
-          {right.map((s) => <StandingRow key={s.pseudo} s={s} />)}
+      )}
+
+      {suite.length > 0 && (
+        <div className="grid flex-1 grid-cols-2 gap-x-12 gap-y-2 content-start">
+          {suite.map((s) => (
+            <StandingRow key={s.pseudo} s={s} big />
+          ))}
         </div>
-      </div>
+      )}
+    </div>
+  );
+}
+
+/** Une marche du podium : rang, pseudo et points, en tres grand. */
+function PodiumCard({ s }: { s: StandingEntry }) {
+  const deco =
+    s.position === 1
+      ? { medaille: '🥇', bord: 'border-amber-300/70', fond: 'bg-amber-300/15', texte: 'text-amber-200' }
+      : s.position === 2
+        ? { medaille: '🥈', bord: 'border-slate-200/60', fond: 'bg-slate-200/10', texte: 'text-slate-100' }
+        : { medaille: '🥉', bord: 'border-orange-400/60', fond: 'bg-orange-400/10', texte: 'text-orange-200' };
+  return (
+    <div
+      className={`anim-pop flex flex-col items-center gap-2 rounded-3xl border-2 px-6 py-7 ${deco.bord} ${deco.fond}`}
+      style={{ animationDelay: `${(4 - s.position) * 0.18}s` }}
+    >
+      <span className="text-6xl leading-none">{deco.medaille}</span>
+      <span className={`max-w-full truncate text-4xl font-black ${deco.texte}`}>{s.pseudo}</span>
+      {typeof s.score === 'number' && (
+        <span className="text-5xl font-black tabular-nums text-cyan-300">{s.score}</span>
+      )}
+      {s.positionChange > 0 && <span className="text-2xl font-bold text-emerald-300">▲ {s.positionChange}</span>}
+      {s.positionChange < 0 && <span className="text-2xl font-bold text-rose-400">▼ {Math.abs(s.positionChange)}</span>}
     </div>
   );
 }
@@ -828,10 +881,10 @@ function StandingRow({ s, big = false }: { s: StandingEntry; big?: boolean }) {
   const medal = s.position === 1 ? '🥇' : s.position === 2 ? '🥈' : s.position === 3 ? '🥉' : null;
   return (
     <div
-      className={`anim-fade-up flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 px-5 ${big ? 'py-3 text-2xl' : 'py-1.5 text-lg'}`}
+      className={`anim-fade-up flex items-center gap-5 rounded-xl border border-white/10 bg-white/5 px-6 ${big ? 'py-4 text-3xl' : 'py-2 text-xl'}`}
       style={{ animationDelay: `${Math.min(s.position * 0.05, 1)}s` }}
     >
-      <span className={`w-10 shrink-0 text-center font-black tabular-nums ${s.position <= 3 ? 'text-amber-300' : 'text-white/40'}`}>
+      <span className={`w-14 shrink-0 text-center font-black tabular-nums ${s.position <= 3 ? 'text-amber-300' : 'text-white/40'}`}>
         {medal ?? s.position}
       </span>
       <span className="min-w-0 flex-1 truncate font-bold">{s.pseudo}</span>

@@ -42,11 +42,17 @@ const NO_GAME_GRACE_MS = 4000;
  * question a 22 px, colonne a 762 px.
  *
  * Subtilite verifiee a la mesure, et contre-intuitive : sous `zoom`, les
- * longueurs absolues (le `max-w-[34rem]`) sont bien multipliees, mais les
- * tailles en POURCENTAGE ne le sont pas, elles se resolvent contre le parent et
- * restent telles quelles. Donc `h-full w-full` suffit et il ne faut SURTOUT pas
- * compenser en `100 / ECHELLE` : essaye, et la colonne s'arrete a 771 px de
- * haut sur 1080 en laissant une bande noire en bas.
+ * longueurs absolues sont bien multipliees, mais les tailles en POURCENTAGE ne
+ * le sont pas, elles se resolvent contre le parent et restent telles quelles.
+ * Donc `h-full w-full` suffit et il ne faut SURTOUT pas compenser en
+ * `100 / ECHELLE` : essaye, et la colonne s'arrete a 771 px de haut sur 1080 en
+ * laissant une bande noire en bas.
+ *
+ * AUCUN PLAFOND DE LARGEUR ICI, et c'est deliberé : un `max-w` en rem se fait
+ * multiplier par le zoom. Un plafond de 80rem donnait 1792 px, ce qui debordait
+ * sur les dalles 4:3 en 1280 (le parc est mixte, 4:3 et 16:9). En pourcentage,
+ * le conteneur epouse exactement la dalle quelle que soit sa resolution ; ce
+ * sont les ecrans internes qui plafonnent leur propre contenu.
  */
 const ECHELLE_DALLE = 1.4;
 
@@ -70,10 +76,9 @@ export default function TablePlayPage() {
   }, [liveGame, navigate]);
 
   return (
-    // Colonne centree : la surface joueur est pensee pour un telephone, elle
-    // serait illisible etiree sur une dalle 1920 en paysage. Elle est en
-    // revanche agrandie (cf. ECHELLE_DALLE).
-    <div className="mx-auto h-full w-full max-w-[80rem]" style={{ zoom: ECHELLE_DALLE }}>
+    // Pleine dalle, agrandie (cf. ECHELLE_DALLE). Ce sont les ecrans internes
+    // qui plafonnent leur propre largeur de lecture.
+    <div className="h-full w-full" style={{ zoom: ECHELLE_DALLE }}>
       <PlayerApp
         embedded
         deviceLabel={identity?.hostname}

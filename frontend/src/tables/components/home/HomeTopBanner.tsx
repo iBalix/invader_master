@@ -88,16 +88,17 @@ export default function HomeTopBanner({
   featured,
   featuredIntervalMs = DEFAULT_INTERVAL_MS,
 }: Props) {
-  // [TEMP] Events desactives sur retour de l'associe (mai 2026) : on ignore
-  // liveEvent + nextEvent et on force le bandeau a son etat neutre. Les
-  // mises en avant ('featured') continuent de tourner par dessus. Pour
-  // reactiver : decommenter le bloc ci-dessous et supprimer la ligne forcee.
-  // const baseSlide: Slide = liveEvent.is_live
-  //   ? { kind: 'live' }
-  //   : nextEvent
-  //     ? { kind: 'event' }
-  //     : { kind: 'empty' };
-  const baseSlide: Slide = { kind: 'empty' };
+  // Priorite : une partie en cours passe devant le prochain evenement, qui passe
+  // devant l'etat neutre. Les mises en avant ('featured') tournent par dessus.
+  //
+  // Ce choix a ete desactive en dur de mai 2026 a aout 2026 sur un retour de
+  // l'associe, le bandeau etant force a l'etat neutre. Reactive a la demande :
+  // il y avait 7 evenements actifs a venir en base que personne ne voyait.
+  const baseSlide: Slide = liveEvent.is_live
+    ? { kind: 'live' }
+    : nextEvent
+      ? { kind: 'event' }
+      : { kind: 'empty' };
   const t = useT();
 
   const [featuredIndex, setFeaturedIndex] = useState<number | null>(null);
@@ -105,7 +106,7 @@ export default function HomeTopBanner({
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // [TEMP] On ignore liveEvent.is_live ici aussi (cf. baseSlide ci-dessus).
+    // La rotation des mises en avant tourne quelle que soit la diapo de base.
     if (featured.length === 0) {
       setFeaturedIndex(null);
       return;

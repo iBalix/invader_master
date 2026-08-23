@@ -107,7 +107,21 @@ export function useGameSession(idOrCode: string | null, options: UseGameSessionO
     const unsubscribe = subscribeToGame(sessionId, (e) => {
       if (e.event === 'sync') {
         const v = (e.payload.v as number) ?? 0;
-        if (v > versionRef.current) void refresh();
+        if (v <= versionRef.current) return;
+        const patch = e.payload.patch as Partial<PublicState> | undefined;
+        if (patch) {
+          // BASCULE IMMEDIATE. Le serveur embarque de quoi changer de phase sans
+          // aller-retour : c'est ce qui fait qu'une borne ouvre sa fenetre de
+          // bonus a l'heure au lieu d'attendre son tour dans la ruee de GET
+          // /state que declenchait chaque transition.
+          versionRef.current = v;
+          setState((prev) => (prev ? { ...prev, ...patch, v } : prev));
+        }
+        // Reconciliation quand meme, pour ce que le correctif ne porte pas
+        // (scores, `you`, bloc reveal). Etalee au hasard : sans ce delai, les
+        // quarante clients repartaient ensemble et on retombait dans la ruee.
+        const attente = patch ? 150 + Math.random() * 900 : 0;
+        window.setTimeout(() => void refresh(), attente);
       } else {
         if (e.event === 'answered') {
           // patch opportuniste du compteur (écrans)

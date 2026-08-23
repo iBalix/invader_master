@@ -81,7 +81,13 @@ export interface SessionConfig {
   /** nombre de quitte-ou-double par joueur pour la partie */
   qdPerPlayer: number;
   speedBonus: boolean;
-  /** afficher les scores pendant la partie (sinon positions seulement) */
+  /**
+   * Afficher les scores pendant la partie, et pas seulement les positions.
+   *
+   * A `true` par defaut depuis le retour terrain : un classement sans points ne
+   * dit pas si l'ecart se joue a 1 ou a 20, et la salle decroche. Le suspense se
+   * fabrique par la cinematique de fin, pas en cachant les chiffres.
+   */
   showScores: boolean;
   musicUrl: string | null;
   /**
@@ -140,7 +146,7 @@ export const DEFAULT_CONFIG: SessionConfig = {
   questionMs: 23000,
   qdPerPlayer: 2,
   speedBonus: true,
-  showScores: false,
+  showScores: true,
   // valeurs de depart du mixer projo : celles que l'ecran appliquait en dur
   musicVolume: 0.35,
   sfxVolume: 0.8,

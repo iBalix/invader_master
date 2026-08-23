@@ -23,6 +23,8 @@ import {
   saveIdentity,
   type PublicState,
   type You,
+  REVEAL_JOUEUR_MS,
+  serverNow,
 } from '../lib/gameClient';
 import { useGameSession, usePhaseCountdown } from '../hooks/useGameSession';
 import {
@@ -348,7 +350,7 @@ function PlayerScreen(props: ScreenProps) {
       case 'lobby':
         return <LobbyScreen {...props} you={you} />;
       case 'rules':
-        return <RulesScreen />;
+        return <RulesScreen embedded={props.embedded} />;
       case 'announce':
         return <AnnounceScreen {...props} you={you} />;
       case 'question':
@@ -493,12 +495,14 @@ function LobbyScreen({ state, you, sessionRef, playerToken, onLeft }: ScreenProp
   );
 }
 
-function RulesScreen() {
+function RulesScreen({ embedded }: { embedded?: boolean }) {
   return (
     <Center>
-      <div className="anim-fade-up max-w-sm">
-        <h2 className="mb-5 text-center text-2xl font-black uppercase tracking-wider">Les règles</h2>
-        <ul className="space-y-3 text-white/80">
+      <div className={`anim-fade-up ${embedded ? 'max-w-4xl' : 'max-w-sm'}`}>
+        <h2 className={`mb-5 text-center font-black uppercase tracking-wider ${embedded ? 'text-4xl' : 'text-2xl'}`}>
+          Les règles
+        </h2>
+        <ul className={`text-white/80 ${embedded ? 'space-y-5 text-2xl' : 'space-y-3'}`}>
           <li className="flex gap-3"><span>🎯</span><span>Réponds sur ton téléphone avant la fin du temps.</span></li>
           <li className="flex gap-3"><span>⭐</span><span>Chaque question affiche le nombre de points qu'elle rapporte.</span></li>
           <li className="flex gap-3"><span>⚡</span><span>Le plus rapide des bons répondeurs gagne 1 point bonus.</span></li>
@@ -863,7 +867,37 @@ function EstimationInput({
 
 function RevealScreen({ state, you }: { state: PublicState; you: You }) {
   const reveal = state.reveal;
+
+  // ANTI-SPOILER. Le projecteur montre d'abord la repartition, puis la bonne
+  // reponse. Si les telephones et les bornes affichaient le verdict des la
+  // bascule en phase reveal, la salle connaitrait la reponse par ses voisins
+  // avant la fin de l'animation. On retient donc l'affichage jusqu'a
+  // REVEAL_JOUEUR_MS, cale APRES la revelation du projecteur.
+  //
+  // Compte depuis phaseStartedAt et non depuis le montage : un joueur qui
+  // arrive en cours de revelation voit tout de suite le verdict, au lieu de
+  // repartir pour un tour d'attente.
+  const debut = state.phaseStartedAt;
+  const [attente, setAttente] = useState(() =>
+    debut === null ? 0 : Math.max(0, debut + REVEAL_JOUEUR_MS - serverNow()),
+  );
+  useEffect(() => {
+    if (attente <= 0) return;
+    const t = setTimeout(() => setAttente(0), attente);
+    return () => clearTimeout(t);
+  }, [attente]);
+  useEffect(() => {
+    setAttente(debut === null ? 0 : Math.max(0, debut + REVEAL_JOUEUR_MS - serverNow()));
+  }, [debut]);
+
   if (!reveal) return <Center><Spinner /></Center>;
+  if (attente > 0) {
+    return (
+      <Center>
+        <BigMessage emoji="👀" title="Résultats..." sub="Regarde l'écran principal !" />
+      </Center>
+    );
+  }
   if (reveal.cancelled) {
     return (
       <Center>
