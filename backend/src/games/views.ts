@@ -127,6 +127,10 @@ export function buildPublicState(
       wifiPassword: cfg.wifiPassword,
       pauseText: cfg.pauseText,
       musicUrl: cfg.musicUrl,
+      // Sans ces deux lignes, le mixer de la console est inerte : l'ecran projo
+      // ne recoit jamais les valeurs et retombe sur ses defauts.
+      musicVolume: cfg.musicVolume ?? 0.35,
+      sfxVolume: cfg.sfxVolume ?? 0.8,
       // Remonté pour que la console affiche sans ambiguïté qu'on est en partie
       // de test. Le champ est whitelisté ici, pas déversé : ne pas remplacer ce
       // bloc par un spread de cfg, il contient des textes de pilotage.

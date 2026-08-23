@@ -84,6 +84,17 @@ export interface SessionConfig {
   /** afficher les scores pendant la partie (sinon positions seulement) */
   showScores: boolean;
   musicUrl: string | null;
+  /**
+   * Volumes du projecteur, pilotes par le mixer de la console GM (0 a 1).
+   *
+   * Ils DOIVENT rester declares ici et whitelistes dans buildPublicState.
+   * Avant, ils n'existaient qu'au frontend : la console les enregistrait bien en
+   * base (set-config fait un spread), mais la vue publique les filtrait, donc
+   * l'ecran projo lisait un `?? 0.35` eternel. Resultat, le mixer ne faisait
+   * rien du tout et la console reaffichait 35/80 a chaque rechargement.
+   */
+  musicVolume: number;
+  sfxVolume: number;
   wifiSsid: string;
   wifiPassword: string;
   pauseText: string;
@@ -122,6 +133,9 @@ export const DEFAULT_CONFIG: SessionConfig = {
   qdPerPlayer: 2,
   speedBonus: true,
   showScores: false,
+  // valeurs de depart du mixer projo : celles que l'ecran appliquait en dur
+  musicVolume: 0.35,
+  sfxVolume: 0.8,
   musicUrl: null,
   wifiSsid: 'INVADER BAR',
   wifiPassword: '',
