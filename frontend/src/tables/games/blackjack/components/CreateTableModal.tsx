@@ -8,7 +8,7 @@
  * propre cadre (segmented control), jamais de chiffres flottants.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { HelpCircle, X } from 'lucide-react';
 import ArcadeButton from '../../../components/ui/ArcadeButton';
 import ArcadeModal from '../../../components/ui/ArcadeModal';
@@ -43,7 +43,7 @@ function Segment<T extends string | number>({
       {options.map((option) => (
         <button
           key={String(option)}
-          className={`h-11 min-w-[52px] rounded-lg px-3.5 font-display text-lg font-bold transition-colors ${
+          className={`h-10 min-w-[52px] rounded-lg px-3.5 font-display text-lg font-bold transition-colors ${
             option === value ? 'bg-table-cyan text-black' : 'text-white/70'
           }`}
           onClick={() => onChange(option)}
@@ -68,9 +68,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 /** section encadrée de la modale */
 function Section({ title, children, className }: { title?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border border-white/10 bg-white/[0.04] p-4 ${className ?? ''}`}>
+    <div className={`rounded-2xl border border-white/10 bg-white/[0.04] p-3 ${className ?? ''}`}>
       {title && (
-        <div className="mb-3 font-display text-sm font-bold uppercase tracking-[0.2em] text-table-cyan/80">{title}</div>
+        <div className="mb-2 font-display text-sm font-bold uppercase tracking-[0.2em] text-table-cyan/80">{title}</div>
       )}
       {children}
     </div>
@@ -94,6 +94,8 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
 export default function CreateTableModal({ open, busy, onClose, onCreate }: Props) {
   const t = useT();
   const [pseudo, setPseudo] = useState<string>(() => getLastPseudo());
+  const [pseudoError, setPseudoError] = useState(false);
+  const pseudoRef = useRef<HTMLInputElement>(null);
   const [theme, setTheme] = useState('neon');
   const [rounds, setRounds] = useState(8);
   const [startChips, setStartChips] = useState(500);
@@ -119,39 +121,58 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
   const selectedTheme = BJ_THEMES.find((th) => th.id === theme) ?? BJ_THEMES[0];
 
   return (
-    <ArcadeModal open={open} onClose={onClose} title={t('table.bj.create.title')} size="2xl">
-      <div className="flex flex-col gap-4">
+    <ArcadeModal open={open} onClose={onClose} title={t('table.bj.create.title')} size="2xl" dense>
+      <div className="flex flex-col gap-3">
         {/* pseudo */}
-        <input
-          value={pseudo}
-          onChange={(e) => setPseudo(e.target.value)}
-          maxLength={16}
-          placeholder={t('table.bj.create.pseudoPlaceholder')}
-          className="w-full rounded-2xl border border-white/15 bg-black/40 px-5 py-3 text-xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
-        />
+        <div>
+          <input
+            ref={pseudoRef}
+            value={pseudo}
+            onChange={(e) => {
+              setPseudo(e.target.value);
+              if (pseudoError) setPseudoError(false);
+            }}
+            maxLength={16}
+            placeholder={t('table.bj.create.pseudoPlaceholder')}
+            className={`w-full rounded-2xl border-2 bg-black/40 px-5 py-3 text-xl text-table-ink outline-none placeholder:text-table-ink-muted ${
+              pseudoError ? 'border-red-500/80' : 'border-white/15 focus:border-table-cyan/70'
+            }`}
+          />
+          {pseudoError && (
+            <div className="bj-pop mt-1.5 px-1 font-display text-base font-bold uppercase text-red-400">
+              {t('table.bj.create.pseudoMissing')}
+            </div>
+          )}
+        </div>
 
-        {/* thème */}
-        <Section title={t('table.bj.create.theme')}>
+        {/* thème : titre à gauche, tuiles sur la même ligne */}
+        <div className="flex items-center gap-5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5">
+          <span className="w-16 font-display text-sm font-bold uppercase tracking-[0.2em] text-table-cyan/80">
+            {t('table.bj.create.theme')}
+          </span>
           <div className="flex items-start gap-4">
             {BJ_THEMES.map((th) => (
-              <button key={th.id} className="flex flex-col items-center gap-1.5" onClick={() => setTheme(th.id)}>
-                <BjThemePreview theme={th} size={80} selected={theme === th.id} />
-                <span className={`text-sm font-bold uppercase ${theme === th.id ? 'text-table-cyan' : 'text-white/55'}`}>
+              <button key={th.id} className="flex flex-col items-center gap-1" onClick={() => setTheme(th.id)}>
+                <BjThemePreview theme={th} size={64} selected={theme === th.id} />
+                <span className={`text-xs font-bold uppercase ${theme === th.id ? 'text-table-cyan' : 'text-white/55'}`}>
                   {t(th.labelKey)}
                 </span>
               </button>
             ))}
           </div>
-        </Section>
+        </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3">
           {/* table */}
-          <Section title={t('table.bj.create.sectionTable')} className="flex flex-col gap-3">
+          <Section title={t('table.bj.create.sectionTable')} className="flex flex-col gap-2">
             <Row label={t('table.bj.create.decks')}>
               <Segment options={[2, 4, 6]} value={decks} onChange={setDecks} />
             </Row>
             <Row label={t('table.bj.create.rounds')}>
               <Segment options={[6, 8, 10, 12]} value={rounds} onChange={setRounds} />
+            </Row>
+            <Row label={t('table.bj.create.decision')}>
+              <Segment options={[7_000, 10_000, 15_000, 20_000]} value={decisionMs} onChange={setDecisionMs} render={(v) => `${v / 1000}s`} />
             </Row>
             <div className="flex justify-end gap-2 text-sm text-white/50">
               {[2, 5, 8].map((p) => (
@@ -163,7 +184,7 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
           </Section>
 
           {/* enjeu */}
-          <Section title={t('table.bj.create.sectionStakes')} className="flex flex-col gap-3">
+          <Section title={t('table.bj.create.sectionStakes')} className="flex flex-col gap-2">
             <Row label={t('table.bj.create.startChips')}>
               <Segment options={[200, 500, 1000]} value={startChips} onChange={setStartChips} />
             </Row>
@@ -186,19 +207,12 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
           </Section>
         </div>
 
-        {/* rythme et règles */}
-        <Section title={t('table.bj.create.sectionRules')}>
-          <div className="flex items-center justify-between gap-4">
-            <Row label={t('table.bj.create.decision')}>
-              <Segment options={[7_000, 10_000, 15_000, 20_000]} value={decisionMs} onChange={setDecisionMs} render={(v) => `${v / 1000}s`} />
-            </Row>
-            <div className="flex gap-2">
-              <Toggle label={t('table.bj.create.lateJoin')} value={lateJoin} onChange={setLateJoin} />
-              <Toggle label={t('table.bj.create.double')} value={allowDouble} onChange={setAllowDouble} />
-              <Toggle label={t('table.bj.create.split')} value={allowSplit} onChange={setAllowSplit} />
-            </div>
-          </div>
-        </Section>
+        {/* règles à interrupteur */}
+        <div className="flex gap-2">
+          <Toggle label={t('table.bj.create.lateJoin')} value={lateJoin} onChange={setLateJoin} />
+          <Toggle label={t('table.bj.create.double')} value={allowDouble} onChange={setAllowDouble} />
+          <Toggle label={t('table.bj.create.split')} value={allowSplit} onChange={setAllowSplit} />
+        </div>
 
         {/* jokers */}
         <Section>
@@ -228,8 +242,8 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
                   }`}
                   onClick={() => setJokers((prev) => ({ ...prev, [type]: !prev[type] }))}
                 >
-                  <JokerGlyph type={type} theme={selectedTheme} width={52} t={t} compact />
-                  <span className="flex h-8 items-center text-center text-xs font-bold uppercase leading-tight text-white/70">
+                  <JokerGlyph type={type} theme={selectedTheme} width={46} t={t} compact />
+                  <span className="flex h-7 items-center text-center text-xs font-bold uppercase leading-tight text-white/70">
                     {t(`table.bj.joker.${type}`)}
                   </span>
                 </button>
@@ -252,8 +266,14 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
           variant="accent"
           size="xl"
           fullWidth
-          disabled={busy || !isValidPseudo(pseudo)}
-          onClick={() =>
+          disabled={busy}
+          onClick={() => {
+            // pseudo manquant : on l'explique au lieu d'un bouton muet
+            if (!isValidPseudo(pseudo)) {
+              setPseudoError(true);
+              pseudoRef.current?.focus();
+              return;
+            }
             onCreate({
               pseudo: pseudo.trim(),
               // le groupe qui rejoint fait la table : la seule borne est la
@@ -271,8 +291,8 @@ export default function CreateTableModal({ open, busy, onClose, onCreate }: Prop
               jokersEnabled: jokers,
               jokerFrequency,
               theme,
-            })
-          }
+            });
+          }}
         >
           {t('table.bj.create.submit')}
         </ArcadeButton>

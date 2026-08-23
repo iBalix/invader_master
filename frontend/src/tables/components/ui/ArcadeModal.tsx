@@ -21,6 +21,9 @@ interface Props {
   children: ReactNode;
   dismissOnBackdrop?: boolean;
   size?: 'md' | 'lg' | 'xl' | '2xl';
+  /** padding et titre resserrés : pour les modales denses qui doivent tenir
+   * sans scroll sur une dalle 1080p */
+  dense?: boolean;
 }
 
 const SIZE_CLASSES = {
@@ -37,6 +40,7 @@ export default function ArcadeModal({
   children,
   dismissOnBackdrop = true,
   size = 'md',
+  dense = false,
 }: Props) {
   useEffect(() => {
     if (!open) return;
@@ -72,7 +76,7 @@ export default function ArcadeModal({
           <motion.div
             className={[
               'relative z-10 w-full cursor-default rounded-3xl border border-white/15 bg-table-bg-elev shadow-glass',
-              'p-8',
+              dense ? 'p-5' : 'p-8',
               SIZE_CLASSES[size],
             ].join(' ')}
             initial={{ scale: 0.96, opacity: 0, y: 12 }}
@@ -100,7 +104,7 @@ export default function ArcadeModal({
             </button>
 
             {title && (
-              <div className="relative mb-6 pr-14 font-display text-3xl uppercase tracking-wider text-table-ink">
+              <div className={`relative pr-14 font-display text-3xl uppercase tracking-wider text-table-ink ${dense ? 'mb-3' : 'mb-6'}`}>
                 {title}
               </div>
             )}

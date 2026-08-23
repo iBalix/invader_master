@@ -178,7 +178,7 @@ export default function BjTable({
       {inRound && <JokerLegend state={state} theme={theme} t={t} />}
 
       {/* résolution de manche */}
-      <RoundResultOverlay state={state} theme={theme} t={t} />
+      <RoundResultOverlay state={state} theme={theme} myId={mySeat?.playerId ?? null} t={t} />
 
       {/* couches d'effets */}
       <JokerFxLayer event={state.lastJokerEvent} theme={theme} anchors={anchors} reduced={reduced} t={t} />

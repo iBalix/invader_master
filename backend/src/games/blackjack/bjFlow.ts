@@ -480,6 +480,12 @@ function startBetting(session: SessionRow, state: BjState, config: BjConfig): vo
     finishGame(session, state, config);
     return;
   }
+  // « terminer après cette manche » : la manche qui vient de se payer était
+  // la dernière, on ne repart pas pour un tour
+  if (state.endAfterRound && state.roundIndex >= 0) {
+    finishGame(session, state, config);
+    return;
+  }
   state.roundIndex += 1;
   if (state.roundIndex >= config.rounds) {
     finishGame(session, state, config);
