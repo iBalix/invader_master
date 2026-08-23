@@ -562,7 +562,14 @@ function useCompteurAnime(cible: number, actif: boolean, dureeMs: number, delaiM
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    // Filet de securite : rAF ne tourne pas si la page ne compose pas. Sans ce
+    // timeout, le chiffre resterait bloque a 0 alors que la barre, elle, est
+    // animee par le compositeur CSS et arriverait bien a destination.
+    const filet = setTimeout(() => setValeur(cible), delaiMs + dureeMs + 120);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(filet);
+    };
   }, [cible, actif, dureeMs, delaiMs]);
   return valeur;
 }
@@ -640,15 +647,15 @@ function RevealProjo({ state }: { state: PublicState }) {
     setOuvert(false);
     // deux frames avant d'ouvrir : la transition CSS a besoin de voir la
     // largeur 0 rendue avant de partir vers sa cible.
-    let raf2 = 0;
-    const raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => setOuvert(true));
-    });
+    // setTimeout et NON requestAnimationFrame : rAF est completement suspendu
+    // quand la page ne compose pas (fenetre occultee, onglet en arriere-plan).
+    // Sur un kiosque, la revelation serait alors restee figee a 0 %. Un timeout
+    // est throttle dans ce cas, mais il finit toujours par se declencher.
+    const t0 = setTimeout(() => setOuvert(true), 60);
     const t1 = setTimeout(() => setPhase('answer'), 2200);
     const t2 = setTimeout(() => setPhase('fastest'), 3400);
     return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
+      clearTimeout(t0);
       clearTimeout(t1);
       clearTimeout(t2);
     };

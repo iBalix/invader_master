@@ -32,9 +32,9 @@ export default function BlackjackGamePage() {
 
   const [playerToken, setPlayerToken] = useState<string | null>(() => getBjIdentity(sessionId)?.playerToken ?? null);
   const { state, you, refresh, applyResponse, syncInfo } = useBjSession(sessionId, playerToken);
-  // ?debug=1 : pastille montrant comment chaque mise à jour arrive (realtime
-  // ou sondage) et son âge, pour diagnostiquer la latence en conditions réelles
-  const debug = new URLSearchParams(window.location.search).get('debug') === '1';
+  // [TEMP] pastille de latence affichée en permanence le temps du rodage au
+  // bar (demande de Romain, 23/08/2026) ; repassera derrière ?debug=1 ensuite
+  const debug = true;
   const [busy, setBusy] = useState(false);
   const [sitOpen, setSitOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
