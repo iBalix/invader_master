@@ -86,24 +86,36 @@ export function tableIdOf(hostname: string): string | null {
 // ---------------------------------------------------------------------------
 
 /**
- * Reproduit à l'octet près ce que produisait `buildInvaderUrl` côté front
- * (double antislash, sémantique URLSearchParams où l'espace devient `+`).
- * Ne PAS "améliorer" cet encodage : un `%20` à la place d'un `+` casserait
- * silencieusement les jeux dont le nom de fichier contient un espace.
+ * Construit le lien `invader:\\run?...` que le lanceur Windows resout.
  *
- * Le construire côté serveur ferme aussi un trou : l'endpoint est public, et
- * un client ne doit pas pouvoir faire exécuter une commande arbitraire sur un
- * PC du bar.
+ * LA BARRE OBLIQUE DOIT RESTER BRUTE, c'est tout l'enjeu de cette fonction.
+ *
+ * La version precedente passait par URLSearchParams, qui encode `/` en `%2F`.
+ * Le lanceur ne decode pas : il cherchait donc un fichier litteralement nomme
+ * `Tekken3%2FTekken3.cue`, ne le trouvait pas, et RetroArch se refermait
+ * aussitot. La borne semblait lancer le jeu puis revenait a l'interface. Les
+ * jeux ranges a plat marchaient, ceux ranges dans un sous-dossier non : 5 sur
+ * 32 au catalogue, tous les PlayStation en .cue.
+ *
+ * La reference est le comportement de l'ancienne interface : `game.php` injecte
+ * le nom de fichier BRUT dans un href, et son JS relit `link.href`, donc l'URL
+ * telle que le navigateur l'a normalisee. Cette normalisation laisse `/` en
+ * clair et encode l'espace en `%20`. C'est exactement ce que reproduit la ligne
+ * ci-dessous : encodeURIComponent pour tout le reste, puis on rend sa barre
+ * oblique au chemin.
+ *
+ * Le commentaire precedent invoquait un `buildInvaderUrl` cote front et une
+ * histoire d'espaces devenant `+`. Cette fonction n'existe nulle part dans le
+ * legacy, et aucun nom de fichier du catalogue ne contient d'espace : la
+ * justification etait fausse, et c'est elle qui a fait garder l'encodage fautif.
+ *
+ * Construire ce lien cote serveur ferme par ailleurs un trou : l'endpoint est
+ * public, et un client ne doit pas pouvoir faire executer une commande
+ * arbitraire sur un PC du bar.
  */
 export function buildDeeplink(fileName: string, library: string): string {
-  const params = new URLSearchParams({
-    run: '1',
-    istable: '1',
-    cmd: 'retroarch',
-    libcore: `${library}.dll`,
-    game: fileName,
-  });
-  return `invader:\\\\run?${params.toString()}`;
+  const jeu = encodeURIComponent(fileName).replace(/%2F/gi, '/');
+  return `invader:\\\\run?run=1&istable=1&cmd=retroarch&libcore=${library}.dll&game=${jeu}`;
 }
 
 async function resolveGame(
