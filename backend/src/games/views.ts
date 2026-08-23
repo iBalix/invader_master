@@ -127,6 +127,10 @@ export function buildPublicState(
       wifiPassword: cfg.wifiPassword,
       pauseText: cfg.pauseText,
       musicUrl: cfg.musicUrl,
+      // Remonté pour que la console affiche sans ambiguïté qu'on est en partie
+      // de test. Le champ est whitelisté ici, pas déversé : ne pas remplacer ce
+      // bloc par un spread de cfg, il contient des textes de pilotage.
+      testMode: cfg.testMode === true,
     },
     playerCount: active.length,
     // en battle, tout le monde est "eliminated" entre deux manches : l'ecran bar

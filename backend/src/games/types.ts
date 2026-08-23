@@ -104,6 +104,16 @@ export interface SessionConfig {
   finalSize?: number;
   /** proportion de bonnes réponses des bots */
   botAccuracy?: number;
+  /**
+   * Partie de TEST : aucune question n'est consommée en base.
+   *
+   * En battle, une question posée est definitivement retiree du stock
+   * (`battle_questions.used_at`). Une repetition de test brulait donc du stock
+   * pour de bon, et le seul recours etait de tout remettre en circulation, ce
+   * qui ressuscitait aussi les questions des vraies soirees. Avec ce drapeau,
+   * la question n'est exclue que pour la duree de la session.
+   */
+  testMode?: boolean;
 }
 
 export const DEFAULT_CONFIG: SessionConfig = {

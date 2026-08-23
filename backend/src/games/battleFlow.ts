@@ -13,6 +13,8 @@
  * Principes :
  * - question_order est un journal append-only : un snapshot ajouté à chaque
  *   tirage (les réponses sont mélangées au tirage, used_at posé en base).
+ *   Exception : en partie de test (`config.testMode`), used_at n'est PAS posé,
+ *   l'exclusion ne vaut que pour la session. Cf. drawNextQuestion.
  * - Le verdict est PROVISOIRE : rien n'est persisté avant show-results, le
  *   GM corrige (bonne réponse / ressusciter / repêchage) avant que la salle
  *   ne voie un compte de survivants faux.
@@ -185,11 +187,19 @@ async function drawNextQuestion(session: SessionRow): Promise<void> {
     );
   }
 
-  // consommation non destructive et définitive
-  await supabaseAdmin
-    .from('battle_questions')
-    .update({ used_at: new Date().toISOString() })
-    .eq('id', item.id);
+  if (session.config.testMode) {
+    // Partie de test : on ne touche pas a la base. L'exclusion est portee par
+    // la session, via le meme mecanisme que le retrait manuel de la file.
+    // Indispensable : `used_at` restant null, sans cette ligne la question
+    // pourrait ressortir au prochain refill de la MEME partie de test.
+    b.excludedIds.push(item.id);
+  } else {
+    // consommation non destructive et définitive
+    await supabaseAdmin
+      .from('battle_questions')
+      .update({ used_at: new Date().toISOString() })
+      .eq('id', item.id);
+  }
 
   // snapshot : réponses mélangées une fois pour toutes
   const correctAnswer = item.answers[item.correctIndex];

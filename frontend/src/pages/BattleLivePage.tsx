@@ -21,6 +21,7 @@ import {
   LifeBuoy,
   ListOrdered,
   Music2,
+  FlaskConical,
   Pause,
   Play,
   Plus,
@@ -124,7 +125,7 @@ interface GmState {
   phaseEndsAt: number | null;
   currentQuestionIndex: number;
   playerCount: number;
-  config: { musicVolume?: number; sfxVolume?: number; wifiSsid: string };
+  config: { musicVolume?: number; sfxVolume?: number; wifiSsid: string; testMode?: boolean };
   gm: {
     currentQuestion: {
       question: string;
@@ -267,11 +268,18 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
     void loadStats();
   }, [loadStats]);
 
-  const launch = async () => {
+  const launch = async (testMode = false) => {
     setLaunching(true);
     try {
-      const { data } = await api.post('/api/game', { mode: 'battle' });
-      toast.success(`Battle créée ! Code : ${data.data.joinCode}`);
+      const { data } = await api.post('/api/game', {
+        mode: 'battle',
+        ...(testMode ? { config: { testMode: true } } : {}),
+      });
+      toast.success(
+        testMode
+          ? `Battle de TEST créée (stock intact) ! Code : ${data.data.joinCode}`
+          : `Battle créée ! Code : ${data.data.joinCode}`,
+      );
       onLaunched(data.data.id);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
@@ -324,7 +332,9 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
                 );
               })}
               <p className="pt-1 text-xs text-gray-400">
-                Sous 5 disponibles par difficulté, l'IA regénère automatiquement pendant la partie.
+                Une question posée est retirée du stock pour de bon. Sous 5 disponibles par
+                difficulté, l'IA en regénère automatiquement pendant la partie. Une battle de test
+                ne consomme rien.
               </p>
             </div>
           ) : (
@@ -356,6 +366,18 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
           >
             <Swords size={15} /> {launching ? 'Lancement...' : 'Lancer la battle'}
           </button>
+          <button
+            type="button"
+            disabled={launching}
+            onClick={() => void launch(true)}
+            className="mt-5 ml-2 inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-40"
+          >
+            <FlaskConical size={15} /> Lancer une battle de test
+          </button>
+          <p className="mt-2 text-xs text-gray-400">
+            La battle de test se joue normalement, mais aucune question n'est consommée : elles
+            restent toutes disponibles pour les vraies soirées.
+          </p>
         </div>
       </div>
     </div>
@@ -381,6 +403,11 @@ function Header({ state, onRefresh }: { state: GmState; onRefresh: () => void })
           {b?.isFinal && (
             <span className="rounded-full bg-amber-100 px-3 py-0.5 text-sm font-bold text-amber-700">
               👑 FINALE
+            </span>
+          )}
+          {state.config.testMode && (
+            <span className="rounded-full bg-amber-500 px-3 py-0.5 text-sm font-bold text-white">
+              🧪 TEST · stock préservé
             </span>
           )}
         </div>
