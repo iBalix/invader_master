@@ -21,7 +21,8 @@ interface GameForm {
   display_order: number;
   competition: boolean;
   competition_link: string;
-  max_players: number;
+  /** configurations de joueurs cochees ('1' | '2' | '3' | '4' | '4+') */
+  player_counts: string[];
   youtube_url: string;
   youtube_video_id: string | null;
   youtube_start_sec: number;
@@ -55,7 +56,7 @@ const EMPTY: GameForm = {
   display_order: 100,
   competition: false,
   competition_link: '',
-  max_players: 1,
+  player_counts: [],
   youtube_url: '',
   youtube_video_id: null,
   youtube_start_sec: 0,
@@ -72,6 +73,38 @@ const EMPTY: GameForm = {
 };
 
 const PLATFORM_OPTIONS = ['Table', 'Borne', 'Salon'];
+
+/**
+ * Configurations de joueurs, alignees une a une sur les puces de filtre des
+ * bornes (games_v2.player_counts).
+ *
+ * C'est un ENSEMBLE, pas un plafond. L'ancien champ "joueurs max" laissait le
+ * filtre deduire que tout nombre inferieur marchait aussi : les echecs, a 2
+ * joueurs obligatoires, ressortaient donc sous "1 joueur". On coche desormais
+ * explicitement chaque configuration ou le jeu doit apparaitre.
+ *
+ * max_players existe toujours en base mais n'est plus saisi ici : le backend le
+ * recalcule depuis ces tags a l'enregistrement.
+ */
+const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '4+'] as const;
+
+/**
+ * Tags d'un jeu a l'ouverture du formulaire, avec repli sur max_players.
+ *
+ * Le repli couvre la fenetre entre le deploiement et l'application de la
+ * migration 047 : sans lui, editer un jeu presenterait tous les tags decoches
+ * et le premier enregistrement le sortirait de tous les filtres. Il reproduit
+ * l'ancien raisonnement en plafond, donc 1..N.
+ */
+function configsInitiales(g: { player_counts?: string[] | null; max_players?: number | null }): string[] {
+  if (g.player_counts && g.player_counts.length > 0) {
+    return PLAYER_COUNT_OPTIONS.filter((c) => g.player_counts!.includes(c));
+  }
+  const max = g.max_players ?? 1;
+  const out = PLAYER_COUNT_OPTIONS.filter((c) => c !== '4+' && Number(c) <= Math.min(max, 4)) as string[];
+  if (max > 4) out.push('4+');
+  return out;
+}
 
 const CONTROL_FIELDS: { key: keyof GameForm; label: string }[] = [
   { key: 'control_a', label: 'A' },
@@ -124,6 +157,17 @@ export default function GameFormV2Page() {
   const set = <K extends keyof GameForm>(key: K, val: GameForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
+  const togglePlayerCount = (c: string) => {
+    setForm((prev) => ({
+      ...prev,
+      // on reordonne selon PLAYER_COUNT_OPTIONS : les tags servent aussi
+      // d'affichage dans la liste, autant qu'ils y sortent toujours triés
+      player_counts: PLAYER_COUNT_OPTIONS.filter((v) =>
+        v === c ? !prev.player_counts.includes(c) : prev.player_counts.includes(v),
+      ),
+    }));
+  };
+
   const togglePlatform = (p: string) => {
     setForm((prev) => ({
       ...prev,
@@ -165,7 +209,7 @@ export default function GameFormV2Page() {
         display_order: g.display_order ?? 100,
         competition: g.competition ?? false,
         competition_link: g.competition_link ?? '',
-        max_players: g.max_players ?? 1,
+        player_counts: configsInitiales(g),
         youtube_url: videoId ? `https://youtu.be/${videoId}` : '',
         youtube_video_id: videoId,
         youtube_start_sec: g.youtube_start_sec ?? 0,
@@ -245,7 +289,7 @@ export default function GameFormV2Page() {
         competition: form.competition,
         competition_link: form.competition_link || null,
         cover_url: coverUrl,
-        max_players: form.max_players,
+        player_counts: form.player_counts,
         youtube_video_id: form.youtube_video_id,
         youtube_start_sec: form.youtube_start_sec || 0,
         youtube_duration_sec: form.youtube_duration_sec,
@@ -404,25 +448,37 @@ export default function GameFormV2Page() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Joueurs max *</label>
-              <select
-                value={form.max_players}
-                onChange={(e) => set('max_players', parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value={1}>1 joueur</option>
-                <option value={2}>2 joueurs</option>
-                <option value={3}>3 joueurs</option>
-                <option value={4}>4 joueurs</option>
-                <option value={5}>5 joueurs</option>
-                <option value={6}>6 joueurs</option>
-                <option value={7}>7 joueurs</option>
-                <option value={8}>8 joueurs</option>
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre de joueurs *</label>
+              <div className="flex gap-2 flex-wrap">
+                {PLAYER_COUNT_OPTIONS.map((c) => {
+                  const on = form.player_counts.includes(c);
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => togglePlayerCount(c)}
+                      aria-pressed={on}
+                      className={`px-3 py-2 rounded-lg border text-sm font-medium transition ${
+                        on
+                          ? 'border-primary-500 bg-primary-500 text-white'
+                          : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {c === '1' ? '1 joueur' : `${c} joueurs`}
+                    </button>
+                  );
+                })}
+              </div>
               <p className="mt-1 text-xs text-gray-400">
-                Utilisé par le filtre joueurs sur les bornes. Au-delà de 4, le jeu apparaît sous le
-                filtre « 4+ » : les jeux en réseau montent jusqu'à 8.
+                Coche chaque configuration sous laquelle le jeu doit apparaître dans le filtre des
+                bornes. Ce n'est pas un maximum : les échecs se jouent à deux, donc « 2 joueurs »
+                seul. Un jeu de 1 à 4 se coche 1, 2, 3 et 4.
               </p>
+              {form.player_counts.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Aucune configuration cochée : le jeu ne sortira sous aucun filtre.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Plateformes</label>

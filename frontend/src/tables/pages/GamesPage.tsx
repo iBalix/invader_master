@@ -2,15 +2,15 @@
  * Ecran liste des jeux v2 (DA V3 launcher).
  *
  * - Sidebar moderne (LauncherSidebar) avec icone Lucide + texture par categorie
- * - Bandeau de filtre nb joueurs (1 / 2 / 3 / 4+) au-dessus de la grille. Chaque
- *   seuil signifie "au moins n joueurs", d'ou le "+" sur le dernier ; un jeu en
- *   reseau a 8 joueurs y tombe naturellement.
+ * - Bandeau de filtre nb joueurs (1 / 2 / 3 / 4 / 4+) au-dessus de la grille.
+ *   Ce sont cinq configurations distinctes, pas des seuils : chaque jeu declare
+ *   celles sous lesquelles il doit apparaitre (cf. CONFIGS_JOUEURS plus bas).
  * - AUCUN filtre coche par defaut, et remise a zero a chaque changement de
  *   categorie : on entre en voyant tous les jeux, pas une grille a moitie grisee.
- * - Les seuils sans aucun jeu dans la categorie affichee sont grises et non
- *   cliquables. Un second appui sur le seuil actif le retire.
- * - Grid de vignettes 16:9 dense ; avec un filtre pose, les jeux dont
- *   max_players est sous le seuil sont grises
+ * - Les configurations sans aucun jeu dans la categorie affichee sont grisees et
+ *   non cliquables. Un second appui sur le filtre actif le retire.
+ * - Grid de vignettes 16:9 dense ; avec un filtre pose, les jeux qui ne portent
+ *   pas cette configuration sont grises
  * - Tap d'une vignette = LaunchGameModal (sauf grise)
  * - Plus de titre redondant en haut (la categorie active est lisible dans la sidebar)
  * - Plus de catégorie "Nos préférés" ni "4 joueurs" (filtrees au seed v2)
@@ -34,17 +34,38 @@ import AnimatedGrid, { AnimatedGridItem } from '../components/ui/AnimatedGrid';
 import ScrollIndicator from '../components/menu/ScrollIndicator';
 
 /**
- * Seuils du filtre joueurs. Chaque seuil signifie "au moins n joueurs" : le
- * dernier s'affiche donc "4+", ce que le filtre faisait deja sans le dire.
- * Un jeu en reseau a 8 joueurs (le blackjack) tombe bien sous ce 4+.
+ * Puces du filtre joueurs. Ce sont des CONFIGURATIONS, pas des seuils.
+ *
+ * La version precedente raisonnait en plafond : le filtre "2" gardait tout jeu
+ * dont max_players etait >= 2, et en deduisait donc que le jeu marchait aussi a
+ * 1 joueur. Faux des qu'un jeu impose un minimum : les echecs se jouent a deux,
+ * exactement deux, et ressortaient pourtant sous "1 joueur".
+ *
+ * Chaque jeu declare desormais la liste des configurations sous lesquelles il
+ * doit apparaitre (games_v2.player_counts), et un filtre ne garde que les jeux
+ * qui contiennent sa valeur. Un jeu 1 a 4 joueurs se tague donc explicitement
+ * 1, 2, 3 et 4.
  */
-const SEUILS_JOUEURS = [1, 2, 3, 4] as const;
+const CONFIGS_JOUEURS = ['1', '2', '3', '4', '4+'] as const;
+type ConfigJoueurs = (typeof CONFIGS_JOUEURS)[number];
 
-/** libelle d'un seuil : le plus haut est un "et plus" */
-function libelleSeuil(n: number): string {
-  const dernier = SEUILS_JOUEURS[SEUILS_JOUEURS.length - 1];
-  if (n === dernier) return `${n}+ joueurs`;
-  return `${n} ${n === 1 ? 'joueur' : 'joueurs'}`;
+function libelleConfig(c: string): string {
+  return c === '1' ? '1 joueur' : `${c} joueurs`;
+}
+
+/**
+ * Configurations d'un jeu, avec repli sur maxPlayers.
+ *
+ * Le repli existe pour la fenetre entre le deploiement du code et l'application
+ * de la migration 047 : sans lui, la page jeux se viderait entre les deux. Il
+ * reproduit l'ancien raisonnement en plafond, donc 1..N.
+ */
+function configsDuJeu(g: GameV2): string[] {
+  if (g.playerCounts && g.playerCounts.length > 0) return g.playerCounts;
+  const max = g.maxPlayers ?? 1;
+  const out = CONFIGS_JOUEURS.filter((c) => c !== '4+' && Number(c) <= Math.min(max, 4)) as string[];
+  if (max > 4) out.push('4+');
+  return out;
 }
 
 export default function GamesPage() {
@@ -58,7 +79,7 @@ export default function GamesPage() {
   const [selected, setSelected] = useState<GameV2 | null>(null);
   // null = aucun filtre, et c'est l'etat par defaut : on entre dans une
   // categorie en voyant tous ses jeux, pas une grille a moitie grisee.
-  const [playerFilter, setPlayerFilter] = useState<number | null>(null);
+  const [playerFilter, setPlayerFilter] = useState<ConfigJoueurs | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-selection de la premiere categorie au load
@@ -94,16 +115,14 @@ export default function GamesPage() {
   }, [data, activeCategory]);
 
   /**
-   * Seuils ayant au moins un jeu dans la categorie affichee. Les autres sont
-   * grises et non cliquables : proposer un filtre qui ne renvoie rien envoie le
-   * client dans un mur, et sur une borne il n'a personne a qui demander.
+   * Configurations ayant au moins un jeu dans la categorie affichee. Les autres
+   * sont grisees et non cliquables : proposer un filtre qui ne renvoie rien
+   * envoie le client dans un mur, et sur une borne il n'a personne a qui
+   * demander.
    */
-  const seuilsDisponibles = useMemo(() => {
-    const dispo = new Set<number>();
-    for (const g of visibleGames) {
-      const max = g.maxPlayers ?? 1;
-      for (const n of SEUILS_JOUEURS) if (max >= n) dispo.add(n);
-    }
+  const configsDisponibles = useMemo(() => {
+    const dispo = new Set<string>();
+    for (const g of visibleGames) for (const c of configsDuJeu(g)) dispo.add(c);
     return dispo;
   }, [visibleGames]);
 
@@ -149,9 +168,9 @@ export default function GamesPage() {
               Filtre joueurs
             </span>
             <div className="flex gap-2">
-              {SEUILS_JOUEURS.map((n) => {
+              {CONFIGS_JOUEURS.map((n) => {
                 const active = playerFilter === n;
-                const dispo = seuilsDisponibles.has(n);
+                const dispo = configsDisponibles.has(n);
                 return (
                   <button
                     key={n}
@@ -182,7 +201,7 @@ export default function GamesPage() {
                     aria-pressed={active}
                     title={dispo ? undefined : 'Aucun jeu de cette catégorie'}
                   >
-                    {libelleSeuil(n)}
+                    {libelleConfig(n)}
                   </button>
                 );
               })}
@@ -211,8 +230,8 @@ export default function GamesPage() {
                   className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-4"
                 >
                   {visibleGames.map((g) => {
-                    const maxP = g.maxPlayers ?? 1;
-                    const isDisabled = playerFilter !== null && maxP < playerFilter;
+                    const isDisabled =
+                      playerFilter !== null && !configsDuJeu(g).includes(playerFilter);
                     const consoleLabel =
                       g.consoleDisplayName ||
                       (g.consoleId ? consoleLabelById.get(g.consoleId) : null) ||
@@ -228,7 +247,7 @@ export default function GamesPage() {
                           game={gameForCard}
                           consoleLabel={consoleLabel}
                           disabled={isDisabled}
-                          disabledReason={isDisabled ? `Min. ${libelleSeuil(playerFilter!)}` : null}
+                          disabledReason={isDisabled ? `Pas en ${libelleConfig(playerFilter!)}` : null}
                           onClick={() => {
                             if (isDisabled) return;
                             // jeu web (échecs, ...) : navigation interne dans

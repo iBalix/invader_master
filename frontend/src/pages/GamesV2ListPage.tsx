@@ -16,9 +16,31 @@ interface GameRow {
   platform: string[];
   display_order: number;
   max_players: number;
+  /** absent tant que migration-047 n'est pas appliquee : on retombe sur max_players */
+  player_counts?: string[] | null;
   youtube_video_id: string | null;
   categories: string[];
   competition: boolean;
+}
+
+const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '4+'] as const;
+
+/**
+ * Configurations affichees dans la colonne "Joueurs".
+ *
+ * On montre les tags plutot que l'ancien "max joueurs" : c'est la donnee qui
+ * decide reellement sous quel filtre le jeu sort sur les bornes. Repli sur
+ * max_players tant que la migration 047 n'est pas appliquee, sinon la colonne
+ * serait vide partout.
+ */
+function configsAffichees(g: GameRow): string[] {
+  if (g.player_counts && g.player_counts.length > 0) {
+    return PLAYER_COUNT_OPTIONS.filter((c) => g.player_counts!.includes(c));
+  }
+  const max = g.max_players ?? 1;
+  const out = PLAYER_COUNT_OPTIONS.filter((c) => c !== '4+' && Number(c) <= Math.min(max, 4)) as string[];
+  if (max > 4) out.push('4+');
+  return out;
 }
 
 interface CategoryRow {
@@ -268,7 +290,7 @@ export default function GamesV2ListPage() {
                   <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <th className="px-6 py-3">Jeu</th>
                     <th className="px-6 py-3">Console</th>
-                    <th className="px-6 py-3 text-center">Max j.</th>
+                    <th className="px-6 py-3 text-center">Joueurs</th>
                     <th className="px-6 py-3 text-center">YT</th>
                     <th className="px-6 py-3">Plateforme(s)</th>
                     <th className="px-6 py-3">Catégories</th>
@@ -303,9 +325,19 @@ export default function GamesV2ListPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                          {g.max_players}
-                        </span>
+                        <div className="flex flex-wrap justify-center gap-1">
+                          {configsAffichees(g).map((c) => (
+                            <span
+                              key={c}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                            >
+                              {c}
+                            </span>
+                          ))}
+                          {configsAffichees(g).length === 0 && (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-center">
                         {g.youtube_video_id ? (

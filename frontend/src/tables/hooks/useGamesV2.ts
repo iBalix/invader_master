@@ -48,6 +48,12 @@ export interface GameV2 {
   controllerCount?: number | null;
   displayOrder?: number;
   maxPlayers?: number;
+  /**
+   * Configurations de joueurs supportees ('1' | '2' | '3' | '4' | '4+').
+   * Optionnel : absent tant que la migration 047 n'est pas appliquee, le filtre
+   * retombe alors sur maxPlayers.
+   */
+  playerCounts?: string[];
   youtubeVideoId?: string | null;
   youtubeStartSec?: number;
   youtubeDurationSec?: number | null;

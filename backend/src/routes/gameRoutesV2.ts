@@ -10,12 +10,15 @@ gameV2Routes.use(authMiddleware, requireRole('admin', 'salarie'));
 const ALLOWED = [
   'name', 'name_en', 'subtitle', 'subtitle_en', 'description', 'description_en',
   'file_name', 'console_id', 'platform', 'competition', 'competition_link',
-  'cover_url', 'display_order', 'max_players',
+  'cover_url', 'display_order', 'max_players', 'player_counts',
   'youtube_video_id', 'youtube_start_sec', 'youtube_duration_sec',
   'control_a', 'control_b', 'control_x', 'control_y',
   'control_l', 'control_r', 'control_start', 'control_select',
   'special_note', 'game_type', 'game_url',
 ] as const;
+
+/** configurations de joueurs, alignees une a une sur les puces de filtre */
+const PLAYER_COUNTS = ['1', '2', '3', '4', '4+'] as const;
 
 function pick(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -32,6 +35,25 @@ function pick(body: Record<string, unknown>): Record<string, unknown> {
     const n = Number(out.max_players);
     if (Number.isFinite(n)) out.max_players = Math.max(1, Math.min(8, Math.round(n)));
     else delete out.max_players;
+  }
+  // player_counts : vocabulaire ferme, aligne sur les puces de filtre des
+  // bornes. C'est un ENSEMBLE de configurations supportees, pas un plafond :
+  // les echecs valent ['2'] et ne doivent pas ressortir sous "1 joueur".
+  // Le CHECK SQL protege aussi, mais on evite un 500 PostgREST opaque.
+  if ('player_counts' in out) {
+    const brut = Array.isArray(out.player_counts) ? out.player_counts : [];
+    const retenus = PLAYER_COUNTS.filter((v) => brut.includes(v));
+    out.player_counts = retenus;
+    // max_players est DERIVE des tags, jamais saisi : deux champs decrivant le
+    // meme fait finissent toujours par diverger. Il ne sert plus qu'a deux
+    // choses, l'affichage et le repli des bornes quand player_counts est vide.
+    // '4+' vaut 8, le plafond du CHECK depuis migration-046 (blackjack en
+    // reseau) ; sinon on prend le tag le plus haut.
+    if (retenus.length > 0) {
+      out.max_players = retenus.includes('4+')
+        ? 8
+        : Math.max(...retenus.map((v) => Number(v)));
+    }
   }
   // Sanitize youtube_start_sec / youtube_duration_sec (integers >= 0)
   for (const k of ['youtube_start_sec', 'youtube_duration_sec'] as const) {
@@ -148,10 +170,41 @@ gameV2Routes.get('/:id', async (req, res) => {
   }
 });
 
+/**
+ * La colonne player_counts existe-t-elle deja ?
+ *
+ * migration-047 s'applique a la main dans le SQL Editor (convention du projet),
+ * donc le code peut etre deploye avant. Sans ce garde-fou, PostgREST refuserait
+ * tout enregistrement de jeu ("column games_v2.player_counts does not exist")
+ * entre les deux : le back-office serait casse pour une migration en retard.
+ *
+ * On sonde avant chaque enregistrement et on retire simplement le champ tant que
+ * la colonne manque. Seul le succes est memorise, JAMAIS l'absence : la
+ * migration s'applique en base sans redemarrer le backend, et un cache negatif
+ * obligerait a redeployer pour que les tags se remettent a fonctionner. Le cout
+ * de la sonde est donc un select limit 1 par sauvegarde, uniquement pendant la
+ * fenetre degradee. A retirer quand la migration sera passee partout.
+ */
+let colonneTagsVue = false;
+
+async function colonneTagsPresente(): Promise<boolean> {
+  if (colonneTagsVue) return true;
+  const { error } = await supabaseAdmin.from('games_v2').select('player_counts').limit(1);
+  if (error) {
+    console.warn(
+      '[games-v2] colonne player_counts absente, tags de joueurs ignores a l\'ecriture. Appliquer docs/migration-047-games-v2-player-counts.sql.',
+    );
+    return false;
+  }
+  colonneTagsVue = true;
+  return true;
+}
+
 gameV2Routes.post('/', async (req, res) => {
   try {
     const { category_ids, images } = req.body;
     const fields = pick(req.body);
+    if (!(await colonneTagsPresente())) delete fields.player_counts;
 
     const { data: game, error } = await supabaseAdmin
       .from('games_v2')
@@ -202,6 +255,7 @@ gameV2Routes.put('/:id', async (req, res) => {
   try {
     const { category_ids, images } = req.body;
     const fields = pick(req.body);
+    if (!(await colonneTagsPresente())) delete fields.player_counts;
 
     // On selectionne la ligne mise a jour pour detecter un update silencieux
     // (RLS qui filtre, ID invalide). Sans ca, PostgREST renvoie 204 meme si 0
