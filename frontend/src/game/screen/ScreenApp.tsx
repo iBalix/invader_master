@@ -78,8 +78,10 @@ export default function ScreenApp() {
       if (!isProjector) return;
       if (e.event === 'player-joined') pushToast(`${e.payload.pseudo} rejoint la partie !`, 'join');
       if (e.event === 'bonus') {
-        pushToast(`🎲 ${e.payload.pseudo} tente le QUITTE OU DOUBLE !`, 'bonus');
-        gameAudio.bonusBlip();
+        // Pas de son : sur une annonce, dix joueurs activent leur joker en
+        // quelques secondes et le blip devenait un crepitement. Le retour visuel
+        // suffit, et il laisse la musique respirer.
+        pushToast(e.payload.pseudo as string, 'bonus');
       }
       if (e.event === 'answered') setAnsweredCount((e.payload.count as number) ?? 0);
     },
@@ -242,9 +244,12 @@ function ProjectorScreen({
             if (r?.milestone != null) setTimeout(() => gameAudio.milestoneHit(), 1000);
           }, 1200);
         } else {
-          // cales sur RevealProjo : revelation a 2200 ms, plus rapide a 3400 ms
-          setTimeout(() => gameAudio.correctHit(), 2200);
-          if (state.reveal?.fastest) setTimeout(() => gameAudio.fastestChime(), 3400);
+          // Cales sur les MEMES constantes que l'animation : c'est tout l'interet
+          // de les avoir sorties dans gameClient. Des valeurs en dur ici avaient
+          // laisse le son de bonne reponse partir 1,1 s avant l'image quand les
+          // temps visuels ont ete ralentis.
+          setTimeout(() => gameAudio.correctHit(), REVEAL_REPONSE_MS);
+          if (state.reveal?.fastest) setTimeout(() => gameAudio.fastestChime(), REVEAL_RAPIDE_MS);
         }
         break;
       }
@@ -307,18 +312,32 @@ function ProjectorScreen({
 
       {/* toasts (arrivées + bonus) */}
       <div className="pointer-events-none absolute right-6 top-6 z-40 flex w-96 flex-col gap-2">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`anim-slide-in rounded-xl border px-4 py-3 text-lg font-bold backdrop-blur ${
-              t.kind === 'bonus'
-                ? 'border-violet-400/50 bg-violet-500/25 text-violet-100'
-                : 'border-cyan-400/40 bg-cyan-500/15 text-cyan-100'
-            }`}
-          >
-            {t.text}
-          </div>
-        ))}
+        {toasts.map((t) =>
+          t.kind === 'bonus' ? (
+            // Joker : le pseudo porte l'information, le libelle est fixe et mis
+            // en retrait. L'ancienne version noyait le nom dans une phrase en
+            // gras uniforme, illisible de loin quand trois toasts s'empilent.
+            <div
+              key={t.id}
+              className="anim-slide-in flex items-center gap-4 rounded-2xl border-2 border-violet-400/60 bg-violet-500/25 px-5 py-4 backdrop-blur"
+            >
+              <span className="anim-pop text-4xl leading-none">🎲</span>
+              <span className="min-w-0">
+                <span className="block truncate text-2xl font-black text-white">{t.text}</span>
+                <span className="block text-sm font-bold uppercase tracking-[0.2em] text-violet-200/80">
+                  quitte ou double
+                </span>
+              </span>
+            </div>
+          ) : (
+            <div
+              key={t.id}
+              className="anim-slide-in rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-4 py-3 text-lg font-bold text-cyan-100 backdrop-blur"
+            >
+              {t.text}
+            </div>
+          ),
+        )}
       </div>
 
       <ProjectorBody state={state} remaining={remaining} answeredCount={answeredCount} />

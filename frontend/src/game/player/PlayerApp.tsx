@@ -35,6 +35,7 @@ import {
   TYPE_LABELS,
 } from '../ui/bits';
 import { BattlePlayerScreen } from './BattlePlayer';
+import QuizRules from './QuizRules';
 import '../game.css';
 
 const ERROR_LABELS: Record<string, string> = {
@@ -350,7 +351,7 @@ function PlayerScreen(props: ScreenProps) {
       case 'lobby':
         return <LobbyScreen {...props} you={you} />;
       case 'rules':
-        return <RulesScreen embedded={props.embedded} />;
+        return <QuizRules phaseStartedAt={state.phaseStartedAt} embedded={props.embedded} />;
       case 'announce':
         return <AnnounceScreen {...props} you={you} />;
       case 'question':
@@ -490,24 +491,6 @@ function LobbyScreen({ state, you, sessionRef, playerToken, onLeft }: ScreenProp
         >
           Quitter ({you.pseudo})
         </button>
-      </div>
-    </Center>
-  );
-}
-
-function RulesScreen({ embedded }: { embedded?: boolean }) {
-  return (
-    <Center>
-      <div className={`anim-fade-up ${embedded ? 'max-w-4xl' : 'max-w-sm'}`}>
-        <h2 className={`mb-5 text-center font-black uppercase tracking-wider ${embedded ? 'text-4xl' : 'text-2xl'}`}>
-          Les règles
-        </h2>
-        <ul className={`text-white/80 ${embedded ? 'space-y-5 text-2xl' : 'space-y-3'}`}>
-          <li className="flex gap-3"><span>🎯</span><span>Réponds sur ton téléphone avant la fin du temps.</span></li>
-          <li className="flex gap-3"><span>⭐</span><span>Chaque question affiche le nombre de points qu'elle rapporte.</span></li>
-          <li className="flex gap-3"><span>⚡</span><span>Le plus rapide des bons répondeurs gagne 1 point bonus.</span></li>
-          <li className="flex gap-3"><span>🎲</span><span>2 quitte ou double par partie : active-le avant la question, bonne réponse = points x2, mauvaise = rien à perdre !</span></li>
-        </ul>
       </div>
     </Center>
   );
