@@ -32,6 +32,7 @@ import ChessGamePage from './games/chess/pages/ChessGamePage';
 import BlackjackLobbyPage from './games/blackjack/pages/BlackjackLobbyPage';
 import BlackjackGamePage from './games/blackjack/pages/BlackjackGamePage';
 import { useHostname } from './hooks/useHostname';
+import { useSansZoom } from '../hooks/useSansZoom';
 
 function HostnameGuard({ children }: { children: React.ReactNode }) {
   const identity = useHostname();
@@ -66,6 +67,7 @@ function useKioskDocument(): void {
 
 export default function TablesApp() {
   useKioskDocument();
+  useSansZoom();
   return (
     <Routes>
       <Route path="setup" element={<SetupPage />} />

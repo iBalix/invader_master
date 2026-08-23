@@ -24,6 +24,7 @@ import {
   YoutubeClip,
 } from '../ui/bits';
 import { gameAudio } from './audio';
+import { useSansZoom } from '../../hooks/useSansZoom';
 import { REVEAL_BARRES_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS } from '../lib/gameClient';
 import { BattleProjectorBody } from './BattleScreens';
 import '../game.css';
@@ -41,6 +42,7 @@ const AUDIO_PRET = 'invader:audio-pret';
 
 export default function ScreenApp() {
   const { hostname = 'PROJO' } = useParams<{ hostname: string }>();
+  useSansZoom();
   const isProjector = !hostname.toUpperCase().startsWith('BAR');
   const [sessionId, setSessionId] = useState<string | null>(null);
 

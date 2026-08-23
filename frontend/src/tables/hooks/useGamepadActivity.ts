@@ -37,25 +37,13 @@
  * des que le navigateur juge la page non visible, ce qui gelerait le badge.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export interface GamepadActivity {
   /** nombre de manettes vues a l'instant present, sans amortissement */
   count: number;
   /** une entree (bouton ou axe) a ete detectee il y a moins de LIT_MS */
   active: boolean;
-}
-
-/** ce que le bandeau de diagnostic affiche pour une manette */
-export interface DiagnosticManette {
-  index: number;
-  id: string;
-  axes: number[];
-  repos: number[];
-  boutonsPresses: number[];
-  /** boutons neutralises car deja presses au branchement */
-  boutonsIgnores: number[];
-  actif: boolean;
 }
 
 /** duree d'affichage d'un appui : un tap physique dure ~80 ms, on le prolonge */
@@ -76,9 +64,9 @@ interface Reference {
 }
 
 /**
- * Relevés de repos, au niveau module et non dans un hook : la detection et le
- * bandeau de diagnostic doivent raisonner sur EXACTEMENT la meme reference,
- * sinon le diagnostic ne dit pas ce que voit le detecteur.
+ * Relevés de repos, au niveau module et non dans un hook : ils doivent survivre
+ * au demontage du badge, sinon changer de page refait le relevé et un pad tenu a
+ * ce moment-la se retrouve calibre "en appui".
  */
 const referenceParManette = new Map<string, Reference>();
 
@@ -100,19 +88,13 @@ function referencePour(pad: Gamepad): Reference {
   return creee;
 }
 
-interface Analyse {
-  actif: boolean;
-  diagnostic: DiagnosticManette;
-}
-
-function analyser(pad: Gamepad): Analyse {
+/** la manette est-elle reellement sollicitee, par rapport a son propre repos ? */
+function estSollicitee(pad: Gamepad): boolean {
   const ref = referencePour(pad);
-  const presses: number[] = [];
   let actif = false;
 
   pad.buttons.forEach((b, i) => {
     if (b.pressed) {
-      presses.push(i);
       if (!ref.boutonsSuspects.has(i)) actif = true;
     } else if (ref.boutonsSuspects.has(i)) {
       // relache une fois : ce bouton n'est plus suspect, il compte desormais
@@ -121,22 +103,10 @@ function analyser(pad: Gamepad): Analyse {
   });
 
   pad.axes.forEach((valeur, i) => {
-    const repos = ref.axes[i] ?? 0;
-    if (Math.abs(valeur - repos) > ECART_MINIMAL) actif = true;
+    if (Math.abs(valeur - (ref.axes[i] ?? 0)) > ECART_MINIMAL) actif = true;
   });
 
-  return {
-    actif,
-    diagnostic: {
-      index: pad.index,
-      id: pad.id,
-      axes: Array.from(pad.axes),
-      repos: ref.axes,
-      boutonsPresses: presses,
-      boutonsIgnores: [...ref.boutonsSuspects],
-      actif,
-    },
-  };
+  return actif;
 }
 
 function manettesBranchees(): Gamepad[] {
@@ -166,7 +136,7 @@ export function useGamepadActivity(enabled = true): GamepadActivity {
     function tick() {
       const now = performance.now();
       const pads = manettesBranchees();
-      if (pads.some((pad) => analyser(pad).actif)) lastInputAt = now;
+      if (pads.some(estSollicitee)) lastInputAt = now;
 
       // setState seulement sur transition reelle : la signature encode tout
       // ce que le rendu utilise. Sans ca on re-rendrait 20 fois par seconde.
@@ -185,40 +155,4 @@ export function useGamepadActivity(enabled = true): GamepadActivity {
   }, [enabled]);
 
   return state;
-}
-
-/**
- * Detail par manette, pour le bandeau de diagnostic.
- *
- * Sondage separe et volontairement lent (4 Hz) : ces valeurs changent en
- * continu, les inclure dans l'etat du badge le ferait re-rendre 20 fois par
- * seconde pour rien. Le hook ne tourne que si le bandeau est monte.
- */
-export function useGamepadDiagnostic(enabled = true): DiagnosticManette[] {
-  const [lignes, setLignes] = useState<DiagnosticManette[]>([]);
-  const precedent = useRef('');
-
-  useEffect(() => {
-    if (!enabled) {
-      setLignes([]);
-      return;
-    }
-    function tick() {
-      const suivant = manettesBranchees().map((pad) => analyser(pad).diagnostic);
-      // on ne re-rend que si quelque chose a bouge, arrondi au centieme :
-      // les axes bruitent en permanence sur les derniers chiffres
-      const empreinte = JSON.stringify(
-        suivant.map((d) => [d.index, d.axes.map((a) => a.toFixed(2)), d.boutonsPresses, d.actif]),
-      );
-      if (empreinte !== precedent.current) {
-        precedent.current = empreinte;
-        setLignes(suivant);
-      }
-    }
-    tick();
-    const interval = window.setInterval(tick, 250);
-    return () => window.clearInterval(interval);
-  }, [enabled]);
-
-  return lignes;
 }

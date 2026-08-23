@@ -84,9 +84,12 @@ html.tables-kiosk body {
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
-  /* pas de zoom au double-tap ni au pincement : sur une borne le zoom
-     navigateur casse tout le plein-ecran (constate en test blackjack) */
-  touch-action: manipulation;
+  /* `pan-x pan-y` et NON `manipulation` : contrairement a ce que son nom
+     suggere, `manipulation` autorise le pincement, il ne supprime que le zoom
+     au double-tap. Sur une borne le zoom navigateur casse tout le plein-ecran,
+     et personne ne sait revenir en arriere. On garde le defilement, dont la
+     carte et la ludotheque ont besoin. */
+  touch-action: pan-x pan-y;
 }
 
 html.tables-kiosk input,
@@ -100,4 +103,28 @@ html.tables-kiosk textarea {
    ludotheque relancait le rebond de la page. */
 .tables-scroll {
   overscroll-behavior: contain;
+}
+
+/* ============================================================
+ * Zoom utilisateur interdit, partout.
+ *
+ * Parc 100 % tactile : un pincement accidentel laissait la dalle agrandie sans
+ * que personne sache revenir en arriere, et un double-tap sur un bouton zoomait
+ * au lieu de valider.
+ *
+ * `pan-x pan-y` et non `none` : on interdit le pincement et le double-tap, mais
+ * on GARDE le defilement, dont la carte et la ludotheque ont besoin. `none`
+ * aurait fige les listes.
+ *
+ * A ne pas confondre avec le `zoom` CSS applique a la surface joueur sur borne
+ * (cf. TablePlayPage) : celui-la est une mise a l'echelle de mise en page, decidee
+ * par nous, et n'est pas affectee par ces regles.
+ * ============================================================ */
+
+html,
+body {
+  touch-action: pan-x pan-y;
+  /* iOS gonfle les polices en paysage sans cette ligne */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
