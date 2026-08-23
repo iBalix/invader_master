@@ -32,6 +32,12 @@ export function playUrl(joinCode: string): string {
   return `${window.location.origin}/play/${joinCode}`;
 }
 
+/**
+ * Emis des que le son est deverrouille, pour que le voile "Activer le son"
+ * disparaisse meme s'il est deja affiche au moment du geste.
+ */
+const AUDIO_PRET = 'invader:audio-pret';
+
 export default function ScreenApp() {
   const { hostname = 'PROJO' } = useParams<{ hostname: string }>();
   const isProjector = !hostname.toUpperCase().startsWith('BAR');
@@ -82,6 +88,38 @@ export default function ScreenApp() {
   useEffect(() => {
     setAnsweredCount(0);
   }, [state?.currentQuestionIndex, state?.status === 'question']);
+
+  // DEVERROUILLAGE AUDIO : au premier geste utilisateur, n'importe lequel et sur
+  // n'importe quel ecran, ecran d'attente inclus.
+  //
+  // Avant, seul un clic sur le voile "Activer le son" appelait enable(). Or ce
+  // voile ne vit que dans ProjectorScreen, monte uniquement quand une partie
+  // tourne. Le clic d'ouverture du kiosque, qui atterrit sur l'ecran d'attente,
+  // ne comptait donc pas : le voile resurgissait au lancement du quiz alors que
+  // le navigateur avait bien recu son geste et que la page n'avait pas rechargé.
+  //
+  // Deux mecanismes, parce qu'un seul ne suffit pas :
+  //   - hasBeenActive couvre le geste ARRIVE AVANT le montage de React (cas du
+  //     clic automatique a l'ouverture de l'URL, qui precede l'app) ;
+  //   - les ecouteurs couvrent le geste qui arrive apres.
+  useEffect(() => {
+    if (gameAudio.enabled) return;
+    const declarer = () => {
+      gameAudio.enable();
+      window.dispatchEvent(new Event(AUDIO_PRET));
+    };
+    if (navigator.userActivation?.hasBeenActive) {
+      declarer();
+      return;
+    }
+    const evenements: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart'];
+    const surGeste = () => {
+      declarer();
+      evenements.forEach((e) => window.removeEventListener(e, surGeste));
+    };
+    evenements.forEach((e) => window.addEventListener(e, surGeste));
+    return () => evenements.forEach((e) => window.removeEventListener(e, surGeste));
+  }, []);
 
   const active = state && !state.ended;
 
@@ -143,6 +181,11 @@ function ProjectorScreen({
   answeredCount: number;
 }) {
   const [soundOn, setSoundOn] = useState(gameAudio.enabled);
+  useEffect(() => {
+    const surPret = () => setSoundOn(true);
+    window.addEventListener(AUDIO_PRET, surPret);
+    return () => window.removeEventListener(AUDIO_PRET, surPret);
+  }, []);
   const prevStatus = useRef<string>('');
   const prevCineStep = useRef(-1);
   const remaining = usePhaseCountdown(state.phaseEndsAt);
