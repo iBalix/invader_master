@@ -34,7 +34,20 @@ const RANK_COLORS = ['#E8C267', '#C7CCD9', '#B07B4F'];
 
 export default function GameOverOverlay({ state, you, theme, busy, onRematch, onExit, t }: Props) {
   const result = state.result;
-  if (!result) return null;
+  // partie close sans podium (annulation, incident) : jamais d'écran mort
+  if (!result) {
+    return (
+      <div className="pointer-events-auto absolute inset-0 z-40 flex flex-col items-center justify-center gap-6" style={{ background: 'rgba(3,5,12,0.95)' }}>
+        <span className="font-display text-5xl font-black uppercase tracking-wider text-white/90">
+          {t('table.bj.end.cancelled')}
+        </span>
+        <span className="max-w-[700px] text-center text-2xl text-white/60">{t('table.bj.end.cancelledSub')}</span>
+        <ArcadeButton variant="ghost" size="xl" icon={<LogOut className="h-6 w-6" />} onClick={onExit}>
+          {t('table.bj.end.exit')}
+        </ArcadeButton>
+      </div>
+    );
+  }
   const podium = result.podium;
   const prime = state.config.prime;
   const offered = you !== null && (state.rematch?.offers.includes(you.playerId) ?? false);
