@@ -54,12 +54,24 @@ const V1_URL_BY_SCREEN: Record<string, string> = {
   '-2': 'http://localhost?type=table_slave',
 };
 
+/**
+ * URL de l'ecran projo de la nouvelle interface.
+ *
+ * Une seule entree pour le quiz ET le battle, contrairement a la V1 qui exigeait
+ * deux URLs distinctes : `/screen/:hostname` lit la session en cours et affiche
+ * ce qu'il faut, y compris un ecran d'attente quand rien ne tourne. Le hostname
+ * compte, ScreenApp s'en sert pour distinguer un projecteur d'une TV de bar
+ * (tout ce qui commence par BAR est une TV).
+ */
+const V2_PROJO_URL = 'https://invadermaster-frontend-production.up.railway.app/screen/PROJO';
+
 const PROJO_MODES = [
   { label: 'Invader', value: '' },
   { label: 'Quizz', value: 'http://quizz.invader.bar?type=projecteur' },
   { label: 'Battle Royale', value: 'http://quizz.invader.bar/battle.php?type=projecteur&hostname=PROJO' },
   { label: 'TV', value: 'http://localhost/tv.php?type=projecteur&hostname=PROJO' },
   { label: 'Stand Up', value: 'http://localhost/standup.php?type=projecteur&hostname=PROJO' },
+  { label: 'V2 · Quiz + Battle (Invader Master)', value: V2_PROJO_URL },
 ];
 
 const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
@@ -569,6 +581,21 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
                         Appliquer
                       </button>
                     </div>
+                    {selectedProjoMode === V2_PROJO_URL && (
+                      <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                        <p className="font-semibold">Un clic sur le projecteur est nécessaire après bascule.</p>
+                        <p className="mt-1">
+                          Le navigateur bloque le son tant que personne n'a cliqué sur la page : un
+                          voile « Cliquer pour activer le son » reste affiché. Sans ce clic, le
+                          blindtest et les effets sonores seront muets.
+                        </p>
+                        <p className="mt-1.5">
+                          Cet écran couvre le quiz <strong>et</strong> le battle : il suit la session
+                          lancée depuis « Quiz live » ou « Battle live », et affiche un écran
+                          d'attente entre deux parties.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
