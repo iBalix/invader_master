@@ -117,9 +117,11 @@ export function useBjSession(sessionId: string | null, playerToken: string | nul
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playerToken]);
 
-  // fetch initial + poll de secours + retours de veille/réseau
-  const playing = state !== null && state.status !== 'lobby' && state.status !== 'end';
-  const pollMs = playing ? POLL_PLAYING_MS : POLL_IDLE_MS;
+  // fetch initial + poll de secours + retours de veille/réseau.
+  // La salle d'attente sonde AUSSI vite qu'une manche : voir arriver un
+  // joueur ou partir le lancement ne doit jamais attendre un cycle long.
+  const active = state !== null && state.status !== 'end';
+  const pollMs = active ? POLL_PLAYING_MS : POLL_IDLE_MS;
   useEffect(() => {
     if (!sessionId) return;
     void refresh();

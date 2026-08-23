@@ -199,7 +199,8 @@ export function useChessSession(
   }, [playerToken]);
 
   // fetch initial + poll de secours + retours de veille/réseau
-  const pollMs = state?.status === 'playing' ? POLL_PLAYING_MS : POLL_IDLE_MS;
+  // l'attente d'un adversaire (lobby) sonde aussi vite qu'une partie
+  const pollMs = state && state.status !== 'end' ? POLL_PLAYING_MS : POLL_IDLE_MS;
   useEffect(() => {
     if (!sessionId) return;
     void refresh();
