@@ -95,6 +95,14 @@ export interface SessionConfig {
    */
   musicVolume: number;
   sfxVolume: number;
+  /**
+   * Volume du media DE LA QUESTION : extrait de blindtest et clip YouTube.
+   *
+   * Canal distinct de musicVolume, qui ne pilote que la musique d'ambiance.
+   * L'extrait etait joue par un <audio> nu, donc a 100 % sans reglage possible,
+   * alors que c'est precisement le son que la salle ecoute.
+   */
+  mediaVolume: number;
   wifiSsid: string;
   wifiPassword: string;
   pauseText: string;
@@ -136,6 +144,7 @@ export const DEFAULT_CONFIG: SessionConfig = {
   // valeurs de depart du mixer projo : celles que l'ecran appliquait en dur
   musicVolume: 0.35,
   sfxVolume: 0.8,
+  mediaVolume: 0.9,
   musicUrl: null,
   wifiSsid: 'INVADER BAR',
   wifiPassword: '',

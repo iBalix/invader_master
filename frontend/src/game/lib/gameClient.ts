@@ -154,6 +154,7 @@ export interface PublicState {
     musicUrl: string | null;
     musicVolume?: number;
     sfxVolume?: number;
+    mediaVolume?: number;
   };
   playerCount: number;
   /** joueurs inscrits (survivants + eliminés), pour les ecrans d'appel */

@@ -3,7 +3,7 @@
  * Design : dark néon, cohérent avec le launcher des tables tactiles.
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 
 // ---------------------------------------------------------------------------
@@ -146,18 +146,52 @@ export function parseYoutube(spec: string | null | undefined): {
   return { videoId: m[1], start, end: start + parseInt(m[3], 10) };
 }
 
-export function YoutubeClip({ spec, muted = false }: { spec: string; muted?: boolean }) {
+/**
+ * Clip YouTube, volume pilotable depuis le mixer de la console.
+ *
+ * Le volume d'une iframe YouTube ne se regle pas en CSS ni par attribut : il
+ * faut passer par l'API JS du player. D'ou `enablejsapi=1` et un postMessage
+ * `setVolume`. On le renvoie a chaque changement ET a l'evenement load, parce
+ * qu'un message envoye avant que le player soit pret est perdu sans erreur.
+ */
+export function YoutubeClip({
+  spec,
+  muted = false,
+  volume,
+}: {
+  spec: string;
+  muted?: boolean;
+  /** 0 a 1 ; absent = volume par defaut de YouTube */
+  volume?: number;
+}) {
+  const ref = useRef<HTMLIFrameElement | null>(null);
   const parsed = parseYoutube(spec);
+
+  const appliquerVolume = useCallback(() => {
+    if (volume === undefined || !ref.current?.contentWindow) return;
+    const pct = Math.round(Math.min(1, Math.max(0, volume)) * 100);
+    ref.current.contentWindow.postMessage(
+      JSON.stringify({ event: 'command', func: 'setVolume', args: [pct] }),
+      '*',
+    );
+  }, [volume]);
+
+  useEffect(() => {
+    appliquerVolume();
+  }, [appliquerVolume]);
+
   if (!parsed) return null;
-  const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=1&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0${muted ? '&mute=1' : ''}`;
+  const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=1&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&enablejsapi=1${muted ? '&mute=1' : ''}`;
   return (
     <div className="aspect-video w-full overflow-hidden rounded-2xl bg-black">
       <iframe
+        ref={ref}
         className="h-full w-full"
         src={src}
         title="Extrait"
         allow="autoplay; encrypted-media"
         allowFullScreen={false}
+        onLoad={appliquerVolume}
       />
     </div>
   );

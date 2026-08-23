@@ -38,7 +38,7 @@ export async function broadcastTopic(
   payload: Record<string, unknown> = {},
 ): Promise<void> {
   if (!SUPABASE_URL || !SERVICE_KEY) return;
-  try {
+  const send = async (): Promise<boolean> => {
     const res = await fetch(`${SUPABASE_URL}/realtime/v1/api/broadcast`, {
       method: 'POST',
       headers: {
@@ -59,9 +59,22 @@ export async function broadcastTopic(
     });
     if (!res.ok) {
       console.error(`[realtime] broadcast failed: ${res.status} ${await res.text()}`);
+      return false;
     }
+    return true;
+  };
+  // un événement perdu coûte jusqu'à un cycle de sondage complet aux clients :
+  // un hoquet réseau vaut donc UNE nouvelle tentative rapide avant d'abandonner
+  try {
+    if (await send()) return;
   } catch (err) {
-    // Le temps réel est best-effort : le polling de secours des clients rattrape.
     console.error('[realtime] broadcast error', err);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  try {
+    await send();
+  } catch (err) {
+    // Le temps réel reste best-effort : le polling de secours des clients rattrape.
+    console.error('[realtime] broadcast retry error', err);
   }
 }

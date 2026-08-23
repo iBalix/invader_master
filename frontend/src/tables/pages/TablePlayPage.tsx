@@ -73,7 +73,7 @@ export default function TablePlayPage() {
     // Colonne centree : la surface joueur est pensee pour un telephone, elle
     // serait illisible etiree sur une dalle 1920 en paysage. Elle est en
     // revanche agrandie (cf. ECHELLE_DALLE).
-    <div className="mx-auto h-full w-full max-w-[34rem]" style={{ zoom: ECHELLE_DALLE }}>
+    <div className="mx-auto h-full w-full max-w-[80rem]" style={{ zoom: ECHELLE_DALLE }}>
       <PlayerApp
         embedded
         deviceLabel={identity?.hostname}

@@ -198,8 +198,9 @@ function ProjectorScreen({
             if (r?.milestone != null) setTimeout(() => gameAudio.milestoneHit(), 1000);
           }, 1200);
         } else {
-          setTimeout(() => gameAudio.correctHit(), 1400);
-          if (state.reveal?.fastest) setTimeout(() => gameAudio.fastestChime(), 2600);
+          // cales sur RevealProjo : revelation a 2200 ms, plus rapide a 3400 ms
+          setTimeout(() => gameAudio.correctHit(), 2200);
+          if (state.reveal?.fastest) setTimeout(() => gameAudio.fastestChime(), 3400);
         }
         break;
       }
@@ -487,13 +488,25 @@ function QuestionProjo({
         {(hasImage || hasVideo || q.musicUrl) && (
           <div className="flex flex-1 items-center justify-center">
             {hasVideo && q.videoYoutube ? (
-              <div className="w-full max-w-3xl"><YoutubeClip spec={q.videoYoutube} /></div>
+              <div className="w-full max-w-3xl">
+                <YoutubeClip spec={q.videoYoutube} volume={state.config.mediaVolume ?? 0.9} />
+              </div>
             ) : hasImage ? (
               <img src={q.imageQuestionUrl ?? ''} alt="" className="max-h-[52vh] w-full rounded-3xl object-contain" />
             ) : (
               <div className="anim-glow flex h-56 w-56 items-center justify-center rounded-full border-2 border-cyan-400/40 bg-cyan-400/10 text-8xl">
                 🎵
-                {q.musicUrl && <audio src={q.musicUrl} autoPlay />}
+                {q.musicUrl && (
+                  <audio
+                    src={q.musicUrl}
+                    autoPlay
+                    // le volume d'un <audio> ne se pose pas en attribut : sans ce
+                    // ref l'extrait sortait a 100 %, hors de portee du mixer
+                    ref={(el) => {
+                      if (el) el.volume = Math.min(1, Math.max(0, state.config.mediaVolume ?? 0.9));
+                    }}
+                  />
+                )}
               </div>
             )}
           </div>
@@ -529,15 +542,120 @@ function QuestionProjo({
 
 // --- Révélation ---------------------------------------------------------------
 
+/**
+ * Compteur anime de 0 vers `cible`, demarre quand `actif` passe a vrai.
+ * Meme courbe que la barre, pour que le chiffre et la barre restent solidaires.
+ */
+function useCompteurAnime(cible: number, actif: boolean, dureeMs: number, delaiMs = 0): number {
+  const [valeur, setValeur] = useState(0);
+  useEffect(() => {
+    if (!actif) {
+      setValeur(0);
+      return;
+    }
+    let raf = 0;
+    let debut = 0;
+    const tick = (t: number) => {
+      if (!debut) debut = t;
+      const p = Math.min(1, Math.max(0, (t - debut - delaiMs) / dureeMs));
+      setValeur(Math.round(cible * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [cible, actif, dureeMs, delaiMs]);
+  return valeur;
+}
+
+/**
+ * Une reponse a la revelation, sur le projecteur.
+ *
+ * La barre part de 0 et monte vers son pourcentage, avec un decalage par
+ * reponse : la salle voit la repartition SE CONSTRUIRE au lieu de la decouvrir
+ * figee, et devine peu a peu qui l'emporte. Le chiffre compte en meme temps.
+ *
+ * A ne PAS "simplifier" en posant la largeur finale des le premier rendu :
+ * une transition CSS ne joue que sur un changement de valeur. C'etait le defaut
+ * d'origine, les barres apparaissaient pleines d'un coup et la revelation
+ * tombait a plat, sans que rien ne casse visiblement.
+ */
+function LigneReponseProjo({
+  lettre,
+  texte,
+  pourcent,
+  ouvert,
+  rang,
+  correcte,
+  devoilee,
+}: {
+  lettre: string;
+  texte: string;
+  pourcent: number;
+  ouvert: boolean;
+  rang: number;
+  correcte: boolean;
+  devoilee: boolean;
+}) {
+  const delaiMs = rang * 120;
+  const affiche = useCompteurAnime(pourcent, ouvert, 1600, delaiMs);
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border-2 px-7 py-5 text-3xl font-bold transition-all duration-500 ${
+        devoilee && correcte
+          ? 'anim-pop scale-[1.02] border-emerald-400 bg-emerald-400/20 text-emerald-200'
+          : devoilee
+            ? 'border-white/10 bg-white/5 opacity-40'
+            : 'border-white/15 bg-white/5'
+      }`}
+    >
+      <div
+        className={`absolute inset-y-0 left-0 ${devoilee && correcte ? 'bg-emerald-400/25' : 'bg-white/10'}`}
+        style={{
+          width: `${ouvert ? pourcent : 0}%`,
+          transition: 'width 1.6s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.5s ease-out',
+          transitionDelay: `${delaiMs}ms`,
+        }}
+      />
+      <div className="relative flex items-center justify-between">
+        <span>
+          <span className="mr-3 font-black text-cyan-300">{lettre}</span>
+          {texte}
+          {devoilee && correcte && ' \u2714'}
+        </span>
+        <span className="text-2xl tabular-nums text-white/60">{affiche}%</span>
+      </div>
+    </div>
+  );
+}
+
 function RevealProjo({ state }: { state: PublicState }) {
   const q = state.question;
   const reveal = state.reveal;
-  const [phase, setPhase] = useState<'percent' | 'answer'>('percent');
+  // Trois temps : les barres montent, puis la bonne reponse se detache, puis le
+  // plus rapide arrive. Chaque etape a son son (cf. sequencement audio).
+  const [phase, setPhase] = useState<'grow' | 'answer' | 'fastest'>('grow');
+  const [ouvert, setOuvert] = useState(false);
   useEffect(() => {
-    setPhase('percent');
-    const t = setTimeout(() => setPhase('answer'), 1600);
-    return () => clearTimeout(t);
+    setPhase('grow');
+    setOuvert(false);
+    // deux frames avant d'ouvrir : la transition CSS a besoin de voir la
+    // largeur 0 rendue avant de partir vers sa cible.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setOuvert(true));
+    });
+    const t1 = setTimeout(() => setPhase('answer'), 2200);
+    const t2 = setTimeout(() => setPhase('fastest'), 3400);
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [state.currentQuestionIndex]);
+
+  const devoilee = phase !== 'grow';
+  const rapideDevoile = phase === 'fastest';
 
   if (!q || !reveal) return null;
   if (reveal.cancelled) {
@@ -561,33 +679,18 @@ function RevealProjo({ state }: { state: PublicState }) {
 
       {q.type === 'qcm' && (
         <div className="grid flex-1 content-center gap-4">
-          {(q.answers ?? []).map((a, i) => {
-            const isCorrect = i === reveal.correctIndex;
-            const pct = reveal.percents?.[i] ?? 0;
-            return (
-              <div
-                key={i}
-                className={`relative overflow-hidden rounded-2xl border-2 px-7 py-5 text-3xl font-bold ${
-                  phase === 'answer' && isCorrect
-                    ? 'anim-pop border-emerald-400 bg-emerald-400/20 text-emerald-200'
-                    : 'border-white/15 bg-white/5'
-                } ${phase === 'answer' && !isCorrect ? 'opacity-40' : ''}`}
-              >
-                <div
-                  className="absolute inset-y-0 left-0 bg-white/10"
-                  style={{ width: `${pct}%`, transition: 'width 1.2s ease-out' }}
-                />
-                <div className="relative flex items-center justify-between">
-                  <span>
-                    <span className="mr-3 font-black text-cyan-300">{String.fromCharCode(65 + i)}</span>
-                    {a}
-                    {phase === 'answer' && isCorrect && ' ✔'}
-                  </span>
-                  <span className="text-2xl text-white/60 tabular-nums">{pct}%</span>
-                </div>
-              </div>
-            );
-          })}
+          {(q.answers ?? []).map((a, i) => (
+            <LigneReponseProjo
+              key={i}
+              lettre={String.fromCharCode(65 + i)}
+              texte={a}
+              pourcent={reveal.percents?.[i] ?? 0}
+              ouvert={ouvert}
+              rang={i}
+              correcte={i === reveal.correctIndex}
+              devoilee={devoilee}
+            />
+          ))}
         </div>
       )}
 
@@ -620,27 +723,27 @@ function RevealProjo({ state }: { state: PublicState }) {
         </div>
       )}
 
-      {q.imageQuestionUrl && phase === 'answer' && state.question?.imageAnswerUrl && (
+      {q.imageQuestionUrl && devoilee && state.question?.imageAnswerUrl && (
         <div className="flex justify-center"><img src={state.question.imageAnswerUrl} alt="" className="max-h-[30vh] rounded-2xl object-contain" /></div>
       )}
 
       <div className="mt-6 flex min-h-[56px] flex-wrap items-center justify-center gap-4">
-        {phase === 'answer' && reveal.fastest && (
+        {rapideDevoile && reveal.fastest && (
           <span className="anim-pop rounded-full border border-amber-400/50 bg-amber-400/15 px-6 py-2.5 text-2xl font-black text-amber-300">
             ⚡ Le plus rapide : {reveal.fastest} (+1 pt)
           </span>
         )}
-        {phase === 'answer' && qdWinners.length > 0 && (
+        {rapideDevoile && qdWinners.length > 0 && (
           <span className="anim-pop rounded-full border border-violet-400/50 bg-violet-500/15 px-6 py-2.5 text-2xl font-bold text-violet-200">
             🎲 x2 gagné : {qdWinners.map(([pseudo]) => pseudo).join(', ')}
           </span>
         )}
-        {phase === 'answer' && qdLosers.length > 0 && (
+        {rapideDevoile && qdLosers.length > 0 && (
           <span className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5 text-2xl text-white/50">
             🎲 raté : {qdLosers.map(([pseudo]) => pseudo).join(', ')}
           </span>
         )}
-        {phase === 'answer' && (reveal.special === 'shot' || reveal.special === 'goodies') && reveal.fastest && (
+        {rapideDevoile && (reveal.special === 'shot' || reveal.special === 'goodies') && reveal.fastest && (
           <span className="anim-pop rounded-full border border-amber-400/60 bg-amber-400/20 px-6 py-2.5 text-2xl font-black text-amber-200">
             {reveal.special === 'shot' ? '🥃 Shot offert à' : '🎁 Goodies pour'} {reveal.fastest} !
           </span>

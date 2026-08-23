@@ -21,7 +21,7 @@ import type {
  * partie : avant, un signal manqué laissait l'adversaire attendre jusqu'à
  * 10 s devant un plateau figé.
  */
-const POLL_PLAYING_MS = 2_500;
+const POLL_PLAYING_MS = 1_200;
 const POLL_IDLE_MS = 10_000;
 
 /** Bloc d'accélération agrafé au signal 'sync' par le backend (chessFlow). */

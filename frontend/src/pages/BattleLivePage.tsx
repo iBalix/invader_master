@@ -20,6 +20,7 @@ import {
   Flag,
   LifeBuoy,
   ListOrdered,
+  Film,
   Music2,
   FlaskConical,
   Pause,
@@ -125,7 +126,7 @@ interface GmState {
   phaseEndsAt: number | null;
   currentQuestionIndex: number;
   playerCount: number;
-  config: { musicVolume?: number; sfxVolume?: number; wifiSsid: string; testMode?: boolean };
+  config: { musicVolume?: number; sfxVolume?: number; mediaVolume?: number; wifiSsid: string; testMode?: boolean };
   gm: {
     currentQuestion: {
       question: string;
@@ -1056,12 +1057,15 @@ function MixerPanel({
 }) {
   const [music, setMusic] = useState(Math.round((state.config.musicVolume ?? 0.35) * 100));
   const [sfx, setSfx] = useState(Math.round((state.config.sfxVolume ?? 0.8) * 100));
+  const [media, setMedia] = useState(Math.round((state.config.mediaVolume ?? 0.9) * 100));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const push = (m: number, s: number) => {
+  const push = (m: number, s: number, md: number) => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      void action('set-config', { config: { musicVolume: m / 100, sfxVolume: s / 100 } });
+      void action('set-config', {
+        config: { musicVolume: m / 100, sfxVolume: s / 100, mediaVolume: md / 100 },
+      });
     }, 350);
   };
 
@@ -1082,7 +1086,7 @@ function MixerPanel({
             onChange={(e) => {
               const v = parseInt(e.target.value, 10);
               setMusic(v);
-              push(v, sfx);
+              push(v, sfx, media);
             }}
             className="w-full accent-indigo-600"
           />
@@ -1100,10 +1104,31 @@ function MixerPanel({
             onChange={(e) => {
               const v = parseInt(e.target.value, 10);
               setSfx(v);
-              push(music, v);
+              push(music, v, media);
             }}
             className="w-full accent-indigo-600"
           />
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2 font-medium text-gray-600"><Film size={14} /> Média de la question</span>
+            <span className="font-mono font-bold text-gray-800">{media}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={media}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              setMedia(v);
+              push(music, sfx, v);
+            }}
+            className="w-full accent-indigo-600"
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            Extrait de blindtest et clip vidéo. Canal distinct de la musique de fond.
+          </p>
         </div>
         <p className="text-xs text-gray-400">
           La musique baisse automatiquement pendant les phases de suspense et remonte à ce niveau exact.

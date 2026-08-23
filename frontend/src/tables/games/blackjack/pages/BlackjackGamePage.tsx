@@ -31,7 +31,10 @@ export default function BlackjackGamePage() {
   const hostname = getHostname();
 
   const [playerToken, setPlayerToken] = useState<string | null>(() => getBjIdentity(sessionId)?.playerToken ?? null);
-  const { state, you, refresh, applyResponse } = useBjSession(sessionId, playerToken);
+  const { state, you, refresh, applyResponse, syncInfo } = useBjSession(sessionId, playerToken);
+  // ?debug=1 : pastille montrant comment chaque mise à jour arrive (realtime
+  // ou sondage) et son âge, pour diagnostiquer la latence en conditions réelles
+  const debug = new URLSearchParams(window.location.search).get('debug') === '1';
   const [busy, setBusy] = useState(false);
   const [sitOpen, setSitOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -279,6 +282,18 @@ export default function BlackjackGamePage() {
       </div>
 
       <JoinPseudoModal open={sitOpen} busy={busy} onClose={() => setSitOpen(false)} onJoin={(pseudo) => void handleSit(pseudo)} />
+
+      {debug && syncInfo && (
+        <div
+          className="pointer-events-none fixed bottom-2 left-2 z-50 rounded-lg px-3 py-1.5 font-mono text-sm font-bold"
+          style={{
+            background: 'rgba(0,0,0,0.8)',
+            color: syncInfo.via === 'realtime' ? '#4ADE80' : '#FBBF24',
+          }}
+        >
+          {syncInfo.via} · {syncInfo.ageMs}ms · v{state.v}
+        </div>
+      )}
     </div>
   );
 }

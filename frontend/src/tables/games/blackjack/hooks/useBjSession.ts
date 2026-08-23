@@ -14,14 +14,23 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRealtimeTopic } from '../../../hooks/useRealtimeTopic';
+import { serverNow } from '../../../lib/clockSync';
 import { bjApi } from '../lib/bjApi';
 import type { BjPublicState, BjStateResponse, BjYou } from '../lib/bjTypes';
 
-const POLL_PLAYING_MS = 2_500;
+const POLL_PLAYING_MS = 1_200;
 const POLL_IDLE_MS = 10_000;
 
 interface BjSyncPayload {
   snapshot?: BjPublicState;
+}
+
+/** comment le dernier état est arrivé (badge de diagnostic ?debug=1) */
+export interface SyncInfo {
+  via: 'realtime' | 'fetch';
+  /** âge du snapshot à son application (ms, horloge serveur) */
+  ageMs: number;
+  at: number;
 }
 
 export interface UseBjSessionResult {
@@ -30,12 +39,14 @@ export interface UseBjSessionResult {
   error: string | null;
   refresh: () => Promise<void>;
   applyResponse: (data: BjStateResponse) => void;
+  syncInfo: SyncInfo | null;
 }
 
 export function useBjSession(sessionId: string | null, playerToken: string | null): UseBjSessionResult {
   const [state, setState] = useState<BjPublicState | null>(null);
   const [you, setYou] = useState<BjYou | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [syncInfo, setSyncInfo] = useState<SyncInfo | null>(null);
   const versionRef = useRef(0);
   const youRef = useRef<BjYou | null>(null);
   const tokenRef = useRef(playerToken);
@@ -69,6 +80,11 @@ export function useBjSession(sessionId: string | null, playerToken: string | nul
         try {
           const data = await bjApi.state(sessionId, usedToken ?? undefined);
           if (data.state.v >= versionRef.current) {
+            // le badge ne compte que les VRAIES nouvelles (sinon chaque
+            // sondage de secours l'écraserait en 'fetch')
+            if (data.state.v > versionRef.current) {
+              setSyncInfo({ via: 'fetch', ageMs: 0, at: Date.now() });
+            }
             versionRef.current = data.state.v;
             setState(data.state);
             if (usedToken === tokenRef.current) {
@@ -132,6 +148,7 @@ export function useBjSession(sessionId: string | null, playerToken: string | nul
     if (snapshot.v <= versionRef.current) return;
     versionRef.current = snapshot.v;
     setState(snapshot);
+    setSyncInfo({ via: 'realtime', ageMs: Math.max(0, serverNow() - snapshot.serverNow), at: Date.now() });
 
     // le bloc privé est-il périmé ? (jokers piochés/joués, revanche créée)
     const token = tokenRef.current;
@@ -147,5 +164,5 @@ export function useBjSession(sessionId: string | null, playerToken: string | nul
     if (my === null || jokersStale || rematchStale) void refresh();
   });
 
-  return { state, you, error, refresh, applyResponse };
+  return { state, you, error, refresh, applyResponse, syncInfo };
 }

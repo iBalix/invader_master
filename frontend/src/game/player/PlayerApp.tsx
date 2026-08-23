@@ -390,7 +390,7 @@ function PlayerScreen(props: ScreenProps) {
 // Inscription
 // ---------------------------------------------------------------------------
 
-function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel }: ScreenProps) {
+function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel, embedded }: ScreenProps) {
   const [pseudo, setPseudo] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -419,16 +419,19 @@ function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel }: S
 
   return (
     <Center>
-      <div className="anim-fade-up w-full max-w-sm text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">
+      <div className={`anim-fade-up w-full text-center ${embedded ? 'max-w-2xl' : 'max-w-sm'}`}>
+        <p className={`font-semibold uppercase tracking-[0.25em] text-cyan-300 ${embedded ? 'text-lg' : 'text-sm'}`}>
           {state.mode === 'battle' ? 'Battle Royale' : 'Quiz'}
         </p>
-        <h1 className="anim-title-glow mb-1 text-balance text-3xl font-black">{state.quizName}</h1>
-        <p className="mb-8 text-sm text-white/50">
+        <h1 className={`anim-title-glow mb-1 text-balance font-black ${embedded ? 'text-5xl' : 'text-3xl'}`}>{state.quizName}</h1>
+        <p className={`mb-8 text-white/50 ${embedded ? 'text-lg' : 'text-sm'}`}>
           {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} connecté{state.playerCount > 1 ? 's' : ''}
           {started ? ' · partie en cours, rejoins-nous !' : ''}
         </p>
-        <label className="mb-2 block text-left text-sm font-semibold text-white/70" htmlFor="pseudo">
+        <label
+          className={`mb-2 block text-left font-semibold text-white/70 ${embedded ? 'text-xl' : 'text-sm'}`}
+          htmlFor="pseudo"
+        >
           Ton pseudo ou nom d'équipe
         </label>
         <input
@@ -438,7 +441,9 @@ function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel }: S
           onKeyDown={(e) => e.key === 'Enter' && void join()}
           maxLength={16}
           autoComplete="off"
-          className="mb-3 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3.5 text-center text-lg font-bold text-white placeholder-white/30 outline-none focus:border-cyan-400"
+          className={`mb-3 w-full rounded-xl border border-white/15 bg-white/5 text-center font-bold text-white placeholder-white/30 outline-none focus:border-cyan-400 ${
+            embedded ? 'px-6 py-6 text-3xl' : 'px-4 py-3.5 text-lg'
+          }`}
           placeholder="PSEUDO / ÉQUIPE"
         />
         {error && <p className="anim-shake mb-3 text-sm font-semibold text-rose-400">{error}</p>}
@@ -446,7 +451,9 @@ function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel }: S
           type="button"
           onClick={() => void join()}
           disabled={busy || !pseudo.trim()}
-          className="anim-glow w-full rounded-xl bg-gradient-to-r from-cyan-400 to-violet-500 px-4 py-4 text-lg font-black uppercase tracking-wider text-[#0a0a14] disabled:opacity-40"
+          className={`anim-glow w-full rounded-xl bg-gradient-to-r from-cyan-400 to-violet-500 font-black uppercase tracking-wider text-[#0a0a14] disabled:opacity-40 ${
+            embedded ? 'px-6 py-6 text-2xl' : 'px-4 py-4 text-lg'
+          }`}
         >
           {busy ? '...' : 'Participer'}
         </button>
@@ -612,7 +619,7 @@ export const ANSWER_COLORS = [
   'border-rose-400/50 bg-rose-400/10 active:bg-rose-400/25',
 ];
 
-function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: ScreenProps & { you: You }) {
+function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded }: ScreenProps & { you: You }) {
   const remaining = usePhaseCountdown(state.phaseEndsAt);
   const q = state.question;
   const locked = state.status === 'locked';
@@ -688,7 +695,7 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: Screen
             Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''}
             {you.qdActive ? ' · 🎲 x2' : ''}
           </p>
-          <h2 className="text-balance text-lg font-bold leading-snug">{q.question}</h2>
+          <h2 className={`text-balance font-bold leading-snug ${embedded ? 'text-3xl' : 'text-lg'}`}>{q.question}</h2>
         </div>
         {remaining !== null && !locked && (
           <TimerRing remainingMs={remaining} totalMs={totalMs} size={60} />
@@ -715,7 +722,11 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: Screen
           <BigMessage emoji="⏱️" title="Temps écoulé !" sub={state.judging ? 'Vérification des réponses...' : 'Calcul des scores...'} />
         </Center>
       ) : q.type === 'qcm' ? (
-        <div className="grid flex-1 content-start gap-2.5">
+        <div
+          className={`grid flex-1 gap-2.5 ${
+            embedded ? 'grid-cols-2 grid-rows-2 content-stretch gap-5' : 'content-start'
+          }`}
+        >
           {(q.answers ?? []).map((a, i) => (
             <button
               key={i}
@@ -725,7 +736,9 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh }: Screen
                 setSelected(i);
                 void send({ choice: i });
               }}
-              className={`rounded-xl border-2 px-4 py-3.5 text-left text-base font-semibold leading-snug transition-transform active:scale-[0.98] ${
+              className={`rounded-xl border-2 text-left font-semibold leading-snug transition-transform active:scale-[0.98] ${
+                embedded ? 'flex items-center px-8 text-3xl' : 'px-4 py-3.5 text-base'
+              } ${
                 selected === i
                   ? 'border-white bg-white/20'
                   : ANSWER_COLORS[i % 4]
