@@ -2,8 +2,15 @@
  * Ecran liste des jeux v2 (DA V3 launcher).
  *
  * - Sidebar moderne (LauncherSidebar) avec icone Lucide + texture par categorie
- * - Bandeau de filtre nb joueurs (1/2/3/4) au-dessus de la grille
- * - Grid de vignettes 16:9 dense ; les jeux dont max_players < filtre sont grises
+ * - Bandeau de filtre nb joueurs (1 / 2 / 3 / 4+) au-dessus de la grille. Chaque
+ *   seuil signifie "au moins n joueurs", d'ou le "+" sur le dernier ; un jeu en
+ *   reseau a 8 joueurs y tombe naturellement.
+ * - AUCUN filtre coche par defaut, et remise a zero a chaque changement de
+ *   categorie : on entre en voyant tous les jeux, pas une grille a moitie grisee.
+ * - Les seuils sans aucun jeu dans la categorie affichee sont grises et non
+ *   cliquables. Un second appui sur le seuil actif le retire.
+ * - Grid de vignettes 16:9 dense ; avec un filtre pose, les jeux dont
+ *   max_players est sous le seuil sont grises
  * - Tap d'une vignette = LaunchGameModal (sauf grise)
  * - Plus de titre redondant en haut (la categorie active est lisible dans la sidebar)
  * - Plus de catégorie "Nos préférés" ni "4 joueurs" (filtrees au seed v2)
@@ -26,7 +33,19 @@ import RetroLoader from '../components/ui/RetroLoader';
 import AnimatedGrid, { AnimatedGridItem } from '../components/ui/AnimatedGrid';
 import ScrollIndicator from '../components/menu/ScrollIndicator';
 
-const PLAYER_FILTERS = [1, 2, 3, 4] as const;
+/**
+ * Seuils du filtre joueurs. Chaque seuil signifie "au moins n joueurs" : le
+ * dernier s'affiche donc "4+", ce que le filtre faisait deja sans le dire.
+ * Un jeu en reseau a 8 joueurs (le blackjack) tombe bien sous ce 4+.
+ */
+const SEUILS_JOUEURS = [1, 2, 3, 4] as const;
+
+/** libelle d'un seuil : le plus haut est un "et plus" */
+function libelleSeuil(n: number): string {
+  const dernier = SEUILS_JOUEURS[SEUILS_JOUEURS.length - 1];
+  if (n === dernier) return `${n}+ joueurs`;
+  return `${n} ${n === 1 ? 'joueur' : 'joueurs'}`;
+}
 
 export default function GamesPage() {
   useHostname();
@@ -37,7 +56,9 @@ export default function GamesPage() {
   const t = useT();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selected, setSelected] = useState<GameV2 | null>(null);
-  const [playerFilter, setPlayerFilter] = useState<1 | 2 | 3 | 4>(1);
+  // null = aucun filtre, et c'est l'etat par defaut : on entre dans une
+  // categorie en voyant tous ses jeux, pas une grille a moitie grisee.
+  const [playerFilter, setPlayerFilter] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-selection de la premiere categorie au load
@@ -71,6 +92,26 @@ export default function GamesPage() {
     if (!cat) return [] as GameV2[];
     return data.games.filter((g) => g.categories.includes(cat.name));
   }, [data, activeCategory]);
+
+  /**
+   * Seuils ayant au moins un jeu dans la categorie affichee. Les autres sont
+   * grises et non cliquables : proposer un filtre qui ne renvoie rien envoie le
+   * client dans un mur, et sur une borne il n'a personne a qui demander.
+   */
+  const seuilsDisponibles = useMemo(() => {
+    const dispo = new Set<number>();
+    for (const g of visibleGames) {
+      const max = g.maxPlayers ?? 1;
+      for (const n of SEUILS_JOUEURS) if (max >= n) dispo.add(n);
+    }
+    return dispo;
+  }, [visibleGames]);
+
+  // Changement de categorie : on repart sans filtre. Sinon un filtre reste actif
+  // alors qu'il vient d'etre grise, et la grille arrive vide sans explication.
+  useEffect(() => {
+    setPlayerFilter(null);
+  }, [activeCategory]);
 
   const sidebarEntries = useMemo<SidebarEntry[]>(() => {
     return (data?.categories ?? []).map((cat) => ({
@@ -108,23 +149,29 @@ export default function GamesPage() {
               Filtre joueurs
             </span>
             <div className="flex gap-2">
-              {PLAYER_FILTERS.map((n) => {
+              {SEUILS_JOUEURS.map((n) => {
                 const active = playerFilter === n;
+                const dispo = seuilsDisponibles.has(n);
                 return (
                   <button
                     key={n}
                     type="button"
-                    onClick={() => setPlayerFilter(n)}
+                    disabled={!dispo}
+                    // un second appui sur le seuil actif le retire : sans ca, une
+                    // fois un filtre pose il n'y a plus aucun moyen de tout revoir
+                    onClick={() => setPlayerFilter(active ? null : n)}
                     className={[
-                      'flex items-center gap-2 rounded-full border px-4 py-1.5 font-display text-sm uppercase tracking-wider transition-colors',
-                      active
-                        ? gamesColor
-                          ? ''
-                          : 'border-table-magenta/60 bg-table-magenta/20 text-table-magenta'
-                        : 'border-white/15 bg-white/5 text-table-ink-soft hover:bg-white/10',
+                      'flex h-12 items-center gap-2 rounded-full border px-5 font-display text-base uppercase tracking-wider transition-colors',
+                      !dispo
+                        ? 'cursor-not-allowed border-white/5 bg-white/[0.02] text-table-ink-muted/40'
+                        : active
+                          ? gamesColor
+                            ? ''
+                            : 'border-table-magenta/60 bg-table-magenta/20 text-table-magenta'
+                          : 'border-white/15 bg-white/5 text-table-ink-soft hover:bg-white/10',
                     ].join(' ')}
                     style={
-                      active && gamesColor
+                      dispo && active && gamesColor
                         ? {
                             borderColor: `${gamesColor}99`,
                             backgroundColor: `${gamesColor}33`,
@@ -133,8 +180,9 @@ export default function GamesPage() {
                         : undefined
                     }
                     aria-pressed={active}
+                    title={dispo ? undefined : 'Aucun jeu de cette catégorie'}
                   >
-                    {n} {n === 1 ? 'joueur' : 'joueurs'}
+                    {libelleSeuil(n)}
                   </button>
                 );
               })}
@@ -159,12 +207,12 @@ export default function GamesPage() {
                 </div>
               ) : (
                 <AnimatedGrid
-                  resetKey={`${activeCategory}-${playerFilter}`}
+                  resetKey={`${activeCategory}-${playerFilter ?? "tous"}`}
                   className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-4"
                 >
                   {visibleGames.map((g) => {
                     const maxP = g.maxPlayers ?? 1;
-                    const isDisabled = maxP < playerFilter;
+                    const isDisabled = playerFilter !== null && maxP < playerFilter;
                     const consoleLabel =
                       g.consoleDisplayName ||
                       (g.consoleId ? consoleLabelById.get(g.consoleId) : null) ||
@@ -180,7 +228,7 @@ export default function GamesPage() {
                           game={gameForCard}
                           consoleLabel={consoleLabel}
                           disabled={isDisabled}
-                          disabledReason={isDisabled ? `Min. ${playerFilter} joueurs` : null}
+                          disabledReason={isDisabled ? `Min. ${libelleSeuil(playerFilter!)}` : null}
                           onClick={() => {
                             if (isDisabled) return;
                             // jeu web (échecs, ...) : navigation interne dans

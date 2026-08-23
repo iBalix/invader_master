@@ -405,14 +405,24 @@ export default function GameFormV2Page() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Joueurs max *</label>
-              <select value={form.max_players} onChange={(e) => set('max_players', parseInt(e.target.value) as 1 | 2 | 3 | 4)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+              <select
+                value={form.max_players}
+                onChange={(e) => set('max_players', parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
                 <option value={1}>1 joueur</option>
                 <option value={2}>2 joueurs</option>
                 <option value={3}>3 joueurs</option>
                 <option value={4}>4 joueurs</option>
+                <option value={5}>5 joueurs</option>
+                <option value={6}>6 joueurs</option>
+                <option value={7}>7 joueurs</option>
+                <option value={8}>8 joueurs</option>
               </select>
-              <p className="mt-1 text-xs text-gray-400">Utilisé par le filtre joueurs sur les bornes.</p>
+              <p className="mt-1 text-xs text-gray-400">
+                Utilisé par le filtre joueurs sur les bornes. Au-delà de 4, le jeu apparaît sous le
+                filtre « 4+ » : les jeux en réseau montent jusqu'à 8.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Plateformes</label>
