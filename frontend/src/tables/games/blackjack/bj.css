@@ -314,3 +314,27 @@
   100% { scale: 1; }
 }
 .bj-tuto-pop { animation: bj-tuto-pop 300ms cubic-bezier(0.3, 1.2, 0.4, 1) 1; }
+
+/* ---- mise aux jetons (rack cliquable) -------------------------------------- */
+
+/* le jeton posé arrive du rack : lancer court, rebond, puis il se cale.
+   Propriétés individuelles (translate/scale/rotate) : elles composent avec
+   le positionnement de la pile au lieu de l'écraser. */
+@keyframes bj-chip-toss {
+  0% { translate: 0 54px; scale: 0.75; rotate: -14deg; opacity: 0; }
+  55% { translate: 0 -7px; scale: 1.08; rotate: 4deg; opacity: 1; }
+  100% { translate: 0 0; scale: 1; rotate: 0deg; opacity: 1; }
+}
+.bj-chip-toss { animation: bj-chip-toss 340ms cubic-bezier(0.25, 1, 0.4, 1) 1 backwards; }
+
+/* le jeton du rack s'enfonce sous le doigt */
+.bj-chip-btn { transition: translate 120ms ease-out, filter 120ms ease-out; }
+.bj-chip-btn:active { translate: 0 4px; }
+.bj-chip-btn[data-affordable='false'] { filter: grayscale(1) brightness(0.55); }
+
+/* la zone de mise respire quand elle contient quelque chose */
+@keyframes bj-bet-zone-in {
+  from { scale: 0.94; opacity: 0.5; }
+  to { scale: 1; opacity: 1; }
+}
+.bj-bet-zone-in { animation: bj-bet-zone-in 220ms ease-out 1; }
