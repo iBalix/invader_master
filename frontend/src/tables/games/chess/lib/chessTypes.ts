@@ -49,7 +49,7 @@ export interface ChessPublicState {
   /** bornes de la partie (récap de fin) */
   startedAt: number | null;
   endedAt: number | null;
-  config: { clock: ChessClockConfig | null; theme: string; creatorColor: ChessColor };
+  config: { clock: ChessClockConfig | null; theme: string; creatorColor: ChessColor ; ai: { level: number } | null };
   seats: { w: ChessSeatView | null; b: ChessSeatView | null };
   fen: string;
   /** historique complet en UCI ('e2e4', 'e7e8q'), rejouable par chess.js */
@@ -89,13 +89,19 @@ export interface ChessLobbyItem {
   seats: { w: string | null; b: string | null };
   moveCount: number;
   createdAt: string;
+  /** partie solo : niveau de la machine, sinon null */
+  ai: number | null;
 }
+
+export type ChessAiLevel = 1 | 2 | 3;
 
 export interface CreateChessGameInput {
   pseudo: string;
   clock: { initialMinutes: number; incrementSeconds: number } | null;
   color: ChessColor | 'random';
   theme: string;
+  /** partie solo contre la machine ; null = partie à deux */
+  ai: { level: ChessAiLevel } | null;
 }
 
 export function opponentOf(color: ChessColor): ChessColor {

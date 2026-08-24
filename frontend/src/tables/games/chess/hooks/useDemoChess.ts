@@ -50,7 +50,7 @@ export function useDemoChess(theme: string): DemoChess {
     phaseEndsAt: null,
     startedAt,
     endedAt: result ? Date.now() : null,
-    config: { clock: null, theme, creatorColor: 'w' },
+    config: { clock: null, theme, creatorColor: 'w', ai: null },
     seats: {
       w: { pseudo: 'Blancs', device: 'DEMO' },
       b: { pseudo: 'Noirs', device: 'DEMO' },

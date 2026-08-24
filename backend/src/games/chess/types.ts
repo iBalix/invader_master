@@ -16,6 +16,19 @@ export interface ChessClockConfig {
   incrementMs: number; // incrément Fischer, ajouté après chaque coup joué
 }
 
+/** adversaire machine ; absent/null = partie entre deux joueurs */
+export interface ChessAiConfig {
+  level: 1 | 2 | 3;
+}
+
+/**
+ * Siège tenu par la machine. Aucun `game_players` n'est créé pour elle : ce
+ * playerId n'existe qu'ici, donc aucun token ne peut correspondre et personne
+ * ne peut jouer à sa place via l'API.
+ */
+export const AI_PLAYER_ID = 'ai';
+export const AI_DEVICE = 'AI';
+
 export interface ChessConfig {
   /** null = partie sans pendule */
   clock: ChessClockConfig | null;
@@ -29,6 +42,11 @@ export interface ChessConfig {
   theme: string;
   /** pseudo du créateur (affichage lobby avant le join adverse) */
   creatorPseudo: string;
+  /**
+   * Partie solo contre la machine. OPTIONNEL : les sessions déjà en base n'ont
+   * pas ce champ, elles doivent rester lisibles.
+   */
+  ai?: ChessAiConfig | null;
 }
 
 export interface ChessSeat {

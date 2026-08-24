@@ -5,7 +5,7 @@
  */
 
 import { useMemo, useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { Bot, Minus, Plus, Users } from 'lucide-react';
 import ArcadeButton from '../../../components/ui/ArcadeButton';
 import ArcadeModal from '../../../components/ui/ArcadeModal';
 import { useT } from '../../../i18n/useT';
@@ -14,7 +14,7 @@ import { DUO_TINTS, DUO_TINT_LIST, THEME_CHOICES, duoTheme, getTheme } from '../
 import { PieceGlyph } from '../themes/pieces/StandardPieceSet';
 import { getLastPseudo } from '../lib/identity';
 import { isValidPseudo } from '../lib/pseudo';
-import type { ChessColor, CreateChessGameInput } from '../lib/chessTypes';
+import type { ChessAiLevel, ChessColor, CreateChessGameInput } from '../lib/chessTypes';
 import type { DuoTint } from '../themes';
 
 interface ClockPreset {
@@ -48,6 +48,8 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
   const [clockChoice, setClockChoice] = useState<ClockChoice>(1); // 5+0 par défaut
   const [customMinutes, setCustomMinutes] = useState(10);
   const [customIncrement, setCustomIncrement] = useState(5);
+  const [vsAi, setVsAi] = useState(false);
+  const [aiLevel, setAiLevel] = useState<ChessAiLevel>(2);
   const [color, setColor] = useState<ChessColor | 'random'>('random');
   const [themeBase, setThemeBase] = useState('neon');
   const [duoTint, setDuoTint] = useState<DuoTint>('violet');
@@ -123,6 +125,49 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
             placeholder={t('table.chess.create.pseudoPlaceholder')}
             className="w-full rounded-2xl border border-white/15 bg-black/40 px-5 py-3.5 text-xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
           />
+        </section>
+
+        {/* adversaire : c'est le choix qui conditionne tous les autres */}
+        <section>
+          <div className="mb-2 font-display text-sm uppercase tracking-[0.25em] text-table-cyan/85">
+            {t('table.chess.create.opponent')}
+          </div>
+          <div className="flex gap-3">
+            {([false, true] as const).map((choice) => {
+              const active = vsAi === choice;
+              const Icon = choice ? Bot : Users;
+              return (
+                <button
+                  key={String(choice)}
+                  type="button"
+                  onClick={() => setVsAi(choice)}
+                  className={[
+                    'flex h-16 flex-1 items-center justify-center gap-3 rounded-2xl border transition-colors',
+                    active ? 'border-table-cyan/70 bg-table-cyan/15' : 'border-white/15 bg-white/5',
+                  ].join(' ')}
+                >
+                  <Icon className={`h-7 w-7 ${active ? 'text-table-cyan' : 'text-table-ink-soft'}`} />
+                  <span className="font-display text-lg uppercase tracking-wider text-table-ink-soft">
+                    {t(choice ? 'table.chess.create.opponent.ai' : 'table.chess.create.opponent.human')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {vsAi && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {([1, 2, 3] as const).map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  className={chipClass(aiLevel === level)}
+                  onClick={() => setAiLevel(level)}
+                >
+                  {t(`table.chess.create.ai.level${level}`)}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* cadence */}
@@ -240,7 +285,13 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
           fullWidth
           disabled={busy || !pseudoOk}
           onClick={() =>
-            onCreate({ pseudo: pseudo.trim(), clock, color, theme: previewTheme.id })
+            onCreate({
+              pseudo: pseudo.trim(),
+              clock,
+              color,
+              theme: previewTheme.id,
+              ai: vsAi ? { level: aiLevel } : null,
+            })
           }
         >
           {t('table.chess.create.submit')}

@@ -28,7 +28,10 @@ import {
 } from '../engine.js';
 import { broadcastTopic } from '../realtime.js';
 import { hasMatingMaterial, naturalResult, rebuild, tryMove } from './rules.js';
+import { AI_THINK_MS, aiAcceptsDraw, chooseAiMove, isAiLevel, type AiLevel } from './ai.js';
 import {
+  AI_DEVICE,
+  AI_PLAYER_ID,
   CHESS_LOBBY_TOPIC,
   CHESS_LOBBY_TTL_MS,
   CHESS_NOCLOCK_IDLE_MS,
@@ -36,6 +39,7 @@ import {
   chessStateOf,
   opponentOf,
   seatColorOf,
+  type ChessAiConfig,
   type ChessClockConfig,
   type ChessColor,
   type ChessConfig,
@@ -64,6 +68,43 @@ function notifyLobby(): void {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** pseudo affiché du siège machine, par niveau */
+export function aiSeatPseudo(level: number): string {
+  if (level === 1) return 'IA · Débutant';
+  if (level === 3) return 'IA · Costaud';
+  return 'IA · Normal';
+}
+
+/** partie solo contre la machine ? */
+function aiConfigOf(session: SessionRow): ChessAiConfig | null {
+  return chessConfigOf(session).ai ?? null;
+}
+
+/** couleur tenue par la machine (l'inverse du créateur), null hors mode solo */
+function aiColorOf(session: SessionRow): ChessColor | null {
+  const config = chessConfigOf(session);
+  return config.ai ? opponentOf(config.creatorColor) : null;
+}
+
+/** temps restant de la machine, Infinity sans pendule */
+function aiRemainingMs(state: ChessState, aiColor: ChessColor): number {
+  if (!state.clocks) return Number.POSITIVE_INFINITY;
+  const base = aiColor === 'w' ? state.clocks.wMs : state.clocks.bMs;
+  return base - Math.max(0, Date.now() - new Date(state.clocks.lastMoveAt).getTime());
+}
+
+/**
+ * Échéance de la prochaine transition quand c'est à la machine de jouer :
+ * son délai de réflexion, sauf si son drapeau tombe avant.
+ */
+function scheduleAiTurn(session: SessionRow, state: ChessState, aiColor: ChessColor): void {
+  const now = Date.now();
+  const remaining = aiRemainingMs(state, aiColor);
+  const think = Math.min(AI_THINK_MS, remaining > 0 ? remaining : 0);
+  session.phase_started_at = new Date(now).toISOString();
+  session.phase_ends_at = new Date(now + think).toISOString();
 }
 
 /**
@@ -130,6 +171,8 @@ export interface CreateChessInput {
   clock: { initialMinutes: number; incrementSeconds: number } | null;
   color: ChessColor | 'random';
   theme: string;
+  /** partie solo contre la machine (niveau 1 à 3) */
+  ai?: { level?: number } | null;
 }
 
 function parseClock(input: CreateChessInput['clock']): ChessClockConfig | null {
@@ -162,11 +205,20 @@ export async function createChessSession(
   const creatorColor: ChessColor =
     input.color === 'random' ? (crypto.randomInt(2) === 0 ? 'w' : 'b') : input.color;
 
+  // mode solo : le niveau doit etre 1, 2 ou 3
+  let ai: ChessAiConfig | null = null;
+  if (input.ai) {
+    const level = Number(input.ai.level);
+    if (!isAiLevel(level)) throw httpErr('error_chess_bad_config', 400);
+    ai = { level };
+  }
+
   const config: ChessConfig = {
     clock,
     creatorColor,
     theme,
     creatorPseudo: input.pseudo.trim(),
+    ai,
   };
   const state: ChessState = {
     seats: {},
@@ -181,11 +233,12 @@ export async function createChessSession(
 
   const session = await insertSession({
     mode: 'chess',
-    status: 'lobby',
+    status: ai ? 'playing' : 'lobby',
     config,
     runtime: { chess: state },
     phaseStartedAt: nowIso(),
-    phaseEndsAt: new Date(Date.now() + CHESS_LOBBY_TTL_MS).toISOString(),
+    // solo : la partie commence tout de suite, pas d'attente d'adversaire
+    phaseEndsAt: new Date(Date.now() + (ai ? CHESS_NOCLOCK_IDLE_MS : CHESS_LOBBY_TTL_MS)).toISOString(),
   });
 
   const player = await insertChessPlayer(session.id, input.pseudo, input.device);
@@ -198,6 +251,33 @@ export async function createChessSession(
       pseudo: player.pseudo,
       device: player.device,
     };
+    if (ai) {
+      // siege machine : aucun game_players, donc aucun token ne peut le jouer
+      const aiColor = opponentOf(creatorColor);
+      st.seats[aiColor] = {
+        playerId: AI_PLAYER_ID,
+        pseudo: aiSeatPseudo(ai.level),
+        device: AI_DEVICE,
+      };
+      const now = Date.now();
+      s.started_at = nowIso();
+      s.phase_started_at = nowIso();
+      if (clock) {
+        st.clocks = {
+          wMs: clock.initialMs,
+          bMs: clock.initialMs,
+          lastMoveAt: new Date(now).toISOString(),
+        };
+      }
+      if (st.turn === aiColor) {
+        // la machine a les blancs : elle ouvre la partie toute seule
+        scheduleAiTurn(s, st, aiColor);
+      } else {
+        s.phase_ends_at = clock
+          ? new Date(now + clock.initialMs).toISOString()
+          : new Date(now + CHESS_NOCLOCK_IDLE_MS).toISOString();
+      }
+    }
     markDirty(s);
     return s;
   });
@@ -294,44 +374,82 @@ export async function playChessMove(
     const played = tryMove(chess, input);
     if (!played) throw httpErr('error_chess_illegal_move', 400);
 
-    const now = Date.now();
-    let elapsed: number | null = null;
-    if (state.clocks) {
-      elapsed = Math.max(0, now - new Date(state.clocks.lastMoveAt).getTime());
-      const remaining = color === 'w' ? state.clocks.wMs : state.clocks.bMs;
-      if (elapsed >= remaining) {
-        // course de quelques ms avec l'échéance : le drapeau prime sur le
-        // coup. Pas de mutation ici (un throw n'est jamais persisté par
-        // withSession) : le rattrapage paresseux appliquera la chute au
-        // prochain accès, l'échéance étant déjà dépassée.
-        throw httpErr('error_chess_game_over', 409);
-      }
-      const config = chessConfigOf(session);
-      const newRemaining = remaining - elapsed + (config.clock?.incrementMs ?? 0);
-      if (color === 'w') state.clocks.wMs = newRemaining;
-      else state.clocks.bMs = newRemaining;
-      state.clocks.lastMoveAt = new Date(now).toISOString();
+    commitMove(session, state, chess, played, color);
+    return session;
+  });
+}
+
+/**
+ * Applique un coup DÉJÀ joué sur `chess` : pendule, historique, trait, fin
+ * naturelle, prochaine échéance. Chemin commun au coup humain et au coup de la
+ * machine — c'est ce qui fait que la machine consomme sa pendule exactement
+ * comme un joueur, sans code dédié.
+ */
+function commitMove(
+  session: SessionRow,
+  state: ChessState,
+  chess: Chess,
+  played: { san: string; uci: string },
+  color: ChessColor,
+): void {
+  const now = Date.now();
+  let elapsed: number | null = null;
+  if (state.clocks) {
+    elapsed = Math.max(0, now - new Date(state.clocks.lastMoveAt).getTime());
+    const remaining = color === 'w' ? state.clocks.wMs : state.clocks.bMs;
+    if (elapsed >= remaining) {
+      // course de quelques ms avec l'échéance : le drapeau prime sur le
+      // coup. Pas de mutation ici (un throw n'est jamais persisté par
+      // withSession) : le rattrapage paresseux appliquera la chute au
+      // prochain accès, l'échéance étant déjà dépassée.
+      throw httpErr('error_chess_game_over', 409);
     }
+    const config = chessConfigOf(session);
+    const newRemaining = remaining - elapsed + (config.clock?.incrementMs ?? 0);
+    if (color === 'w') state.clocks.wMs = newRemaining;
+    else state.clocks.bMs = newRemaining;
+    state.clocks.lastMoveAt = new Date(now).toISOString();
+  }
 
-    state.moves.push({ san: played.san, uci: played.uci, ms: elapsed });
-    state.fen = chess.fen();
-    state.turn = opponentOf(color);
-    // tout coup joué efface une offre de nulle en attente
-    state.drawOffer = null;
+  state.moves.push({ san: played.san, uci: played.uci, ms: elapsed });
+  state.fen = chess.fen();
+  state.turn = opponentOf(color);
+  // tout coup joué efface une offre de nulle en attente
+  state.drawOffer = null;
 
-    const result = naturalResult(chess);
-    if (result) {
-      finishChess(session, state, result);
-      return session;
-    }
+  const result = naturalResult(chess);
+  if (result) {
+    finishChess(session, state, result);
+    return;
+  }
 
+  const aiColor = aiColorOf(session);
+  if (aiColor && state.turn === aiColor) {
+    // au tour de la machine : elle joue à l'échéance de réflexion
+    scheduleAiTurn(session, state, aiColor);
+  } else {
     session.phase_started_at = new Date(now).toISOString();
     session.phase_ends_at = state.clocks
       ? new Date(now + (state.turn === 'w' ? state.clocks.wMs : state.clocks.bMs)).toISOString()
       : new Date(now + CHESS_NOCLOCK_IDLE_MS).toISOString();
-    markDirty(session);
-    return session;
-  });
+  }
+  markDirty(session);
+}
+
+/**
+ * Coup de la machine, joué par l'advancer à l'échéance de réflexion. Le calcul
+ * est borné (cf. ai.ts) : il ne bloque jamais l'event loop plus de ~200 ms.
+ */
+function playAiMove(session: SessionRow, state: ChessState, aiColor: ChessColor): boolean {
+  const level = chessConfigOf(session).ai?.level;
+  if (!isAiLevel(level)) return false;
+  const chess = rebuild(state.moves);
+  const choice = chooseAiMove(chess, level as AiLevel);
+  if (!choice) return false;
+  const played = tryMove(chess, choice);
+  if (!played) return false;
+  commitMove(session, state, chess, played, aiColor);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +490,18 @@ export async function chessPlayerAction(
         requirePlaying();
         if (state.drawOffer?.by === color) return session; // déjà offerte : idempotent
         if (state.drawOffer) throw httpErr('error_chess_draw_pending', 409);
+        const aiColor = aiColorOf(session);
+        if (aiColor) {
+          // solo : la machine tranche tout de suite plutôt que de laisser une
+          // offre en attente que personne ne lira jamais
+          if (aiAcceptsDraw(rebuild(state.moves), aiColor)) {
+            finishChess(session, state, { winner: null, reason: 'draw_agreed' });
+          } else {
+            state.drawOffer = null;
+            markDirty(session);
+          }
+          return session;
+        }
         state.drawOffer = { by: color, atPly: state.moves.length };
         markDirty(session);
         return session;
@@ -450,6 +580,8 @@ async function handleRematch(
   markDirty(session);
 
   const other = opponentOf(color);
+  // solo : la machine accepte toujours, la revanche part au premier clic
+  if (aiColorOf(session) === other) rematch.offers[other] = true;
   if (!rematch.offers[other]) return; // en attente de l'autre joueur
 
   // Les deux ont accepté : création de la nouvelle partie.
@@ -464,6 +596,9 @@ async function handleRematch(
     creatorColor: opponentOf(config.creatorColor),
     theme: config.theme,
     creatorPseudo: config.creatorPseudo,
+    // sans cela, la revanche d'une partie solo repartirait en partie à deux
+    // qui attend un adversaire qui ne viendra jamais
+    ai: config.ai ?? null,
   };
   const now = Date.now();
   const newState: ChessState = {
@@ -493,6 +628,31 @@ async function handleRematch(
       ? new Date(now + config.clock.initialMs).toISOString()
       : new Date(now + CHESS_NOCLOCK_IDLE_MS).toISOString(),
   });
+
+  // solo : un seul vrai joueur, la machine reprend son siège virtuel
+  if (newConfig.ai) {
+    const humanColor = newConfig.creatorColor;
+    const aiColor = opponentOf(humanColor);
+    const oldHumanSeat = humanColor === 'w' ? oldSeatB : oldSeatW; // couleurs inversées
+    const human = await insertChessPlayer(newSession.id, oldHumanSeat.pseudo, oldHumanSeat.device);
+    await withSession(newSession.id, async (s) => {
+      const st = chessStateOf(s);
+      st.seats[humanColor] = { playerId: human.id, pseudo: human.pseudo, device: human.device };
+      st.seats[aiColor] = {
+        playerId: AI_PLAYER_ID,
+        pseudo: aiSeatPseudo(newConfig.ai?.level ?? 2),
+        device: AI_DEVICE,
+      };
+      s.started_at = nowIso();
+      // si la machine ouvre, elle joue toute seule
+      if (st.turn === aiColor) scheduleAiTurn(s, st, aiColor);
+      markDirty(s);
+    });
+    rematch.sessionId = newSession.id;
+    rematch.tokens = { [humanColor]: human.player_token } as Record<ChessColor, string>;
+    notifyLobby();
+    return;
+  }
 
   // nouveaux joueurs : l'ancien noir prend les blancs, et inversement
   const newWhite = await insertChessPlayer(newSession.id, oldSeatB.pseudo, oldSeatB.device);
@@ -562,6 +722,12 @@ function chessAdvance(session: SessionRow): boolean {
     return true;
   }
   if (session.status === 'playing') {
+    const aiColor = aiColorOf(session);
+    // c'est a la machine de jouer et il lui reste du temps : elle joue, la
+    // chute de drapeau ne s'applique qu'ensuite
+    if (aiColor && state.turn === aiColor && aiRemainingMs(state, aiColor) > 0) {
+      if (playAiMove(session, state, aiColor)) return true;
+    }
     if (!state.clocks) {
       finishChess(session, state, { winner: null, reason: 'inactivity' });
       return true;

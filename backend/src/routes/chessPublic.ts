@@ -107,6 +107,7 @@ chessPublicRoutes.post('/sessions', async (req, res) => {
       clock?: { initialMinutes?: number; incrementSeconds?: number } | null;
       color?: string;
       theme?: string;
+      ai?: { level?: number } | null;
     };
     const { session, player } = await createChessSession({
       pseudo: body.pseudo ?? '',
@@ -120,6 +121,7 @@ chessPublicRoutes.post('/sessions', async (req, res) => {
             },
       color: (body.color ?? 'random') as 'w' | 'b' | 'random',
       theme: body.theme ?? '',
+      ai: body.ai ?? null,
     });
     res.json({
       status: 'success',

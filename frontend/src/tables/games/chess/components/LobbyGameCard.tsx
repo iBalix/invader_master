@@ -3,7 +3,7 @@
  * CTA rejoindre / reprendre / regarder.
  */
 
-import { Eye, Swords } from 'lucide-react';
+import { Bot, Eye, Swords } from 'lucide-react';
 import ArcadeButton from '../../../components/ui/ArcadeButton';
 import { useT } from '../../../i18n/useT';
 import ThemePreview from './ThemePreview';
@@ -53,6 +53,12 @@ export default function LobbyGameCard({ item, isMine, onJoin, onResume, onWatch 
           <span className="rounded-full bg-white/8 px-2.5 py-0.5 font-display uppercase tracking-wider text-table-ink-muted">
             {t(theme.labelKey)}
           </span>
+          {item.ai !== null && (
+            <span className="flex items-center gap-1.5 rounded-full bg-table-cyan/15 px-2.5 py-0.5 font-display uppercase tracking-wider text-table-cyan">
+              <Bot className="h-4 w-4" />
+              {t(`table.chess.create.ai.level${item.ai}`)}
+            </span>
+          )}
           {item.status === 'playing' && (
             <span className="text-table-ink-muted">
               {t('table.chess.lobby.moves')} {Math.ceil(item.moveCount / 2)}
@@ -64,7 +70,7 @@ export default function LobbyGameCard({ item, isMine, onJoin, onResume, onWatch 
         <ArcadeButton variant="primary" size="lg" icon={<Swords className="h-5 w-5" />} onClick={onResume}>
           {t('table.chess.lobby.resume')}
         </ArcadeButton>
-      ) : item.status === 'lobby' ? (
+      ) : item.status === 'lobby' && item.ai === null ? (
         <ArcadeButton variant="accent" size="lg" icon={<Swords className="h-5 w-5" />} onClick={onJoin}>
           {t('table.chess.lobby.join')}
         </ArcadeButton>

@@ -477,6 +477,7 @@ export default function ChessGamePage() {
           }}
           onJoin={() => setJoinOpen(true)}
           onInvite={() => sendAction('invite')}
+          soloVsAi={state.config.ai !== null}
         />
       )}
 

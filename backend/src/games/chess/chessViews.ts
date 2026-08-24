@@ -33,7 +33,7 @@ export interface ChessPublicState {
   /** bornes de la partie, pour la durée affichée dans le récap de fin */
   startedAt: number | null;
   endedAt: number | null;
-  config: { clock: ChessClockConfig | null; theme: string; creatorColor: ChessColor };
+  config: { clock: ChessClockConfig | null; theme: string; creatorColor: ChessColor; ai: { level: number } | null };
   seats: { w: ChessSeatView | null; b: ChessSeatView | null };
   fen: string;
   /** historique complet en UCI (rejouable par chess.js côté client) */
@@ -80,7 +80,12 @@ export function buildChessPublicState(session: SessionRow): ChessPublicState {
     phaseEndsAt: session.phase_ends_at ? new Date(session.phase_ends_at).getTime() : null,
     startedAt: session.started_at ? new Date(session.started_at).getTime() : null,
     endedAt: session.ended_at ? new Date(session.ended_at).getTime() : null,
-    config: { clock: config.clock, theme: config.theme, creatorColor: config.creatorColor },
+    config: {
+      clock: config.clock,
+      theme: config.theme,
+      creatorColor: config.creatorColor,
+      ai: config.ai ?? null,
+    },
     seats: {
       w: state.seats.w ? { pseudo: state.seats.w.pseudo, device: state.seats.w.device } : null,
       b: state.seats.b ? { pseudo: state.seats.b.pseudo, device: state.seats.b.device } : null,
@@ -145,6 +150,8 @@ export interface ChessLobbyItem {
   seats: { w: string | null; b: string | null };
   moveCount: number;
   createdAt: string;
+  /** partie solo : niveau de la machine, sinon null */
+  ai: number | null;
 }
 
 export function buildChessLobbyItem(session: SessionRow): ChessLobbyItem {
@@ -153,6 +160,7 @@ export function buildChessLobbyItem(session: SessionRow): ChessLobbyItem {
   return {
     sessionId: session.id,
     joinCode: session.join_code,
+    ai: config.ai?.level ?? null,
     status: session.status === 'lobby' ? 'lobby' : 'playing',
     theme: config.theme,
     clock: config.clock,

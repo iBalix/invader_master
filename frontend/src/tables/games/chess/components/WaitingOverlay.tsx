@@ -17,9 +17,11 @@ interface Props {
   onCancel: () => void;
   onJoin: () => void;
   onInvite: () => void;
+  /** partie solo : inviter le bar n'aurait aucun sens */
+  soloVsAi?: boolean;
 }
 
-export default function WaitingOverlay({ isCreator, canJoin, busy, onCancel, onJoin, onInvite }: Props) {
+export default function WaitingOverlay({ isCreator, canJoin, busy, onCancel, onJoin, onInvite, soloVsAi }: Props) {
   const t = useT();
   // anti-spam local : grise le bouton 45 s (le serveur applique le même délai)
   const [inviteSent, setInviteSent] = useState(false);
@@ -42,7 +44,7 @@ export default function WaitingOverlay({ isCreator, canJoin, busy, onCancel, onJ
           {t('table.chess.lobby.join')}
         </ArcadeButton>
       )}
-      {isCreator && (
+      {isCreator && !soloVsAi && (
         <ArcadeButton
           variant="cyan"
           size="lg"
