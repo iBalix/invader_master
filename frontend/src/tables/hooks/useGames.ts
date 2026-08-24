@@ -29,6 +29,13 @@ export interface Game {
   consoleLibrary?: string | null;
   consoleLogoUrl?: string | null;
   categories: string[];
+  /**
+   * Jeu reserve aux bornes de la salle : pas de lancement depuis une table.
+   * Calcule par le serveur sur le nom NON traduit de la categorie, cf.
+   * backend/src/routes/public.ts (la categorie s'appelle "Bornes" en francais
+   * et "Arcades" en anglais).
+   */
+  bornesOnly?: boolean;
   images: string[];
   gameType?: string | null;
   gameUrl?: string | null;

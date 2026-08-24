@@ -447,6 +447,19 @@ publicRoutes.get('/games-v2', async (req, res) => {
     const localizedCats = (categories ?? []).map((c) => localize(c, ['name'], locale));
     const catMap = new Map(localizedCats.map((c) => [c.id as string, c.name as string]));
 
+    // Categories dont les jeux ne sont PAS lancables depuis une table : ils sont
+    // reserves aux bornes de la salle. Le test porte sur la colonne `name` BRUTE
+    // et non sur le libelle localise, parce que la categorie s'appelle "Bornes"
+    // en francais et "Arcades" en anglais : un test cote client sur le nom
+    // affiche rendrait ces jeux lancables des qu'une table passe en anglais.
+    // Meme regle qu'en v1, cf. invader_table/game.php:318, qui remplacait le
+    // bouton JOUER par "DISPONIBLE SUR UNE BORNE DU BAR".
+    const catsSansTable = new Set(
+      (categories ?? [])
+        .filter((c) => /borne/i.test(String(c.name ?? '')))
+        .map((c) => c.id as string),
+    );
+
     const imagesByGame: Record<string, string[]> = {};
     for (const img of images ?? []) {
       if (!imagesByGame[img.game_id]) imagesByGame[img.game_id] = [];
@@ -454,10 +467,13 @@ publicRoutes.get('/games-v2', async (req, res) => {
     }
 
     const catsByGame: Record<string, string[]> = {};
+    /** jeu reserve aux bornes du bar : pas de lancement depuis une table */
+    const bornesOnly: Record<string, boolean> = {};
     for (const l of catLinks ?? []) {
       if (!catsByGame[l.game_id]) catsByGame[l.game_id] = [];
       const name = catMap.get(l.category_id);
       if (name) catsByGame[l.game_id].push(name);
+      if (catsSansTable.has(l.category_id)) bornesOnly[l.game_id] = true;
     }
 
     const gameItems = (games ?? []).map((g) => {
@@ -469,6 +485,7 @@ publicRoutes.get('/games-v2', async (req, res) => {
         consoleLibrary: c?.library ?? null,
         consoleLogoUrl: c?.logo_url ?? null,
         categories: catsByGame[g.id] ?? [],
+        bornesOnly: bornesOnly[g.id] ?? false,
         images: imagesByGame[g.id] ?? [],
       };
     });

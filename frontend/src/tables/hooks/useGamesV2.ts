@@ -54,6 +54,8 @@ export interface GameV2 {
    * retombe alors sur maxPlayers.
    */
   playerCounts?: string[];
+  /** jeu reserve aux bornes de la salle : pas de lancement depuis une table */
+  bornesOnly?: boolean;
   youtubeVideoId?: string | null;
   youtubeStartSec?: number;
   youtubeDurationSec?: number | null;

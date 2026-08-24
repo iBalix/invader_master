@@ -31,6 +31,7 @@ import {
   Sparkles,
   ArrowLeft,
   Loader2,
+  Joystick,
 } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import ArcadeButton from '../ui/ArcadeButton';
@@ -169,6 +170,11 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
 
   if (!game) return null;
 
+  // Jeux de la categorie "Bornes" : consultables mais pas lancables depuis une
+  // table, ils tournent sur les bornes d'arcade de la salle. Regle heritee de la
+  // v1 (invader_table/game.php:318) qui n'avait pas ete reprise ici.
+  const reserveAuxBornes = game.bornesOnly === true;
+
   const launchable = !!game.fileName;
   const noControllerNeeded = isInvaderGame(game);
   const hasController = gamepadCount > 0;
@@ -196,6 +202,9 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
   async function handleLaunch(replace = false) {
     if (!game) return;
     if (!identity) return;
+    // Garde-fou : aucun chemin ne doit pouvoir lancer un jeu de borne, meme si
+    // un bouton reapparaissait un jour par accident.
+    if (game.bornesOnly === true) return;
     if (!launchable) {
       setError(
         t(
@@ -409,6 +418,22 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
           )}
         </div>
 
+        {reserveAuxBornes ? (
+          <div className="flex flex-col justify-center">
+            <div className="rounded-2xl border border-table-yellow/40 bg-table-yellow/10 p-7 text-center">
+              <Joystick className="mx-auto h-14 w-14 text-table-yellow" />
+              <div className="mt-4 font-display text-3xl uppercase leading-tight tracking-wider text-table-yellow">
+                {t('table.games.arcadeOnly.title', 'Disponible sur une borne du bar')}
+              </div>
+              <p className="mt-3 text-base leading-relaxed text-table-ink-soft">
+                {t(
+                  'table.games.arcadeOnly.info',
+                  'Ce jeu ne se lance pas depuis la table. Rends-toi sur une borne d\'arcade de la salle pour y jouer.',
+                )}
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="flex flex-col">
           <div className="font-retro text-xs uppercase tracking-[0.3em] text-table-cyan">
             {t('table.games.before', 'Avant de lancer')}
@@ -512,6 +537,7 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
             )}
           </div>
         </div>
+        )}
       </div>
     </ArcadeModal>
   );
