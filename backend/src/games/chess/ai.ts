@@ -25,6 +25,20 @@ interface LevelConfig {
   /** profondeur visée (l'approfondissement itératif peut s'arrêter avant) */
   depth: number;
   /**
+   * Profondeur de recherche des captures au-delà de la profondeur nominale.
+   * SANS ELLE, un moteur s'arrête au milieu d'un échange et croit avoir gagné
+   * une pièce qui va être reprise : mesuré, il prenait un pion défendu et
+   * pendait son cavalier 12 fois sur 12. 0 = laissé volontairement pour le
+   * niveau débutant, c'est ce qui lui donne ses gaffes crédibles.
+   */
+  quiescence: number;
+  /**
+   * Budget de calcul en ms, PAR NIVEAU : c'est lui qui borne le blocage de
+   * l'event loop, et c'est aussi ce qui hiérarchise vraiment les niveaux (un
+   * budget commun les ramenait tous au même coût, donc à la même force).
+   */
+  budgetMs: number;
+  /**
    * probabilité de jouer volontairement un coup moyen plutôt que le meilleur.
    * C'est ce qui rend le niveau 1 battable par un débutant : la machine ne
    * cherche pas à perdre, elle "ne voit pas" le meilleur coup.
@@ -33,15 +47,23 @@ interface LevelConfig {
 }
 
 export const AI_LEVELS: Record<AiLevel, LevelConfig> = {
-  1: { depth: 1, blunderRate: 0.55 },
-  2: { depth: 2, blunderRate: 0.18 },
-  3: { depth: 3, blunderRate: 0 },
+  1: { depth: 1, quiescence: 0, budgetMs: 30, blunderRate: 0.55 },
+  2: { depth: 2, quiescence: 2, budgetMs: 90, blunderRate: 0.18 },
+  3: { depth: 3, quiescence: 4, budgetMs: 260, blunderRate: 0 },
 };
 
 /** délai de réflexion affiché : un coup instantané est déroutant */
 export const AI_THINK_MS = 850;
-/** plafond dur de calcul : au-delà, on renvoie le meilleur coup déjà trouvé */
-export const AI_TIME_CAP_MS = 200;
+/** plafond dur, le plus large des budgets : sert à borner la pendule */
+export const AI_TIME_CAP_MS = 260;
+
+/**
+ * Temps de pendule imputable à la machine pour un coup. Sans ce plafond, un
+ * redémarrage du serveur pendant son tour lui ferait payer toute la coupure
+ * (le temps se mesure en horloge murale) et elle perdrait au temps une partie
+ * qu'elle gagnait. Elle ne paie donc que sa réflexion prévue, avec une marge.
+ */
+export const AI_MAX_ELAPSED_MS = AI_THINK_MS + AI_TIME_CAP_MS + 1_500;
 
 export function isAiLevel(value: unknown): value is AiLevel {
   return value === 1 || value === 2 || value === 3;
@@ -170,9 +192,45 @@ function orderMoves(moves: Move[]): Move[] {
     .map((entry) => entry.move);
 }
 
+/**
+ * Recherche de quiescence : au bout de la profondeur nominale, on ne s'arrête
+ * PAS au milieu d'un échange. On continue à explorer les seules captures
+ * jusqu'à ce que la position soit calme, sinon la machine confond « je prends
+ * une pièce » et « je gagne une pièce ».
+ */
+function quiesce(chess: Chess, alpha: number, beta: number, depth: number, deadline: number): number {
+  const raw = evaluate(chess);
+  const standPat = chess.turn() === 'w' ? raw : -raw;
+  if (depth === 0) return standPat;
+  // ne rien faire est toujours une option (sauf à être forcé de capturer)
+  if (standPat >= beta) return beta;
+  if (standPat > alpha) alpha = standPat;
+
+  const captures = (chess.moves({ verbose: true }) as Move[]).filter(
+    (move) => move.captured || move.promotion,
+  );
+  for (const move of orderMoves(captures)) {
+    chess.move(move);
+    const score = -quiesce(chess, -beta, -alpha, depth - 1, deadline);
+    chess.undo();
+    if (score >= beta) return beta;
+    if (score > alpha) alpha = score;
+    if (Date.now() > deadline) break;
+  }
+  return alpha;
+}
+
 /** négamax alpha-beta : renvoie le score du camp au trait */
-function search(chess: Chess, depth: number, alpha: number, beta: number, deadline: number): number {
+function search(
+  chess: Chess,
+  depth: number,
+  alpha: number,
+  beta: number,
+  deadline: number,
+  quiescence: number,
+): number {
   if (depth === 0) {
+    if (quiescence > 0) return quiesce(chess, alpha, beta, quiescence, deadline);
     const raw = evaluate(chess);
     return chess.turn() === 'w' ? raw : -raw;
   }
@@ -184,7 +242,7 @@ function search(chess: Chess, depth: number, alpha: number, beta: number, deadli
   let best = -Infinity;
   for (const move of orderMoves(moves)) {
     chess.move(move);
-    const score = -search(chess, depth - 1, -beta, -alpha, deadline);
+    const score = -search(chess, depth - 1, -beta, -alpha, deadline, quiescence);
     chess.undo();
     if (score > best) best = score;
     if (best > alpha) alpha = best;
@@ -210,7 +268,7 @@ export function chooseAiMove(chess: Chess, level: AiLevel): AiMove | null {
   if (legal.length === 0) return null;
 
   const config = AI_LEVELS[level];
-  const deadline = Date.now() + AI_TIME_CAP_MS;
+  const deadline = Date.now() + config.budgetMs;
   const ordered = orderMoves(legal);
 
   // scores de la dernière profondeur entièrement explorée
@@ -221,7 +279,7 @@ export function chooseAiMove(chess: Chess, level: AiLevel): AiMove | null {
     let aborted = false;
     for (const move of ordered) {
       chess.move(move);
-      const score = -search(chess, depth - 1, -Infinity, Infinity, deadline);
+      const score = -search(chess, depth - 1, -Infinity, Infinity, deadline, config.quiescence);
       chess.undo();
       round.push({ move, score });
       if (Date.now() > deadline) {

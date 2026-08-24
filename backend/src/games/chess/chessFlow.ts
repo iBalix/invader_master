@@ -28,7 +28,14 @@ import {
 } from '../engine.js';
 import { broadcastTopic } from '../realtime.js';
 import { hasMatingMaterial, naturalResult, rebuild, tryMove } from './rules.js';
-import { AI_THINK_MS, aiAcceptsDraw, chooseAiMove, isAiLevel, type AiLevel } from './ai.js';
+import {
+  AI_MAX_ELAPSED_MS,
+  AI_THINK_MS,
+  aiAcceptsDraw,
+  chooseAiMove,
+  isAiLevel,
+  type AiLevel,
+} from './ai.js';
 import {
   AI_DEVICE,
   AI_PLAYER_ID,
@@ -92,7 +99,9 @@ function aiColorOf(session: SessionRow): ChessColor | null {
 function aiRemainingMs(state: ChessState, aiColor: ChessColor): number {
   if (!state.clocks) return Number.POSITIVE_INFINITY;
   const base = aiColor === 'w' ? state.clocks.wMs : state.clocks.bMs;
-  return base - Math.max(0, Date.now() - new Date(state.clocks.lastMoveAt).getTime());
+  // plafonné : une coupure serveur ne doit pas vider sa pendule
+  const spent = Math.min(Math.max(0, Date.now() - new Date(state.clocks.lastMoveAt).getTime()), AI_MAX_ELAPSED_MS);
+  return base - spent;
 }
 
 /**
@@ -391,11 +400,14 @@ function commitMove(
   chess: Chess,
   played: { san: string; uci: string },
   color: ChessColor,
+  /** plafond du temps imputable (coup de la machine : cf. AI_MAX_ELAPSED_MS) */
+  elapsedCapMs?: number,
 ): void {
   const now = Date.now();
   let elapsed: number | null = null;
   if (state.clocks) {
     elapsed = Math.max(0, now - new Date(state.clocks.lastMoveAt).getTime());
+    if (elapsedCapMs !== undefined) elapsed = Math.min(elapsed, elapsedCapMs);
     const remaining = color === 'w' ? state.clocks.wMs : state.clocks.bMs;
     if (elapsed >= remaining) {
       // course de quelques ms avec l'échéance : le drapeau prime sur le
@@ -448,7 +460,7 @@ function playAiMove(session: SessionRow, state: ChessState, aiColor: ChessColor)
   if (!choice) return false;
   const played = tryMove(chess, choice);
   if (!played) return false;
-  commitMove(session, state, chess, played, aiColor);
+  commitMove(session, state, chess, played, aiColor, AI_MAX_ELAPSED_MS);
   return true;
 }
 
