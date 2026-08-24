@@ -227,10 +227,10 @@ export default function CartDrawer({ open, onClose, hostname, onCheckout }: Prop
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-display text-base uppercase tracking-wider text-table-yellow">
-                      -10% offerts
+                      -10% sur une boisson
                     </div>
                     <div className="mt-0.5 text-xs leading-snug text-table-ink-soft">
-                      Laisse-nous 5 etoiles sur Google.
+                      Laisse-nous 5 étoiles sur Google.
                       <span className="ml-1 text-table-yellow underline decoration-dotted underline-offset-2">
                         Voir le QR code
                       </span>

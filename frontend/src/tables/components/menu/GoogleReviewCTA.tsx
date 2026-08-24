@@ -1,6 +1,6 @@
 /**
  * CTA bas de page affiche sur la borne quand le module commande est desactive.
- * Click = ouvre la modale "10% offerts contre un avis Google" (QR + explications).
+ * Click = ouvre la modale "10% sur une boisson contre un avis Google" (QR + explications).
  */
 
 import { motion } from 'framer-motion';
@@ -24,7 +24,7 @@ export default function GoogleReviewCTA({ onClick }: Props) {
       style={{ boxShadow: '0 0 28px 0 rgba(250, 204, 21, 0.45)' }}
     >
       <Star className="h-7 w-7 fill-black" />
-      Obtenez 10% sur votre commande
+      Obtenez 10% sur une boisson
     </motion.button>
   );
 }

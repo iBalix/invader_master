@@ -1,12 +1,18 @@
 /**
  * Modal "Avis Google" : incitation a laisser 5 etoiles Google en
- * echange de -10% sur la commande. Affiche le QR code vers la fiche
+ * echange de -10% SUR UNE BOISSON. Affiche le QR code vers la fiche
  * Google de l'etablissement.
+ *
+ * La remise porte sur une boisson, PAS sur la commande entiere. Une premiere
+ * version annoncait "10% sur le montant de ta commande", ce qui promettait au
+ * client bien plus que ce que le bar accorde au comptoir. Toute reformulation
+ * doit garder ce perimetre explicite : le client lit ce texte avant de
+ * commander, il ne doit pas decouvrir la limite a l'encaissement.
  *
  *   - QR code grand format dans une "carte" blanche pour favoriser le scan
  *     (le scanner du tel a besoin de fond clair pour bien lire).
  *   - 5 etoiles jaunes anime au montage pour faire pop.
- *   - Texte clair sur le benefice (10%) et l'action (scan).
+ *   - Texte clair sur le benefice (10% sur une boisson) et l'action (scan).
  */
 
 import { motion } from 'framer-motion';
@@ -54,14 +60,13 @@ export default function GoogleReviewModal({ open, onClose }: Props) {
               '0 0 30px rgba(255, 209, 36, 0.45), 0 0 60px rgba(255, 209, 36, 0.2)',
           }}
         >
-          -10% offerts
+          -10% sur une boisson
         </h2>
 
         <p className="mt-4 max-w-md text-base text-table-ink-soft">
           Envoie-nous de la force avec{' '}
-          <strong className="text-table-yellow">5 etoiles sur Google</strong> et
-          on t'offre <strong className="text-table-ink">10% sur le montant</strong>{' '}
-          de ta commande.
+          <strong className="text-table-yellow">5 étoiles sur Google</strong> et
+          on t'offre <strong className="text-table-ink">10% sur une boisson</strong>.
         </p>
 
         {/* QR card */}
@@ -75,19 +80,19 @@ export default function GoogleReviewModal({ open, onClose }: Props) {
             />
           </div>
           <div className="font-display text-xs uppercase tracking-[0.3em] text-table-ink-muted">
-            Scanne avec ton telephone
+            Scanne avec ton téléphone
           </div>
         </div>
 
         {/* Etape de validation */}
         <div className="mt-6 w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-left text-sm text-table-ink-soft">
           <div className="font-display text-xs uppercase tracking-wider text-table-yellow">
-            Comment ca marche ?
+            Comment ça marche ?
           </div>
           <ol className="mt-2 space-y-1 text-table-ink-soft">
-            <li>1. Scanne le QR code et laisse ton avis 5 etoiles.</li>
+            <li>1. Scanne le QR code et laisse ton avis 5 étoiles.</li>
             <li>2. Montre-le au bar.</li>
-            <li>3. On applique -10% sur ta commande.</li>
+            <li>3. On applique -10% sur une boisson.</li>
           </ol>
         </div>
       </div>

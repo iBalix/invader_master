@@ -129,7 +129,7 @@ export default function MenuPage() {
 
   const orderingEnabled = settings?.orderingEnabled ?? true;
   // Quand le module commande est desactive, on remplace le bouton Commander par
-  // un CTA "10% offerts avec un avis Google" qui ouvre la modale dediee.
+  // un CTA "10% sur une boisson avec un avis Google" qui ouvre la modale dediee.
   const showGoogleCta = !orderingEnabled;
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
