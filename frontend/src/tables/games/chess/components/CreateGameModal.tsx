@@ -48,8 +48,9 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
   const [clockChoice, setClockChoice] = useState<ClockChoice>(1); // 5+0 par défaut
   const [customMinutes, setCustomMinutes] = useState(10);
   const [customIncrement, setCustomIncrement] = useState(5);
-  const [vsAi, setVsAi] = useState(false);
-  const [aiLevel, setAiLevel] = useState<ChessAiLevel>(2);
+  // un seul choix, donc une seule ligne de hauteur fixe : la modale ne bouge
+  // jamais quand on passe de l'humain à la machine
+  const [opponent, setOpponent] = useState<'human' | ChessAiLevel>('human');
   const [color, setColor] = useState<ChessColor | 'random'>('random');
   const [themeBase, setThemeBase] = useState('neon');
   const [duoTint, setDuoTint] = useState<DuoTint>('violet');
@@ -132,42 +133,35 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
           <div className="mb-2 font-display text-sm uppercase tracking-[0.25em] text-table-cyan/85">
             {t('table.chess.create.opponent')}
           </div>
-          <div className="flex gap-3">
-            {([false, true] as const).map((choice) => {
-              const active = vsAi === choice;
-              const Icon = choice ? Bot : Users;
+          <div className="flex gap-2.5">
+            {(['human', 1, 2, 3] as const).map((choice) => {
+              const active = opponent === choice;
+              const human = choice === 'human';
+              const Icon = human ? Users : Bot;
               return (
                 <button
                   key={String(choice)}
                   type="button"
-                  onClick={() => setVsAi(choice)}
+                  onClick={() => setOpponent(choice)}
                   className={[
-                    'flex h-16 flex-1 items-center justify-center gap-3 rounded-2xl border transition-colors',
+                    'flex h-16 flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl border transition-colors',
                     active ? 'border-table-cyan/70 bg-table-cyan/15' : 'border-white/15 bg-white/5',
                   ].join(' ')}
                 >
-                  <Icon className={`h-7 w-7 ${active ? 'text-table-cyan' : 'text-table-ink-soft'}`} />
-                  <span className="font-display text-lg uppercase tracking-wider text-table-ink-soft">
-                    {t(choice ? 'table.chess.create.opponent.ai' : 'table.chess.create.opponent.human')}
+                  <Icon className={`h-6 w-6 ${active ? 'text-table-cyan' : 'text-table-ink-soft'}`} />
+                  <span
+                    className={`font-display text-base uppercase tracking-wider ${
+                      active ? 'text-table-cyan' : 'text-table-ink-soft'
+                    }`}
+                  >
+                    {human
+                      ? t('table.chess.create.opponent.human')
+                      : t(`table.chess.create.ai.level${choice}`)}
                   </span>
                 </button>
               );
             })}
           </div>
-          {vsAi && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {([1, 2, 3] as const).map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  className={chipClass(aiLevel === level)}
-                  onClick={() => setAiLevel(level)}
-                >
-                  {t(`table.chess.create.ai.level${level}`)}
-                </button>
-              ))}
-            </div>
-          )}
         </section>
 
         {/* cadence */}
@@ -290,7 +284,7 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
               clock,
               color,
               theme: previewTheme.id,
-              ai: vsAi ? { level: aiLevel } : null,
+              ai: opponent === 'human' ? null : { level: opponent },
             })
           }
         >
