@@ -10,6 +10,10 @@ export interface CarteSettings {
   happy_hour_days: string[];
   ordering_enabled: boolean;
   google_review_url: string | null;
+  /** prompt de style commun a toutes les generations d'images produit */
+  image_gen_prompt: string | null;
+  /** produits dont l'image sert d'exemple a l'IA */
+  image_gen_reference_product_ids: string[];
 }
 
 const DAYS: { value: string; label: string }[] = [
@@ -36,6 +40,9 @@ export default function CarteSettingsModal({ open, onClose }: Props) {
   const [settings, setSettings] = useState<CarteSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [produitsAvecImage, setProduitsAvecImage] = useState<
+    { id: string; name: string; image_url: string | null }[]
+  >([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,11 +53,25 @@ export default function CarteSettingsModal({ open, onClose }: Props) {
         ...s,
         happy_hour_start: normalizeTime(s.happy_hour_start),
         happy_hour_end: normalizeTime(s.happy_hour_end),
+        // la colonne n'existe pas tant que la migration 048 n'est pas passee :
+        // on normalise pour que le formulaire fonctionne quand meme
+        image_gen_prompt: s.image_gen_prompt ?? '',
+        image_gen_reference_product_ids: s.image_gen_reference_product_ids ?? [],
       });
     } catch {
       toast.error('Erreur de chargement de la configuration');
     } finally {
       setLoading(false);
+    }
+
+    // liste des visuels selectionnables ; un echec ici ne doit pas empecher de
+    // regler les horaires de happy hour
+    try {
+      const { data } = await api.get('/api/menu-products-v2');
+      const items = (data?.items ?? []) as { id: string; name: string; image_url: string | null }[];
+      setProduitsAvecImage(items.filter((p) => p.image_url));
+    } catch {
+      setProduitsAvecImage([]);
     }
   }, []);
 
@@ -62,6 +83,19 @@ export default function CarteSettingsModal({ open, onClose }: Props) {
 
   const set = <K extends keyof CarteSettings>(key: K, val: CarteSettings[K]) => {
     setSettings((prev) => (prev ? { ...prev, [key]: val } : prev));
+  };
+
+  const basculerReference = (id: string) => {
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const actuels = prev.image_gen_reference_product_ids ?? [];
+      const suivants = actuels.includes(id)
+        ? actuels.filter((x) => x !== id)
+        : actuels.length >= 4
+          ? actuels
+          : [...actuels, id];
+      return { ...prev, image_gen_reference_product_ids: suivants };
+    });
   };
 
   const toggleDay = (day: string) => {
@@ -97,6 +131,8 @@ export default function CarteSettingsModal({ open, onClose }: Props) {
         happy_hour_days: settings.happy_hour_days,
         ordering_enabled: settings.ordering_enabled,
         google_review_url: settings.google_review_url || null,
+        image_gen_prompt: settings.image_gen_prompt || null,
+        image_gen_reference_product_ids: settings.image_gen_reference_product_ids ?? [],
       });
       toast.success('Configuration enregistrée');
       onClose();
@@ -229,6 +265,58 @@ export default function CarteSettingsModal({ open, onClose }: Props) {
                 />
                 <p className="mt-1 text-xs text-gray-400">
                   Affiché en bas de la carte sur les tables tactiles lorsque le module commande est désactivé.
+                </p>
+              </div>
+            </section>
+
+            <section className="space-y-3 border-t border-gray-200 pt-4">
+              <h3 className="text-sm font-semibold text-gray-700">Génération d'images par IA</h3>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Prompt de style
+                </label>
+                <textarea
+                  value={settings.image_gen_prompt ?? ''}
+                  onChange={(e) => set('image_gen_prompt', e.target.value)}
+                  rows={4}
+                  placeholder="Photographie de produit pour la carte d'un bar rétro gaming..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Ajouté à chaque génération, avant la description du produit. Décris ici le cadre
+                  commun (cadrage, fond, lumière, ce qu'il ne faut pas voir), pas le produit.
+                </p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-medium text-gray-600">
+                    Visuels donnés en exemple par défaut
+                  </label>
+                  <span className="text-xs text-gray-400 tabular-nums">
+                    {(settings.image_gen_reference_product_ids ?? []).length}/4
+                  </span>
+                </div>
+                <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {produitsAvecImage.map((p) => {
+                    const actif = (settings.image_gen_reference_product_ids ?? []).includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        title={p.name}
+                        onClick={() => basculerReference(p.id)}
+                        className={`relative aspect-video overflow-hidden rounded border-2 transition ${
+                          actif ? 'border-primary-500' : 'border-transparent hover:border-gray-300'
+                        }`}
+                      >
+                        <img src={p.image_url ?? ''} alt={p.name} className="w-full h-full object-cover" />
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-xs text-gray-400">
+                  Pré-cochés à chaque génération. Quatre au maximum : au-delà on paie des jetons
+                  d'entrée sans gagner en cohérence de style.
                 </p>
               </div>
             </section>

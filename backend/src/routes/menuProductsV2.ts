@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
+import { generateProductImage, type Qualite } from '../services/productImageGen.js';
 
 export const menuProductV2Routes = Router();
 
@@ -170,6 +171,71 @@ menuProductV2Routes.get('/', async (req, res) => {
   } catch (err) {
     console.error('List menu products v2 error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });
+  }
+});
+
+/**
+ * Generation d'une image produit par IA.
+ *
+ * Declaree AVANT `get('/:id')` : Express prend la premiere route qui matche, et
+ * un parametre attrape n'importe quel segment.
+ *
+ * Le front n'envoie qu'une description et des identifiants. Le prompt de style
+ * commun est relu ICI dans carte_settings a chaque appel, plutot que d'etre
+ * renvoye par le navigateur : un onglet ouvert depuis une semaine appliquerait
+ * sinon un prompt perime.
+ */
+menuProductV2Routes.post('/generate-image', async (req, res) => {
+  try {
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
+    const requestId = typeof req.body?.requestId === 'string' ? req.body.requestId : undefined;
+    const qualiteBrute = req.body?.quality;
+    const quality: Qualite | undefined =
+      qualiteBrute === 'low' || qualiteBrute === 'medium' || qualiteBrute === 'high'
+        ? qualiteBrute
+        : undefined;
+
+    const idsDemandes = Array.isArray(req.body?.referenceIds)
+      ? (req.body.referenceIds as unknown[]).filter((v): v is string => typeof v === 'string')
+      : null;
+
+    const { data: reglages } = await supabaseAdmin
+      .from('carte_settings')
+      .select('image_gen_prompt, image_gen_reference_product_ids')
+      .limit(1)
+      .single();
+
+    // Le front peut imposer sa selection ; sans selection explicite on retombe
+    // sur les references par defaut des reglages.
+    const ids = idsDemandes ?? (reglages?.image_gen_reference_product_ids ?? []);
+
+    let referenceUrls: string[] = [];
+    if (ids.length > 0) {
+      const { data: produits } = await supabaseAdmin
+        .from('menu_products_v2')
+        .select('id, image_url')
+        .in('id', ids.slice(0, 8));
+      // les identifiants qui ne se resolvent plus (produit supprime) disparaissent ici
+      referenceUrls = (produits ?? [])
+        .map((p) => p.image_url as string | null)
+        .filter((u): u is string => !!u);
+    }
+
+    const resultat = await generateProductImage({
+      prompt,
+      promptDeBase: reglages?.image_gen_prompt ?? '',
+      referenceUrls,
+      quality,
+      userId: req.user?.id ?? 'inconnu',
+      requestId,
+    });
+
+    res.json({ status: 'success', ...resultat });
+  } catch (err) {
+    console.error('[menu-products-v2] generate-image error:', err);
+    const status = (err as { httpStatus?: number }).httpStatus ?? 500;
+    const message = status < 500 && err instanceof Error ? err.message : 'Erreur serveur';
+    res.status(status).json({ status: 'error', message });
   }
 });
 

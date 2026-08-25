@@ -47,7 +47,8 @@ Il y a **2 dépôts/dossiers liés** qu'il ne faut pas confondre :
   Windows installé sur le PC du comptoir (lecture caisse, monitoring).
 - **MySQL legacy** (OVH cloud DB) — uniquement pour le dual-write des imports
   finance (rétro-compatibilité avec l'ancien CRM PHP).
-- **OpenAI** — génération de questions battle.
+- **OpenAI** — génération de questions battle, et génération d'images produit
+  (`gpt-image-2`, cf. `backend/src/services/productImageGen.ts`).
 
 ### Frontend (`frontend/`)
 

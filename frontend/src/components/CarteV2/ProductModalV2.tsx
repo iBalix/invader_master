@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Sparkles } from 'lucide-react';
 import FileUpload from '../Quiz/FileUpload';
 import ConditioningEditor, { type ConditioningInput } from './ConditioningEditor';
 import VariantEditor, { type VariantInput } from './VariantEditor';
 import TagSelector from './TagSelector';
+import ImageGenModal from './ImageGenModal';
 
 export interface ProductV2Data {
   id?: string;
@@ -53,6 +54,7 @@ interface Props {
 export default function ProductModalV2({ initial, onSave, onClose }: Props) {
   const [form, setForm] = useState<ProductV2Data>({ ...EMPTY });
   const [saving, setSaving] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
 
   useEffect(() => {
     if (initial) {
@@ -218,6 +220,15 @@ export default function ProductModalV2({ initial, onSave, onClose }: Props) {
                 Affichée en 16:9 partout sur les tables (liste, fiche produit, panier) : une image
                 carrée ou verticale sera rognée au centre, gauche et droite coupées.
               </p>
+              {/* type="button" IMPERATIF : sans lui, un bouton dans un <form>
+                  vaut submit et ce clic enregistrerait le produit. */}
+              <button
+                type="button"
+                onClick={() => setGenOpen(true)}
+                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Générer avec l'IA
+              </button>
             </div>
           </div>
 
@@ -267,6 +278,14 @@ export default function ProductModalV2({ initial, onSave, onClose }: Props) {
             </button>
           </div>
         </form>
+
+        {/* Hors du <form> volontairement, cf. l'en-tete de ImageGenModal */}
+        <ImageGenModal
+          open={genOpen}
+          productName={form.name}
+          onAccept={(url) => set('image_url', url)}
+          onClose={() => setGenOpen(false)}
+        />
       </div>
     </div>
   );

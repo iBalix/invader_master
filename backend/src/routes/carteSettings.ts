@@ -13,6 +13,9 @@ const ALLOWED_FIELDS = [
   'happy_hour_days',
   'ordering_enabled',
   'google_review_url',
+  // generation d'images par IA : prompt de style commun et visuels d'exemple
+  'image_gen_prompt',
+  'image_gen_reference_product_ids',
 ] as const;
 
 carteSettingsRoutes.get('/', async (_req, res) => {

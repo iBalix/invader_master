@@ -195,6 +195,75 @@ export async function optimizeImage(
   }
 }
 
+/**
+ * Recadre au ratio demandé, en rognant au centre.
+ *
+ * Sert à ramener une image générée par IA au 16:9 des bornes quand le modèle
+ * n'a pas honoré la taille demandée. `fit: 'cover'` + `position: 'centre'`
+ * reproduit exactement ce que fait l'`object-cover` des bornes : on rogne au
+ * même endroit qu'à l'affichage, donc ce qu'on voit à l'aperçu est ce qui sera
+ * servi.
+ *
+ * Si sharp est indisponible (cf. getSharp, déjà arrivé en production sur un
+ * Node trop ancien), on renvoie le buffer intact : l'image part dans son format
+ * d'origine et la borne la rognera au rendu. Une brique d'agrément ne doit
+ * jamais empêcher d'enregistrer un produit.
+ */
+export async function cropToAspect(
+  buffer: Buffer,
+  width: number,
+  height: number,
+): Promise<Buffer> {
+  const sharp = await getSharp();
+  if (!sharp) {
+    console.warn('[imageGen] sharp indisponible, recadrage 16:9 ignoré');
+    return buffer;
+  }
+  try {
+    return await sharp(buffer)
+      .resize(width, height, { fit: 'cover', position: 'centre' })
+      .toBuffer();
+  } catch (err) {
+    console.error('[imageGen] recadrage impossible, original conservé:', (err as Error).message);
+    return buffer;
+  }
+}
+
+/**
+ * Allège une image de référence avant de l'envoyer à l'IA.
+ *
+ * Les références sont facturées en jetons d'entrée. Une photo produit de 250 Ko
+ * en 1280x720 tombe autour de 80 Ko en JPEG q80 sur 1024 px d'arête, sans perte
+ * utile pour transmettre un style. Sans sharp, on renvoie l'original : le
+ * plafond de poids en amont a déjà écarté les cas extrêmes.
+ */
+export async function resizeForReference(buffer: Buffer, maxEdge = 1024): Promise<Buffer> {
+  const sharp = await getSharp();
+  if (!sharp) return buffer;
+  try {
+    return await sharp(buffer)
+      .rotate()
+      .resize(maxEdge, maxEdge, { withoutEnlargement: true, fit: 'inside' })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+  } catch {
+    return buffer;
+  }
+}
+
+/** dimensions d'une image, ou null si illisible ou si sharp est absent */
+export async function imageSize(buffer: Buffer): Promise<{ width: number; height: number } | null> {
+  const sharp = await getSharp();
+  if (!sharp) return null;
+  try {
+    const meta = await sharp(buffer).metadata();
+    if (!meta.width || !meta.height) return null;
+    return { width: meta.width, height: meta.height };
+  } catch {
+    return null;
+  }
+}
+
 /** "2.4 Mo" plutôt que "2538940", pour des logs lisibles en exploitation */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
