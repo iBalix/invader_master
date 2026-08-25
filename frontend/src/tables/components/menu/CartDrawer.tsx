@@ -15,6 +15,7 @@ import ArcadeButton from '../ui/ArcadeButton';
 import GoogleReviewModal from './GoogleReviewModal';
 import CouponModal from './CouponModal';
 import { EASE_OUT_QUART } from '../../lib/motion';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   open: boolean;
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export default function CartDrawer({ open, onClose, hostname, onCheckout }: Props) {
+  const t = useT();
   const { items, couponCode, setQty, remove, setCoupon, clear } = useCart();
   const [priced, setPriced] = useState<PricedCart | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,7 +127,7 @@ export default function CartDrawer({ open, onClose, hostname, onCheckout }: Prop
                     Panier vide
                   </div>
                   <div className="text-sm">
-                    Touche un produit pour l'ajouter a ta commande.
+                    {t('table.menu.cart.empty.hint')}
                   </div>
                 </div>
               )}
@@ -227,12 +229,12 @@ export default function CartDrawer({ open, onClose, hostname, onCheckout }: Prop
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="font-display text-base uppercase tracking-wider text-table-yellow">
-                      -10% sur une boisson
+                      {t('table.review.cart.title')}
                     </div>
                     <div className="mt-0.5 text-xs leading-snug text-table-ink-soft">
-                      Laisse-nous 5 étoiles sur Google.
+                      {t('table.review.cart.body')}
                       <span className="ml-1 text-table-yellow underline decoration-dotted underline-offset-2">
-                        Voir le QR code
+                        {t('table.review.cart.link', 'Voir le QR code')}
                       </span>
                     </div>
                   </div>

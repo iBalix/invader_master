@@ -15,6 +15,7 @@ import { AlertTriangle, CheckCircle2, Tag } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import { tablesApi } from '../../lib/tablesApi';
 import type { PricedCart } from '../../types';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   open: boolean;
@@ -35,6 +36,7 @@ export default function CouponModal({
   initialCode,
   onApply,
 }: Props) {
+  const t = useT();
   const [code, setCode] = useState(initialCode ?? '');
   const [status, setStatus] = useState<Status>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -102,7 +104,7 @@ export default function CouponModal({
         </h2>
 
         <p className="mt-2 text-sm text-table-ink-muted">
-          Saisis ton code pour profiter de la remise.
+          {t('table.menu.coupon.hint')}
         </p>
 
         <div className="mt-6 w-full">

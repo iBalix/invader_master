@@ -22,7 +22,7 @@ import { useHostname } from '../hooks/useHostname';
 import { useGamesV2, type GameV2 } from '../hooks/useGamesV2';
 import { useDesignConfig } from '../hooks/useDesignConfig';
 import type { Game } from '../hooks/useGames';
-import { useT } from '../i18n/useT';
+import { useT, type TFunction } from '../i18n/useT';
 import HeaderBar from '../components/layout/HeaderBar';
 import GamepadBadge from '../components/layout/GamepadBadge';
 import LocaleSwitcher from '../components/layout/LocaleSwitcher';
@@ -50,8 +50,15 @@ import ScrollIndicator from '../components/menu/ScrollIndicator';
 const CONFIGS_JOUEURS = ['1', '2', '3', '4', '4+'] as const;
 type ConfigJoueurs = (typeof CONFIGS_JOUEURS)[number];
 
-function libelleConfig(c: string): string {
-  return c === '1' ? '1 joueur' : `${c} joueurs`;
+/**
+ * Libelle d'une puce. Le singulier n'est pas un detail de style : en francais
+ * "1 joueur" et en anglais "1 player" sont au singulier, tous les autres au
+ * pluriel. On passe donc par deux cles distinctes plutot que par une
+ * concatenation, qui aurait force un "1 joueurs".
+ */
+function libelleConfig(c: string, t: TFunction): string {
+  if (c === '1') return t('table.games.filter.one', '1 joueur');
+  return t('table.games.filter.many', '{n} joueurs').replace('{n}', c);
 }
 
 /**
@@ -171,7 +178,7 @@ export default function GamesPage() {
         <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-white/10 bg-table-bg-soft/85">
           <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-6 py-4">
             <span className="font-display text-xs uppercase tracking-[0.3em] text-table-cyan/85">
-              Filtre joueurs
+              {t('table.games.filter.label', 'Filtre joueurs')}
             </span>
             <div className="flex gap-2">
               {CONFIGS_JOUEURS.map((n) => {
@@ -207,7 +214,7 @@ export default function GamesPage() {
                     aria-pressed={active}
                     title={dispo ? undefined : 'Aucun jeu de cette catégorie'}
                   >
-                    {libelleConfig(n)}
+                    {libelleConfig(n, t)}
                   </button>
                 );
               })}
@@ -253,7 +260,14 @@ export default function GamesPage() {
                           game={gameForCard}
                           consoleLabel={consoleLabel}
                           disabled={isDisabled}
-                          disabledReason={isDisabled ? `Pas en ${libelleConfig(playerFilter!)}` : null}
+                          disabledReason={
+                            isDisabled
+                              ? t('table.games.filter.excluded', 'Pas en {config}').replace(
+                                  '{config}',
+                                  libelleConfig(playerFilter!, t),
+                                )
+                              : null
+                          }
                           onClick={() => {
                             if (isDisabled) return;
                             // jeu web (échecs, ...) : navigation interne dans

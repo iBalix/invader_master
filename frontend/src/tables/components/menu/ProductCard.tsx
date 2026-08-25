@@ -12,6 +12,7 @@
 import { Plus } from 'lucide-react';
 import type { MenuProduct } from '../../hooks/useCarte';
 import { formatPrice } from '../../lib/format';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   product: MenuProduct;
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export default function ProductCard({ product, happyHour, qtyInCart, onSelect, onAdd }: Props) {
+  const t = useT();
   const price = Number(product.price ?? 0);
   const priceHh = product.priceHh != null ? Number(product.priceHh) : null;
   const hhActive = happyHour && priceHh != null && priceHh > 0 && priceHh < price;
@@ -67,7 +69,7 @@ export default function ProductCard({ product, happyHour, qtyInCart, onSelect, o
                 'linear-gradient(135deg, rgba(123,43,255,0.25), rgba(255,43,214,0.15))',
             }}
           >
-            Pas d'image
+            {t('table.menu.noimage')}
           </div>
         )}
       </div>

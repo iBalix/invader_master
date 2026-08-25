@@ -5,6 +5,7 @@
 
 import { X } from 'lucide-react';
 import type { MenuVariantV2, MenuConditioningV2 } from '../../hooks/useCarteV2';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   productName: string;
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export default function VariantPicker({ productName, variants, conditioning, onSelect, onClose }: Props) {
+  const t = useT();
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4"
@@ -35,7 +37,7 @@ export default function VariantPicker({ productName, variants, conditioning, onS
 
         <div className="mb-4">
           <p className="font-display text-xs uppercase tracking-[0.3em] text-table-ink-muted">
-            Choisir une variante
+            {t('table.menu.variant.choose')}
           </p>
           <h2 className="mt-1 font-display text-2xl uppercase tracking-wider text-table-ink">
             {productName}

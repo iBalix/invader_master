@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { HomeFeatured } from '../../types';
 import ArcadeModal from '../ui/ArcadeModal';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   items: HomeFeatured[];
@@ -26,6 +27,7 @@ interface Props {
 const PAGE_SIZE = 3;
 
 export default function FeaturedCards({ items, rotateMs = 7000 }: Props) {
+  const t = useT();
   const [page, setPage] = useState(0);
   const [detail, setDetail] = useState<HomeFeatured | null>(null);
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
@@ -47,10 +49,10 @@ export default function FeaturedCards({ items, rotateMs = 7000 }: Props) {
         </div>
         <div className="min-w-0">
           <div className="font-display text-lg uppercase tracking-wider text-table-ink-soft">
-            Pas de mise en avant
+            {t('table.home.featured.empty.title')}
           </div>
           <div className="text-xs text-table-ink-muted">
-            Ajoute un element dans Config ecrans &gt; Tables tactiles.
+            {t('table.home.featured.empty.body')}
           </div>
         </div>
       </div>

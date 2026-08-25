@@ -10,8 +10,10 @@
  */
 
 import { Lightbulb, Trophy } from 'lucide-react';
+import { useT } from '../../i18n/useT';
 
 export default function TournamentTipCard() {
+  const t = useT();
   return (
     <div
       className="group relative block w-full overflow-hidden rounded-2xl border border-table-yellow/30 text-left"
@@ -67,7 +69,7 @@ export default function TournamentTipCard() {
               <Lightbulb className="h-5 w-5" />
             </span>
             <span className="font-display text-base uppercase tracking-[0.25em] text-white">
-              Le savais-tu&nbsp;?
+              {t('table.games.tip.title')}
             </span>
           </div>
 
@@ -86,7 +88,7 @@ export default function TournamentTipCard() {
 
             <div className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-black/30 px-3.5 py-1.5 font-display text-[13px] uppercase tracking-widest text-white">
               <span className="h-1.5 w-1.5 rounded-full bg-table-yellow" />
-              Renseigne-toi au comptoir
+              {t('table.games.tip.cta')}
             </div>
           </div>
         </div>

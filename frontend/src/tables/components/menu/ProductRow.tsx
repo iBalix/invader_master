@@ -16,6 +16,7 @@ import { Plus } from 'lucide-react';
 import type { MenuProductV2, MenuConditioningV2 } from '../../hooks/useCarteV2';
 import { formatPrice } from '../../lib/format';
 import LucideIcon from '../../../lib/LucideIcon';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   product: MenuProductV2;
@@ -42,6 +43,7 @@ export default function ProductRow({
   onAddConditioning,
   showAddButton = true,
 }: Props) {
+  const t = useT();
   const conditionings = product.conditionings ?? [];
   const variants = product.variants ?? [];
   const tags = product.tags ?? [];
@@ -95,7 +97,7 @@ export default function ProductRow({
                 'linear-gradient(135deg, rgba(123,43,255,0.25), rgba(255,43,214,0.15))',
             }}
           >
-            Pas d'image
+            {t('table.menu.noimage')}
           </div>
         )}
       </div>

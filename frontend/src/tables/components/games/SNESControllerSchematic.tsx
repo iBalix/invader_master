@@ -7,6 +7,8 @@
  *  - Retourne null si aucune touche n'est renseignee
  */
 
+import { useT } from '../../i18n/useT';
+
 interface ControlsMap {
   controlA?: string | null;
   controlB?: string | null;
@@ -42,6 +44,7 @@ const BUTTON_SPECS: ButtonSpec[] = [
 ];
 
 export default function SNESControllerSchematic({ controls, className }: Props) {
+  const t = useT();
   const active = BUTTON_SPECS.filter((b) => {
     const v = controls[b.key];
     return typeof v === 'string' && v.trim().length > 0;
@@ -56,7 +59,7 @@ export default function SNESControllerSchematic({ controls, className }: Props) 
         xmlns="http://www.w3.org/2000/svg"
         className="w-full max-w-[420px] h-auto"
         role="img"
-        aria-label="Manette SNES"
+        aria-label={t('table.games.controller.snes')}
       >
         {/* Epaules L / R (rectangles aux coins superieurs) */}
         <rect x="60"  y="20" width="80" height="16" rx="8" fill="rgba(255,255,255,0.22)" />

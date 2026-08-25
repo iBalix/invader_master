@@ -8,6 +8,7 @@
 
 import { Calendar, Radio, Sparkles, ArrowRight } from 'lucide-react';
 import type { LiveEventState, UpcomingEvent } from '../../types';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   liveEvent: LiveEventState;
@@ -29,6 +30,7 @@ function formatDate(iso: string): string {
 }
 
 export default function EventBanner({ liveEvent, nextEvent }: Props) {
+  const t = useT();
   if (liveEvent.is_live) {
     const label =
       liveEvent.event_label || liveEvent.event_type?.toUpperCase() || 'EVENT EN COURS';
@@ -93,10 +95,10 @@ export default function EventBanner({ liveEvent, nextEvent }: Props) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="font-display text-xl uppercase tracking-wider text-table-ink-soft">
-          Pas d'event a l'horizon
+          {t('table.home.event.empty.title')}
         </div>
         <div className="text-sm text-table-ink-muted">
-          Reste branche, on en programme chaque semaine.
+          {t('table.home.event.empty.body')}
         </div>
       </div>
     </div>
