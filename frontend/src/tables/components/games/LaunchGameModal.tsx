@@ -100,6 +100,7 @@ interface StepCardProps {
 
 function StepCard({ index, icon: Icon, title, body, tone, badge }: StepCardProps) {
   const s = TONE_STYLES[tone];
+  const t = useT();
   return (
     <li className={['flex gap-4 rounded-2xl border p-5', s.wrap].join(' ')}>
       <div
@@ -113,7 +114,7 @@ function StepCard({ index, icon: Icon, title, body, tone, badge }: StepCardProps
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="font-display text-xs uppercase tracking-[0.3em] text-table-ink-muted">
-            Etape {index}
+            {t('table.games.step', 'Etape')} {index}
           </span>
           {badge}
         </div>
@@ -360,7 +361,7 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
             {!step2Valid && !launching && (
               <div className="mt-2 flex items-center justify-center gap-2 text-center text-xs text-table-red">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Branche une manette USB pour pouvoir lancer le jeu.
+                {t('table.games.step2.warn')}
               </div>
             )}
           </div>
@@ -443,8 +444,8 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
             <StepCard
               index={1}
               icon={Coffee}
-              title="Passer commande"
-              body="Au comptoir ou directement depuis la carte sur cette table."
+              title={t('table.games.step1.title')}
+              body={t('table.games.step1.body')}
               tone="neutral"
             />
 
@@ -452,8 +453,8 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
               <StepCard
                 index={2}
                 icon={Sparkles}
-                title="Pas besoin de manettes"
-                body="Ce jeu se joue directement sur l'ecran tactile."
+                title={t('table.games.step2.none.title')}
+                body={t('table.games.step2.none.body')}
                 tone="success"
                 badge={
                   <span className="inline-flex items-center gap-1 rounded-full border border-table-mint/40 bg-table-mint/15 px-2.5 py-1 font-display text-xs uppercase tracking-widest text-table-mint">
@@ -465,11 +466,11 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
               <StepCard
                 index={2}
                 icon={Gamepad2}
-                title="Brancher les manettes"
+                title={t('table.games.step2.title')}
                 body={
                   hasController
                     ? `Manette${gamepadCount > 1 ? 's' : ''} detectee${gamepadCount > 1 ? 's' : ''}, vous pouvez lancer la partie.`
-                    : 'Branche au moins une manette USB sur le PC pour pouvoir jouer.'
+                    : t('table.games.step2.missing')
                 }
                 tone={step2Tone}
                 badge={
@@ -489,14 +490,15 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
             <StepCard
               index={3}
               icon={Power}
-              title="Pour quitter la partie"
+              title={t('table.games.step3.title')}
               body={
                 <span>
-                  Maintiens la touche{' '}
+                  {t('table.games.step3.hold', 'Maintiens la touche')}{' '}
                   <span className="rounded border border-table-yellow/50 bg-table-yellow/15 px-2 py-0.5 font-display text-xs uppercase tracking-widest text-table-yellow">
                     Start
                   </span>{' '}
-                  pendant <strong className="text-table-ink">3 secondes</strong>.
+                  {t('table.games.step3.during', 'pendant')}{' '}
+                  <strong className="text-table-ink">{t('table.games.step3.seconds', '3 secondes')}</strong>.
                 </span>
               }
               tone="neutral"
@@ -527,7 +529,7 @@ export default function LaunchGameModal({ open, game, onClose }: Props) {
             {!step2Valid && !launching && (
               <div className="mt-2 flex items-center justify-center gap-2 text-center text-xs text-table-red">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Branche une manette USB pour pouvoir lancer le jeu.
+                {t('table.games.step2.warn')}
               </div>
             )}
             {identity?.role === 'slave' && (

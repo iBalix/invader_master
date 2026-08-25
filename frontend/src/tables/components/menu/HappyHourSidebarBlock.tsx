@@ -3,6 +3,9 @@
  * carte_settings et pulse quand la fenetre est active.
  */
 
+import { useLocaleStore } from '../../i18n/localeStore';
+import { useT } from '../../i18n/useT';
+
 interface Props {
   start: string;
   end: string;
@@ -10,28 +13,32 @@ interface Props {
   active: boolean;
 }
 
-const DAY_FR_BY_SLUG: Record<string, string> = {
-  mon: 'Lun', tue: 'Mar', wed: 'Mer', thu: 'Jeu', fri: 'Ven', sat: 'Sam', sun: 'Dim',
+const JOURS: Record<'fr' | 'en', Record<string, string>> = {
+  fr: { mon: 'Lun', tue: 'Mar', wed: 'Mer', thu: 'Jeu', fri: 'Ven', sat: 'Sam', sun: 'Dim' },
+  en: { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' },
 };
 
 function formatTime(value: string): string {
   return value.length >= 5 ? value.slice(0, 5) : value;
 }
 
-function formatDays(days: string[]): string {
+function formatDays(days: string[], locale: 'fr' | 'en', tousLesJours: string): string {
   const order = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const noms = JOURS[locale] ?? JOURS.fr;
   const sorted = [...days].sort((a, b) => order.indexOf(a) - order.indexOf(b));
-  if (sorted.length === 7) return 'Tous les jours';
+  if (sorted.length === 7) return tousLesJours;
   // contiguite ?
   const indices = sorted.map((d) => order.indexOf(d));
   const contiguous = indices.every((v, i) => i === 0 || v === indices[i - 1] + 1);
   if (contiguous && sorted.length >= 2) {
-    return `${DAY_FR_BY_SLUG[sorted[0]]}-${DAY_FR_BY_SLUG[sorted[sorted.length - 1]]}`;
+    return `${noms[sorted[0]]}-${noms[sorted[sorted.length - 1]]}`;
   }
-  return sorted.map((d) => DAY_FR_BY_SLUG[d]).join(' · ');
+  return sorted.map((d) => noms[d]).join(' · ');
 }
 
 export default function HappyHourSidebarBlock({ start, end, days, active }: Props) {
+  const locale = useLocaleStore((s) => s.locale);
+  const t = useT();
   return (
     <>
       <style>{`
@@ -75,7 +82,7 @@ export default function HappyHourSidebarBlock({ start, end, days, active }: Prop
           {formatTime(start)} → {formatTime(end)}
         </div>
         <div className="mt-0.5 text-[10px] uppercase tracking-wider text-white/75">
-          {formatDays(days)}
+          {formatDays(days, locale, t('table.menu.happyhour.everyday', 'Tous les jours'))}
         </div>
       </div>
     </>

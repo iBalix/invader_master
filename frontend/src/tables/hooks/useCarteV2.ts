@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { publicApi } from '../lib/tablesApi';
+import { useLocaleStore } from '../i18n/localeStore';
 
 export interface MenuConditioningV2 {
   id: string;
@@ -66,6 +67,7 @@ interface State {
 }
 
 export function useCarteV2(): State {
+  const locale = useLocaleStore((s) => s.locale);
   const [state, setState] = useState<State>({ loading: true, categories: [], error: null });
 
   useEffect(() => {
@@ -87,7 +89,8 @@ export function useCarteV2(): State {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // relance au changement de langue : la locale voyage avec la requete
+  }, [locale]);
 
   return state;
 }

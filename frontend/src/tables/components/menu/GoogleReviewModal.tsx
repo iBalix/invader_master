@@ -18,6 +18,7 @@
 import { motion } from 'framer-motion';
 import { Star } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   open: boolean;
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export default function GoogleReviewModal({ open, onClose }: Props) {
+  const t = useT();
   return (
     <ArcadeModal open={open} onClose={onClose} size="lg">
       <div className="flex flex-col items-center text-center">
@@ -60,13 +62,16 @@ export default function GoogleReviewModal({ open, onClose }: Props) {
               '0 0 30px rgba(255, 209, 36, 0.45), 0 0 60px rgba(255, 209, 36, 0.2)',
           }}
         >
-          -10% sur une boisson
+          {t('table.review.title')}
         </h2>
 
         <p className="mt-4 max-w-md text-base text-table-ink-soft">
-          Envoie-nous de la force avec{' '}
-          <strong className="text-table-yellow">5 étoiles sur Google</strong> et
-          on t'offre <strong className="text-table-ink">10% sur une boisson</strong>.
+          {t('table.review.intro.before', 'Envoie-nous de la force avec')}{' '}
+          <strong className="text-table-yellow">
+            {t('table.review.intro.stars', '5 étoiles sur Google')}
+          </strong>{' '}
+          {t('table.review.intro.middle', "et on t'offre")}{' '}
+          <strong className="text-table-ink">{t('table.review.intro.reward', '10% sur une boisson')}</strong>.
         </p>
 
         {/* QR card */}
@@ -80,19 +85,19 @@ export default function GoogleReviewModal({ open, onClose }: Props) {
             />
           </div>
           <div className="font-display text-xs uppercase tracking-[0.3em] text-table-ink-muted">
-            Scanne avec ton téléphone
+            {t('table.review.scan')}
           </div>
         </div>
 
         {/* Etape de validation */}
         <div className="mt-6 w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-left text-sm text-table-ink-soft">
           <div className="font-display text-xs uppercase tracking-wider text-table-yellow">
-            Comment ça marche ?
+            {t('table.review.how')}
           </div>
           <ol className="mt-2 space-y-1 text-table-ink-soft">
-            <li>1. Scanne le QR code et laisse ton avis 5 étoiles.</li>
-            <li>2. Montre-le au bar.</li>
-            <li>3. On applique -10% sur une boisson.</li>
+            <li>1. {t('table.review.step1')}</li>
+            <li>2. {t('table.review.step2')}</li>
+            <li>3. {t('table.review.step3')}</li>
           </ol>
         </div>
       </div>

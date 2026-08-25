@@ -25,6 +25,7 @@ import type { Game } from '../hooks/useGames';
 import { useT } from '../i18n/useT';
 import HeaderBar from '../components/layout/HeaderBar';
 import GamepadBadge from '../components/layout/GamepadBadge';
+import LocaleSwitcher from '../components/layout/LocaleSwitcher';
 import BackButton from '../components/layout/BackButton';
 import LauncherSidebar, { type SidebarEntry } from '../components/layout/LauncherSidebar';
 import GameCard from '../components/games/GameCard';
@@ -148,7 +149,12 @@ export default function GamesPage() {
       <HeaderBar
         title={t('table.games.title').toUpperCase()}
         left={<BackButton />}
-        right={<GamepadBadge />}
+        right={
+          <div className="flex items-center gap-3">
+            <LocaleSwitcher />
+            <GamepadBadge />
+          </div>
+        }
       />
 
       <div className="mt-5 flex min-h-0 flex-1 gap-5">

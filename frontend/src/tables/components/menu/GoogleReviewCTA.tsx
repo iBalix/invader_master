@@ -6,12 +6,14 @@
 import { motion } from 'framer-motion';
 import { Star } from 'lucide-react';
 import { EASE_OUT_QUART } from '../../lib/motion';
+import { useT } from '../../i18n/useT';
 
 interface Props {
   onClick: () => void;
 }
 
 export default function GoogleReviewCTA({ onClick }: Props) {
+  const t = useT();
   return (
     <motion.button
       type="button"
@@ -24,7 +26,7 @@ export default function GoogleReviewCTA({ onClick }: Props) {
       style={{ boxShadow: '0 0 28px 0 rgba(250, 204, 21, 0.45)' }}
     >
       <Star className="h-7 w-7 fill-black" />
-      Obtenez 10% sur une boisson
+      {t('table.review.cta')}
     </motion.button>
   );
 }

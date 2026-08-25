@@ -10,6 +10,7 @@
 
 import axios from 'axios';
 import { getHostname } from './hostname';
+import { useLocaleStore } from '../i18n/localeStore';
 
 const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
@@ -23,6 +24,16 @@ publicApi.interceptors.request.use((config) => {
   const hostname = getHostname();
   if (hostname) {
     config.headers['X-Hostname'] = hostname;
+  }
+  // La locale part avec toutes les requetes publiques, sans que chaque appelant
+  // ait a y penser. Sans elle, le backend retombait sur 'fr' : l'interface
+  // basculait bien en anglais mais les contenus (noms de categories, produits,
+  // descriptions) restaient francais alors que les colonnes _en existent.
+  // On ne l'ecrase pas si l'appelant a passe une locale explicite.
+  const params = (config.params ?? {}) as Record<string, unknown>;
+  if (params.locale === undefined) {
+    params.locale = useLocaleStore.getState().locale;
+    config.params = params;
   }
   return config;
 });

@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { publicApi } from '../lib/tablesApi';
+import { useLocaleStore } from '../i18n/localeStore';
 
 export interface GameCategoryV2 {
   id: string;
@@ -83,6 +84,7 @@ interface State {
 }
 
 export function useGamesV2(): State {
+  const locale = useLocaleStore((s) => s.locale);
   const [state, setState] = useState<State>({ loading: true, data: null, error: null });
 
   useEffect(() => {
@@ -104,7 +106,8 @@ export function useGamesV2(): State {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // relance au changement de langue : la locale voyage avec la requete
+  }, [locale]);
 
   return state;
 }

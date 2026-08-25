@@ -23,6 +23,7 @@ import { useDesignConfig } from '../hooks/useDesignConfig';
 import { useCart, buildCartKey } from '../store/cartStore';
 import { useT } from '../i18n/useT';
 import HeaderBar from '../components/layout/HeaderBar';
+import LocaleSwitcher from '../components/layout/LocaleSwitcher';
 import BackButton from '../components/layout/BackButton';
 import LauncherSidebar, { type SidebarEntry } from '../components/layout/LauncherSidebar';
 import ProductRow from '../components/menu/ProductRow';
@@ -254,12 +255,15 @@ export default function MenuPage() {
         title=""
         left={<BackButton />}
         right={
-          happyHour ? (
-            <span className="flex items-center gap-2 rounded-full border border-table-yellow/40 bg-table-yellow/15 px-4 py-2 font-display text-sm uppercase tracking-widest text-table-yellow">
-              <span className="h-1.5 w-1.5 rounded-full bg-table-yellow" />
-              {t('table.menu.cart.happyhour')}
-            </span>
-          ) : null
+          <div className="flex items-center gap-3">
+            {happyHour && (
+              <span className="flex items-center gap-2 rounded-full border border-table-yellow/40 bg-table-yellow/15 px-4 py-2 font-display text-sm uppercase tracking-widest text-table-yellow">
+                <span className="h-1.5 w-1.5 rounded-full bg-table-yellow" />
+                {t('table.menu.cart.happyhour')}
+              </span>
+            )}
+            <LocaleSwitcher />
+          </div>
         }
       />
 
