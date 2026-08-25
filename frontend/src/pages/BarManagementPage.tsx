@@ -298,6 +298,7 @@ export default function BarManagementPage() {
       {selectedMachine && (
         <MachineActionModal
           machine={selectedMachine}
+          tableNames={MACHINES.filter((m) => m.type === 'table').map((m) => m.name).sort()}
           agentConnected={agentConnected}
           labels={machineLabels[selectedMachine.name]}
           pingStatus={pingStatus}

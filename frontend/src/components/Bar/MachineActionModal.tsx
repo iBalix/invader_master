@@ -132,6 +132,12 @@ type Tab = 'actions' | 'incidents' | 'historique';
 
 interface Props {
   machine: MachineConfig;
+  /**
+   * Noms des tables du bar, pour la bascule groupee de la fiche "ALL TABLES".
+   * La liste vient de la page plutot que d'etre redefinie ici : une table
+   * ajoutee au plan doit basculer avec les autres sans qu'on y pense.
+   */
+  tableNames?: string[];
   agentConnected: boolean;
   labels?: MachineLabels;
   pingStatus?: Record<string, boolean>;
@@ -140,11 +146,12 @@ interface Props {
   onLabelsUpdated: () => void;
 }
 
-export default function MachineActionModal({ machine, agentConnected, labels, pingStatus, onClose, onIncidentCreated, onLabelsUpdated }: Props) {
+export default function MachineActionModal({ machine, tableNames = [], agentConnected, labels, pingStatus, onClose, onIncidentCreated, onLabelsUpdated }: Props) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<Tab>('actions');
   const [executing, setExecuting] = useState<string | null>(null);
+  const [switchProgress, setSwitchProgress] = useState<{ fait: number; total: number } | null>(null);
   const [machineIncidents, setMachineIncidents] = useState<BarIncident[]>([]);
   const [loadingIncidents, setLoadingIncidents] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -276,6 +283,88 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
    * apres lecture et ne garde l'URL qu'en memoire, donc au redemarrage du PC le
    * poste repart sur son URL habituelle, la V1.
    */
+  /**
+   * Bascule groupee de toutes les tables.
+   *
+   * On ne diffuse PAS une commande unique sur le prefixe TABLE : l'URL porte le
+   * hostname de l'ecran (`?hostname=TABLE08-1`), donc une commande unique
+   * donnerait la meme identite a toutes les dalles. On boucle donc table par
+   * table, ecran par ecran.
+   *
+   * Une table eteinte ne doit pas bloquer les autres : chaque echec est compte
+   * et signale a la fin, au lieu d'interrompre la serie. En revanche on abandonne
+   * la table des que son premier ecran echoue, au lieu de tenter le second :
+   * mieux vaut une table entierement restee en V1 qu'une table avec un ecran
+   * dans chaque interface, qui ne ressemblerait a rien pour le client.
+   */
+  const handleSwitchAllInterfaces = async (target: 'v1' | 'v2') => {
+    const cibles = tableNames;
+    if (cibles.length === 0) {
+      toast.error('Aucune table connue');
+      return;
+    }
+    if (
+      !confirm(
+        `Basculer les ${cibles.length} tables du bar sur l'interface ${target.toUpperCase()} ?\n\n` +
+          'Les deux ecrans de chaque table changent et leur navigateur redemarre.',
+      )
+    ) {
+      return;
+    }
+    setExecuting(target === 'v2' ? 'switch_all_v2' : 'switch_all_v1');
+    setSwitchProgress({ fait: 0, total: cibles.length });
+    const echecs: string[] = [];
+    try {
+      for (const [index, nom] of cibles.entries()) {
+        try {
+          for (const suffix of ['-1', '-2']) {
+            const hostname = `${nom}${suffix}`;
+            const url =
+              target === 'v2'
+                ? `${V2_BASE_URL}?hostname=${hostname}`
+                : `${V1_URL_BY_SCREEN[suffix]}&hostname=${hostname}`;
+            await api.post('/api/bar/execute-command', {
+              command: 'url_edge_server',
+              targetName: hostname,
+              gameName: url,
+            });
+          }
+        } catch {
+          echecs.push(nom);
+        }
+        setSwitchProgress({ fait: index + 1, total: cibles.length });
+      }
+      // un seul restart_edge sur le prefixe : la commande n'a pas besoin de
+      // l'identite de l'ecran, contrairement a l'URL. On ne le lance pas si
+      // aucune table n'a bascule : relancer dix navigateurs devant les clients
+      // pour rien serait pire que de ne rien faire.
+      if (echecs.length < cibles.length) {
+        await api.post('/api/bar/execute-command', {
+          command: 'restart_edge',
+          targetName: 'TABLE',
+        });
+      }
+      if (echecs.length === cibles.length) {
+        toast.error(
+          `Aucune table n'a bascule. Verifier que l'agent du comptoir tourne et que les PC sont allumes.`,
+          { duration: 8000 },
+        );
+      } else if (echecs.length === 0) {
+        toast.success(`${cibles.length} tables basculees sur l'interface ${target.toUpperCase()}`);
+      } else {
+        toast.error(
+          `${cibles.length - echecs.length}/${cibles.length} tables basculees. Echec sur : ${echecs.join(', ')}`,
+          { duration: 8000 },
+        );
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? "Erreur lors de l'execution");
+    } finally {
+      setExecuting(null);
+      setSwitchProgress(null);
+    }
+  };
+
   const handleSwitchInterface = async (target: 'v1' | 'v2') => {
     setExecuting(target === 'v2' ? 'switch_v2' : 'switch_v1');
     try {
@@ -595,6 +684,60 @@ export default function MachineActionModal({ machine, agentConnected, labels, pi
                           d'attente entre deux parties.
                         </p>
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TEMPORAIRE : bascule groupee de toutes les tables */}
+                {machine.type === 'all_tables' && (
+                  <div className="mt-4 pt-4 border-t">
+                    <label className="block text-xs font-medium text-gray-500 mb-2">
+                      Interface de toutes les tables
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        disabled={!agentConnected || executing !== null}
+                        onClick={() => handleSwitchAllInterfaces('v2')}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-indigo-100 hover:bg-indigo-200 text-indigo-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {executing === 'switch_all_v2' ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <FlaskConical className="w-4 h-4" />
+                        )}
+                        Tout passer en V2
+                      </button>
+                      <button
+                        disabled={!agentConnected || executing !== null}
+                        onClick={() => handleSwitchAllInterfaces('v1')}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-gray-100 hover:bg-gray-200 text-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {executing === 'switch_all_v1' ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <RotateCcw className="w-4 h-4" />
+                        )}
+                        Tout ramener en V1
+                      </button>
+                    </div>
+                    {switchProgress ? (
+                      <div className="mt-2">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            className="h-full bg-indigo-500 transition-all duration-200"
+                            style={{ width: `${(switchProgress.fait / switchProgress.total) * 100}%` }}
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500 tabular-nums">
+                          {switchProgress.fait} / {switchProgress.total} tables
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-400">
+                        Bascule les deux écrans des {tableNames.length} tables du bar, puis relance
+                        leur navigateur. Une table éteinte est signalée sans bloquer les autres. Au
+                        redémarrage d'un PC, la table repart sur la V1.
+                      </p>
                     )}
                   </div>
                 )}
