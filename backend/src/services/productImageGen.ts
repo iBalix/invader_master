@@ -254,13 +254,65 @@ function estRefusDeTaille(err: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Assemblage du prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Remplit le gabarit de carte_settings.
+ *
+ * L'operateur ne voit jamais ce gabarit au moment de generer : il n'ecrit que ce
+ * qui change d'une image a l'autre. Le nom du produit, son type et sa
+ * description sont injectes ici, cote serveur, a partir de la fiche en cours
+ * d'edition.
+ *
+ * {PRODUCT_NAME} apparait deux fois dans le gabarit fourni (l'accroche et le
+ * texte de l'enseigne neon), d'ou le remplacement global et non ponctuel.
+ *
+ * Un gabarit sans aucun marqueur reste valide : la description est alors
+ * simplement ajoutee a la suite, ce qui evite qu'un prompt reecrit a la main
+ * dans les reglages ne perde silencieusement le produit.
+ */
+function assemblerPrompt(o: {
+  gabarit: string;
+  productName: string;
+  productType: string;
+  description: string;
+  nbReferences: number;
+}): string {
+  const gabarit = o.gabarit.trim();
+  const nom = o.productName.trim() || 'the product';
+  const type = o.productType.trim() || 'drink';
+
+  const aDesMarqueurs = /\{PRODUCT_(NAME|TYPE|DESCRIPTION)\}/.test(gabarit);
+  const base = aDesMarqueurs
+    ? gabarit
+        .replaceAll('{PRODUCT_NAME}', nom)
+        .replaceAll('{PRODUCT_TYPE}', type)
+        .replaceAll('{PRODUCT_DESCRIPTION}', o.description)
+    : `${gabarit}\n\n${nom} : ${o.description}`;
+
+  // La consigne d'inspiration n'a de sens que s'il y a effectivement des
+  // exemples joints : la reclamer sans piece jointe ferait halluciner un style.
+  if (o.nbReferences === 0) return base.trim();
+  return (
+    base.trim() +
+    `\n\nSTYLE REFERENCE: match the rendering style, framing and lighting mood of the ` +
+    `${o.nbReferences} attached reference image(s). Do not copy their subject or their text.`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Entree publique
 // ---------------------------------------------------------------------------
 
 export interface OptionsGeneration {
-  /** description saisie par l'utilisateur, sans le prompt de style */
-  prompt: string;
-  /** prompt de style commun, lu dans carte_settings */
+  /** nom du produit en cours d'edition, injecte dans {PRODUCT_NAME} */
+  productName: string;
+  /** cocktail | shooter | food : pilote la branche conditionnelle du gabarit */
+  productType: string;
+  /** description du produit et precisions de l'operateur, injectees dans {PRODUCT_DESCRIPTION} */
+  description: string;
+  /** gabarit de prompt commun, lu dans carte_settings */
   promptDeBase: string;
   /** URL publiques des visuels a joindre en exemple */
   referenceUrls: string[];
@@ -275,9 +327,9 @@ export async function generateProductImage(opts: OptionsGeneration): Promise<Res
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw erreur('OPENAI_API_KEY non configuree', 500);
 
-  const description = opts.prompt.trim();
+  const description = opts.description.trim();
   if (description.length < 3) throw erreur('Decris ce que doit montrer l\'image', 400);
-  if (description.length > 1000) throw erreur('Description trop longue (1000 caracteres maximum)', 400);
+  if (description.length > 2000) throw erreur('Description trop longue (2000 caracteres maximum)', 400);
 
   purgerDedup();
   if (opts.requestId) {
@@ -297,13 +349,13 @@ export async function generateProductImage(opts: OptionsGeneration): Promise<Res
   try {
     const references = await chargerReferences(opts.referenceUrls);
 
-    // La consigne d'inspiration n'a de sens que s'il y a effectivement des
-    // exemples joints : la reclamer sans piece jointe ferait halluciner un style.
-    const consigne =
-      references.length > 0
-        ? ` Inspire-toi du style, du cadrage et de l'ambiance lumineuse des ${references.length} image(s) jointe(s) en exemple, sans copier leur contenu.`
-        : '';
-    const promptFinal = `${opts.promptDeBase.trim()}\n\n${description}${consigne}`.trim();
+    const promptFinal = assemblerPrompt({
+      gabarit: opts.promptDeBase,
+      productName: opts.productName,
+      productType: opts.productType,
+      description,
+      nbReferences: references.length,
+    });
 
     const qualite = opts.quality ?? QUALITE_DEFAUT;
     incrementerCompteur();
@@ -360,7 +412,7 @@ export async function generateProductImage(opts: OptionsGeneration): Promise<Res
     };
 
     console.log(
-      `[imageGen] "${description.slice(0, 60)}" refs=${references.length} ${MODELE}/${qualite} ` +
+      `[imageGen] "${opts.productName}" (${opts.productType}) refs=${references.length} ${MODELE}/${qualite} ` +
         `${finale.width}x${finale.height} -> ${formatBytes(resultat.bytes)} en ${(resultat.durationMs / 1000).toFixed(1)} s`,
     );
 

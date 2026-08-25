@@ -34,20 +34,55 @@ interface ProduitReference {
   image_url: string | null;
 }
 
+/**
+ * Types compris par la règle conditionnelle du gabarit de prompt : l'un pose une
+ * enseigne néon au nom du produit, l'autre une planche de service sans aucun
+ * texte. Se tromper de branche donne une image inutilisable, d'où un choix
+ * explicite plutôt qu'une devinette.
+ */
+const TYPES: { value: string; label: string }[] = [
+  { value: 'cocktail', label: 'Cocktail (enseigne néon au nom)' },
+  { value: 'shooter', label: 'Shooter (enseigne néon au nom)' },
+  // "food dish" et non "food" : la valeur est aussi injectee dans l'accroche du
+  // gabarit ("a {PRODUCT_TYPE}"), et "a food" se lit mal. Le mot food reste
+  // present, donc la regle conditionnelle continue de se resoudre.
+  { value: 'food dish', label: 'Plat ou dessert (planche, sans texte)' },
+];
+
+/** type deviné depuis les catégories du produit, ajustable ensuite */
+function typeDepuisCategories(categories: string[]): string {
+  const jointes = categories.join(' ').toLowerCase();
+  if (jointes.includes('shooter')) return 'shooter';
+  if (/sal[ée]|dessert|food/.test(jointes)) return 'food dish';
+  return 'cocktail';
+}
+
 interface Props {
   open: boolean;
-  /** nom du produit en cours d'édition, pour préremplir la description */
+  /** nom du produit en cours d'édition, injecté dans le gabarit */
   productName: string;
+  /** description de la fiche, transmise telle quelle à l'IA */
+  productDescription: string;
+  /** catégories du produit, pour deviner la branche du gabarit */
+  productCategories: string[];
   onAccept: (url: string) => void;
   onClose: () => void;
 }
 
-export default function ImageGenModal({ open, productName, onAccept, onClose }: Props) {
-  const [prompt, setPrompt] = useState('');
+export default function ImageGenModal({
+  open,
+  productName,
+  productDescription,
+  productCategories,
+  onAccept,
+  onClose,
+}: Props) {
+  const [specifics, setSpecifics] = useState('');
+  const [description, setDescription] = useState('');
+  const [productType, setProductType] = useState('cocktail');
   const [quality, setQuality] = useState<Qualite>('medium');
   const [candidats, setCandidats] = useState<ProduitReference[]>([]);
   const [references, setReferences] = useState<string[]>([]);
-  const [promptDeBase, setPromptDeBase] = useState('');
   const [generating, setGenerating] = useState(false);
   const [resultat, setResultat] = useState<{ url: string; bytes: number; cropped: boolean } | null>(null);
 
@@ -62,7 +97,6 @@ export default function ImageGenModal({ open, productName, onAccept, onClose }: 
       );
       setCandidats(items);
       const r = reglages.data?.data ?? {};
-      setPromptDeBase(r.image_gen_prompt ?? '');
       const defauts: string[] = r.image_gen_reference_product_ids ?? [];
       // on n'active que les références qui existent encore et ont une image
       setReferences(defauts.filter((id) => items.some((p) => p.id === id)));
@@ -74,9 +108,11 @@ export default function ImageGenModal({ open, productName, onAccept, onClose }: 
   useEffect(() => {
     if (!open) return;
     setResultat(null);
-    setPrompt(productName ? `Photo de "${productName}"` : '');
+    setSpecifics('');
+    setDescription(productDescription);
+    setProductType(typeDepuisCategories(productCategories));
     void charger();
-  }, [open, productName, charger]);
+  }, [open, productDescription, productCategories, charger]);
 
   if (!open) return null;
 
@@ -86,14 +122,17 @@ export default function ImageGenModal({ open, productName, onAccept, onClose }: 
     );
 
   const generer = async () => {
-    if (generating || prompt.trim().length < 3) return;
+    if (generating || description.trim().length + specifics.trim().length < 3) return;
     setGenerating(true);
     setResultat(null);
     try {
       const { data } = await api.post(
         '/api/menu-products-v2/generate-image',
         {
-          prompt: prompt.trim(),
+          productName,
+          productType,
+          description: description.trim(),
+          specifics: specifics.trim(),
           referenceIds: references,
           quality,
           // Le même identifiant pour un clic : si l'intercepteur 401 rejoue la
@@ -165,32 +204,68 @@ export default function ImageGenModal({ open, productName, onAccept, onClose }: 
             </>
           ) : (
             <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Que doit-on voir ?
-                </label>
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value.slice(0, 1000))}
-                  rows={3}
-                  disabled={generating}
-                  placeholder="Un cocktail bleu fumant dans un verre à pied, avec une rondelle de citron vert"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-                <p className="mt-1 text-xs text-gray-400">{prompt.length}/1000</p>
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <p className="text-xs text-gray-500">
+                  Produit&nbsp;: <strong className="text-gray-700">{productName || '(sans nom)'}</strong>
+                </p>
+                <p className="mt-0.5 text-xs text-gray-400">
+                  Le style, le cadrage et l'ambiance viennent des réglages de la carte. Tu n'écris
+                  ici que ce qui change d'une image à l'autre.
+                </p>
               </div>
 
-              {promptDeBase && (
-                <details className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <summary className="cursor-pointer text-xs font-medium text-gray-600">
-                    Style appliqué à toutes les images
-                  </summary>
-                  <p className="mt-2 text-xs text-gray-500 whitespace-pre-line">{promptDeBase}</p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    Modifiable dans les réglages de la carte.
-                  </p>
-                </details>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  value={productType}
+                  onChange={(e) => setProductType(e.target.value)}
+                  disabled={generating}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  {TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  Deviné depuis la catégorie du produit. Il décide de la mise en scène&nbsp;: une
+                  enseigne néon au nom du produit pour un verre, une planche sans aucun texte pour
+                  un plat.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description du produit
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value.slice(0, 1200))}
+                  rows={2}
+                  disabled={generating}
+                  placeholder="Curaçao, vodka, jus de fraise, sirop de grenadine et citron"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Reprise de la fiche produit. La modifier ici ne modifie pas la fiche.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Précisions pour cette image <span className="text-gray-400">(optionnel)</span>
+                </label>
+                <textarea
+                  value={specifics}
+                  onChange={(e) => setSpecifics(e.target.value.slice(0, 800))}
+                  rows={2}
+                  disabled={generating}
+                  placeholder="Verre à pied givré, fumée légère, rondelle de citron vert sur le bord"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                <p className="mt-1 text-xs text-gray-400 tabular-nums">{specifics.length}/800</p>
+              </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -257,7 +332,7 @@ export default function ImageGenModal({ open, productName, onAccept, onClose }: 
                 <button
                   type="button"
                   onClick={() => void generer()}
-                  disabled={generating || prompt.trim().length < 3}
+                  disabled={generating || description.trim().length + specifics.trim().length < 3}
                   className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition disabled:opacity-50"
                 >
                   {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}

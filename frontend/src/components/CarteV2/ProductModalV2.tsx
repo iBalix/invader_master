@@ -283,6 +283,14 @@ export default function ProductModalV2({ initial, onSave, onClose }: Props) {
         <ImageGenModal
           open={genOpen}
           productName={form.name}
+          productDescription={form.description}
+          /* categories : presentes a l'execution sur la ligne de liste, mais
+             absentes du type ProductV2Data. Elles ne servent qu'a deviner un
+             defaut ajustable, d'ou la lecture defensive plutot qu'un elargissement
+             du type partage. */
+          productCategories={
+            (initial as unknown as { categories?: string[] } | null)?.categories ?? []
+          }
           onAccept={(url) => set('image_url', url)}
           onClose={() => setGenOpen(false)}
         />

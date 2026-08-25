@@ -187,7 +187,15 @@ menuProductV2Routes.get('/', async (req, res) => {
  */
 menuProductV2Routes.post('/generate-image', async (req, res) => {
   try {
-    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt : '';
+    const texte = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+    const productName = texte(req.body?.productName);
+    const productType = texte(req.body?.productType) || 'cocktail';
+    // description de la fiche produit et precisions saisies pour cette image :
+    // le front envoie les deux separement, on les fusionne ici pour que le
+    // gabarit n'ait qu'un seul marqueur a remplir
+    const description = [texte(req.body?.description), texte(req.body?.specifics)]
+      .filter(Boolean)
+      .join('. ');
     const requestId = typeof req.body?.requestId === 'string' ? req.body.requestId : undefined;
     const qualiteBrute = req.body?.quality;
     const quality: Qualite | undefined =
@@ -222,7 +230,9 @@ menuProductV2Routes.post('/generate-image', async (req, res) => {
     }
 
     const resultat = await generateProductImage({
-      prompt,
+      productName,
+      productType,
+      description,
       promptDeBase: reglages?.image_gen_prompt ?? '',
       referenceUrls,
       quality,
