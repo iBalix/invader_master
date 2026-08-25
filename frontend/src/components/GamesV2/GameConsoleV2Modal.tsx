@@ -101,12 +101,18 @@ export default function GameConsoleV2Modal({ initial, onSave, onClose }: Props) 
             <p className="mt-1 text-xs text-gray-400">Nom du core RetroArch utilisé pour lancer les jeux</p>
           </div>
 
-          <FileUpload
-            label="Logo"
-            accept="image/*"
-            value={logoUrl}
-            onChange={(v) => setLogoUrl(v)}
-          />
+          <div>
+            <FileUpload
+              label="Logo"
+              accept="image/*"
+              value={logoUrl}
+              onChange={(v) => setLogoUrl(v)}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              PNG à fond transparent, hauteur 120 px environ. Sert à l'ancien site : il n'est pas
+              affiché sur les nouvelles tables aujourd'hui, seul le nom de la console y apparaît.
+            </p>
+          </div>
 
           <div className="flex justify-end gap-3 pt-2 border-t border-gray-200">
             <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">

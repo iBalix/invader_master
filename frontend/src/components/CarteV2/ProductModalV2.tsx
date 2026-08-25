@@ -206,11 +206,18 @@ export default function ProductModalV2({ initial, onSave, onClose }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <FileUpload label="Icône" accept="image/*" value={form.icon_url} onChange={(v) => set('icon_url', v)} />
-              <p className="mt-1 text-xs text-gray-400">Exactement 300 x 300 px</p>
+              <p className="mt-1 text-xs text-gray-400">
+                Carré, 300 x 300 px. Utilisée par l'ancien site et par la liste ci-dessus, elle
+                n'est plus affichée sur les tables : c'est l'image HD qui y sert partout.
+              </p>
             </div>
             <div>
               <FileUpload label="Image HD" accept="image/*" value={form.image_url} onChange={(v) => set('image_url', v)} />
-              <p className="mt-1 text-xs text-gray-400">Minimum 1280 x 720 px</p>
+              <p className="mt-1 text-xs text-gray-400">
+                <strong className="text-gray-500">16:9 obligatoire</strong>, idéalement 1280 x 720 px.
+                Affichée en 16:9 partout sur les tables (liste, fiche produit, panier) : une image
+                carrée ou verticale sera rognée au centre, gauche et droite coupées.
+              </p>
             </div>
           </div>
 

@@ -22,6 +22,14 @@ interface Props {
 export default function TagSelector({ value, onChange }: Props) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
+  /**
+   * Echec de chargement de la LISTE des tags, a ne pas confondre avec une liste
+   * vide. Sans cette distinction, une requete qui echoue affichait "Aucun tag
+   * defini" : l'utilisateur en deduit que les mentions de son produit ont
+   * disparu, alors que la selection est intacte en base et sera renvoyee telle
+   * quelle a l'enregistrement.
+   */
+  const [echec, setEchec] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState<string | null>('#16a34a');
@@ -33,7 +41,9 @@ export default function TagSelector({ value, onChange }: Props) {
     try {
       const { data } = await api.get('/api/menu-tags-v2');
       setTags(data.items ?? []);
+      setEchec(false);
     } catch {
+      setEchec(true);
       toast.error('Erreur de chargement des tags');
     } finally {
       setLoading(false);
@@ -95,6 +105,21 @@ export default function TagSelector({ value, onChange }: Props) {
       {loading ? (
         <div className="flex items-center justify-center py-4">
           <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+        </div>
+      ) : echec ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+          <div className="font-medium">Liste des tags indisponible.</div>
+          <p className="mt-0.5">
+            Les tags déjà posés sur ce produit sont conservés : enregistrer ne les supprimera pas.
+            Ils ne sont simplement pas modifiables tant que la liste n'est pas chargée.
+          </p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="mt-1.5 rounded border border-amber-400 px-2 py-1 font-medium hover:bg-amber-100 transition"
+          >
+            Réessayer
+          </button>
         </div>
       ) : tags.length === 0 ? (
         <p className="text-xs text-gray-400 italic">

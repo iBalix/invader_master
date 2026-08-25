@@ -70,7 +70,14 @@ export default function ProductRow({
         </div>
       )}
 
-      <div className="relative aspect-square w-40 shrink-0 overflow-hidden rounded-xl bg-black/30">
+      {/*
+        16:9 et non plus carre. Les photos produit sont fournies en 16:9 (1280x720
+        cote stockage) : un cadre carre en rognait pres de la moitie de la largeur,
+        et le meme visuel n'avait donc pas le meme cadrage ici et dans la fiche
+        produit, qui est deja en 16:9. Meme hauteur qu'avant a 4 px pres, la ligne
+        ne bouge pas.
+      */}
+      <div className="relative aspect-video w-64 shrink-0 overflow-hidden rounded-xl bg-black/30">
         {product.imageUrl ? (
           <img
             src={product.imageUrl}

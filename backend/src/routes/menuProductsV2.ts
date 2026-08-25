@@ -157,6 +157,13 @@ menuProductV2Routes.get('/', async (req, res) => {
       conditionings: conditioningsByProduct[p.id] ?? [],
       variants: variantsByProduct[p.id] ?? [],
       tags: tagsByProduct[p.id] ?? [],
+      // tag_ids en plus de tags : le formulaire d'edition envoie tag_ids et le
+      // PUT reecrit les liaisons des qu'il recoit un tableau. S'il ouvrait un
+      // produit sans connaitre ses tag_ids, le premier enregistrement effacerait
+      // toutes ses mentions en silence. Le formulaire sait le deduire de `tags`,
+      // mais dependre d'une deduction pour ne pas perdre de donnees est trop
+      // fragile : on expose le champ directement.
+      tag_ids: (tagsByProduct[p.id] ?? []).map((t) => t.id as string),
     }));
 
     res.json({ status: 'success', items });

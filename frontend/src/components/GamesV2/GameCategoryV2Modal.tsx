@@ -148,8 +148,9 @@ export default function GameCategoryV2Modal({ initial, onSave, onClose }: Props)
               onChange={setTextureUrl}
             />
             <p className="mt-1 text-xs text-gray-400">
-              Recommandé : paysage 16:9 (ex 800×450). Affichée en fond du bouton sidebar côté bornes,
-              avec un dégradé noir à gauche pour la lisibilité du libellé.
+              Bandeau large, idéalement 800 x 220 px (environ 3,6:1). Affichée 262 x 72 px en fond
+              du bouton de catégorie sur la table, avec un dégradé noir qui couvre les deux tiers
+              gauches : garder le motif intéressant à droite et n'y mettre aucun texte.
             </p>
           </div>
 

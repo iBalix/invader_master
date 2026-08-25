@@ -610,7 +610,11 @@ export default function GameFormV2Page() {
 
           <div>
             <FileUpload label="Jaquette (cover)" accept="image/*" value={coverUrl} onChange={(v) => setCoverUrl(v)} />
-            <p className="mt-1 text-xs text-gray-400">Minimum 388 x 319 px</p>
+            <p className="mt-1 text-xs text-gray-400">
+              <strong className="text-gray-500">16:9 obligatoire</strong>, idéalement 1280 x 720 px.
+              Affichée en 16:9 dans la grille des jeux, soit 360 x 202 px sur une dalle : une
+              jaquette carrée ou verticale sera rognée en haut et en bas.
+            </p>
           </div>
 
           <div>
@@ -628,6 +632,10 @@ export default function GameFormV2Page() {
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-xs text-gray-400">
+              <strong className="text-gray-500">16:9</strong>, idéalement 1280 x 720 px. Affichées
+              dans la fiche de lancement sur la table, à environ 560 x 315 px.
+            </p>
             <div className="mt-2">
               <FileUpload label="" accept="image/*" value={null} onChange={addImage} />
               <p className="mt-1 text-xs text-gray-400">Minimum 1280 x 720 px</p>
