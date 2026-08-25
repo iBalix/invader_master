@@ -135,11 +135,11 @@ function cheminDepuisUrl(url: string): string | null {
  * Toute reference qui echoue est sautee sans faire echouer la generation : mieux
  * vaut une image generee avec deux exemples sur trois qu'un message d'erreur.
  */
-async function chargerReferences(urls: string[]): Promise<Buffer[]> {
+async function chargerReferences(urls: string[], plafond = MAX_REFERENCES): Promise<Buffer[]> {
   const out: Buffer[] = [];
   let cumul = 0;
 
-  for (const url of urls.slice(0, MAX_REFERENCES)) {
+  for (const url of urls.slice(0, plafond)) {
     const chemin = cheminDepuisUrl(url);
     if (!chemin) {
       console.warn('[imageGen] reference hors bucket ignoree');
@@ -278,27 +278,58 @@ function assemblerPrompt(o: {
   productType: string;
   description: string;
   nbReferences: number;
+  /** une photo reelle du produit occupe la premiere piece jointe */
+  aPhotoReelle: boolean;
 }): string {
   const gabarit = o.gabarit.trim();
   const nom = o.productName.trim() || 'the product';
   const type = o.productType.trim() || 'drink';
+
+  // Un {PRODUCT_DESCRIPTION} vide laisserait une ligne orpheline dans le
+  // gabarit ; on renvoie alors le modele vers la photo, qui porte l'information.
+  const description =
+    o.description.trim() ||
+    (o.aPhotoReelle ? 'see the attached photograph of the real product' : '');
 
   const aDesMarqueurs = /\{PRODUCT_(NAME|TYPE|DESCRIPTION)\}/.test(gabarit);
   const base = aDesMarqueurs
     ? gabarit
         .replaceAll('{PRODUCT_NAME}', nom)
         .replaceAll('{PRODUCT_TYPE}', type)
-        .replaceAll('{PRODUCT_DESCRIPTION}', o.description)
-    : `${gabarit}\n\n${nom} : ${o.description}`;
+        .replaceAll('{PRODUCT_DESCRIPTION}', description)
+    : `${gabarit}\n\n${nom} : ${description}`;
 
   // La consigne d'inspiration n'a de sens que s'il y a effectivement des
   // exemples joints : la reclamer sans piece jointe ferait halluciner un style.
   if (o.nbReferences === 0) return base.trim();
-  return (
-    base.trim() +
-    `\n\nSTYLE REFERENCE: match the rendering style, framing and lighting mood of the ` +
-    `${o.nbReferences} attached reference image(s). Do not copy their subject or their text.`
-  );
+
+  const morceaux = [base.trim()];
+
+  // Deux consignes distinctes, parce que les deux sortes de pieces jointes ne
+  // jouent pas le meme role. La photo reelle dit CE QU'EST le produit, les
+  // references de style disent COMMENT le rendre. Sans cette distinction, le
+  // modele moyenne les deux et invente un produit qui n'existe pas au bar.
+  if (o.aPhotoReelle) {
+    morceaux.push(
+      'REAL PRODUCT PHOTO: the FIRST attached image is an actual photograph of ' +
+        'this exact product as it is really served at the bar. It is the ground ' +
+        'truth for what the product looks like: reproduce faithfully its colour, ' +
+        'its glassware or plate, its garnish, its proportions and its visible ' +
+        'ingredients. Keep it recognisable as the same product. Only the ' +
+        'rendering, the lighting and the background may differ from that photo.',
+    );
+  }
+
+  const nbStyle = o.nbReferences - (o.aPhotoReelle ? 1 : 0);
+  if (nbStyle > 0) {
+    morceaux.push(
+      `STYLE REFERENCE: the ${o.aPhotoReelle ? 'other ' : ''}${nbStyle} attached image(s) are ` +
+        'style references only. Match their rendering style, framing and lighting mood. ' +
+        'Do not copy their subject, their garnish or their text.',
+    );
+  }
+
+  return morceaux.join('\n\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +345,14 @@ export interface OptionsGeneration {
   description: string;
   /** gabarit de prompt commun, lu dans carte_settings */
   promptDeBase: string;
-  /** URL publiques des visuels a joindre en exemple */
+  /** URL publiques des visuels a joindre en exemple de style */
   referenceUrls: string[];
+  /**
+   * Photo reelle du produit tel qu'il est servi au bar, si l'operateur en a
+   * joint une. Elle prime sur les references de style : elle dit a quoi
+   * ressemble VRAIMENT le produit, la ou les autres ne disent que le rendu.
+   */
+  realPhotoUrl?: string;
   quality?: Qualite;
   /** identifiant de l'utilisateur, pour le verrou anti double-clic */
   userId: string;
@@ -328,7 +365,13 @@ export async function generateProductImage(opts: OptionsGeneration): Promise<Res
   if (!apiKey) throw erreur('OPENAI_API_KEY non configuree', 500);
 
   const description = opts.description.trim();
-  if (description.length < 3) throw erreur('Decris ce que doit montrer l\'image', 400);
+  const aPhotoDemandee = !!opts.realPhotoUrl?.trim();
+  // Une photo reelle se suffit a elle-meme : elle dit deja ce qu'est le produit.
+  // Exiger en plus une description reviendrait a demander de decrire ce qu'on
+  // vient de montrer.
+  if (description.length < 3 && !aPhotoDemandee) {
+    throw erreur("Decris le produit, ou joins une photo reelle", 400);
+  }
   if (description.length > 2000) throw erreur('Description trop longue (2000 caracteres maximum)', 400);
 
   purgerDedup();
@@ -347,7 +390,23 @@ export async function generateProductImage(opts: OptionsGeneration): Promise<Res
 
   const debut = Date.now();
   try {
-    const references = await chargerReferences(opts.referenceUrls);
+    // La photo reelle est chargee SEPAREMENT, et pas simplement mise en tete de
+    // la liste : si elle echouait au telechargement, la consigne « la premiere
+    // image jointe est une photo reelle » designerait une reference de style, et
+    // le modele reproduirait fidelement le mauvais produit. En la chargeant a
+    // part, on sait si elle est reellement la.
+    const photoReelle = opts.realPhotoUrl?.trim()
+      ? await chargerReferences([opts.realPhotoUrl.trim()], 1)
+      : [];
+    const aPhotoReelle = photoReelle.length > 0;
+
+    // Elle passe en premier : les modeles d'image preservent au mieux les
+    // premieres pieces jointes, et elle n'est jamais celle qu'on rogne.
+    const styles = await chargerReferences(
+      opts.referenceUrls,
+      MAX_REFERENCES - photoReelle.length,
+    );
+    const references = [...photoReelle, ...styles];
 
     const promptFinal = assemblerPrompt({
       gabarit: opts.promptDeBase,
@@ -355,6 +414,7 @@ export async function generateProductImage(opts: OptionsGeneration): Promise<Res
       productType: opts.productType,
       description,
       nbReferences: references.length,
+      aPhotoReelle,
     });
 
     const qualite = opts.quality ?? QUALITE_DEFAUT;
@@ -412,7 +472,7 @@ export async function generateProductImage(opts: OptionsGeneration): Promise<Res
     };
 
     console.log(
-      `[imageGen] "${opts.productName}" (${opts.productType}) refs=${references.length} ${MODELE}/${qualite} ` +
+      `[imageGen] "${opts.productName}" (${opts.productType}) refs=${references.length}${aPhotoReelle ? ' dont photo reelle' : ''} ${MODELE}/${qualite} ` +
         `${finale.width}x${finale.height} -> ${formatBytes(resultat.bytes)} en ${(resultat.durationMs / 1000).toFixed(1)} s`,
     );
 

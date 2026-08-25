@@ -196,6 +196,9 @@ menuProductV2Routes.post('/generate-image', async (req, res) => {
     const description = [texte(req.body?.description), texte(req.body?.specifics)]
       .filter(Boolean)
       .join('. ');
+    // photo reelle du produit, deja uploadee dans le bucket par /api/upload :
+    // le service refusera toute URL etrangere, cf. son filtre anti-SSRF
+    const realPhotoUrl = texte(req.body?.realPhotoUrl) || undefined;
     const requestId = typeof req.body?.requestId === 'string' ? req.body.requestId : undefined;
     const qualiteBrute = req.body?.quality;
     const quality: Qualite | undefined =
@@ -235,6 +238,7 @@ menuProductV2Routes.post('/generate-image', async (req, res) => {
       description,
       promptDeBase: reglages?.image_gen_prompt ?? '',
       referenceUrls,
+      realPhotoUrl,
       quality,
       userId: req.user?.id ?? 'inconnu',
       requestId,

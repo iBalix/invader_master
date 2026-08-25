@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Sparkles, X, RefreshCw, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../../lib/api';
+import FileUpload from '../Quiz/FileUpload';
 
 type Qualite = 'low' | 'medium' | 'high';
 
@@ -80,6 +81,13 @@ export default function ImageGenModal({
   const [specifics, setSpecifics] = useState('');
   const [description, setDescription] = useState('');
   const [productType, setProductType] = useState('cocktail');
+  /**
+   * Photo reelle du produit, telle qu'il est servi au bar. Elle passe par
+   * /api/upload comme n'importe quel fichier, donc elle arrive dans notre bucket
+   * et franchit le filtre anti-SSRF du serveur. Elle prime sur les references de
+   * style : celles-ci disent comment rendre, elle dit ce que c'est.
+   */
+  const [realPhotoUrl, setRealPhotoUrl] = useState<string | null>(null);
   const [quality, setQuality] = useState<Qualite>('medium');
   const [candidats, setCandidats] = useState<ProduitReference[]>([]);
   const [references, setReferences] = useState<string[]>([]);
@@ -109,6 +117,7 @@ export default function ImageGenModal({
     if (!open) return;
     setResultat(null);
     setSpecifics('');
+    setRealPhotoUrl(null);
     setDescription(productDescription);
     setProductType(typeDepuisCategories(productCategories));
     void charger();
@@ -122,7 +131,8 @@ export default function ImageGenModal({
     );
 
   const generer = async () => {
-    if (generating || description.trim().length + specifics.trim().length < 3) return;
+    if (generating) return;
+    if (!realPhotoUrl && description.trim().length + specifics.trim().length < 3) return;
     setGenerating(true);
     setResultat(null);
     try {
@@ -134,6 +144,7 @@ export default function ImageGenModal({
           description: description.trim(),
           specifics: specifics.trim(),
           referenceIds: references,
+          realPhotoUrl,
           quality,
           // Le même identifiant pour un clic : si l'intercepteur 401 rejoue la
           // requête après un refresh de jeton, le serveur renvoie l'image déjà
@@ -267,10 +278,24 @@ export default function ImageGenModal({
                 <p className="mt-1 text-xs text-gray-400 tabular-nums">{specifics.length}/800</p>
               </div>
 
+              <div className="rounded-lg border border-primary-200 bg-primary-50/50 p-3">
+                <FileUpload
+                  label="Photo réelle du produit (optionnel)"
+                  accept="image/*"
+                  value={realPhotoUrl}
+                  onChange={setRealPhotoUrl}
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Une photo du produit tel qu'il est vraiment servi. Elle passe avant tout le reste :
+                  l'IA reprendra sa couleur, son verre ou son assiette, sa garniture et ses
+                  proportions, et ne changera que le rendu, la lumière et le décor.
+                </p>
+              </div>
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    Visuels donnés en exemple
+                    Visuels donnés en exemple de style
                   </label>
                   <span className="text-xs text-gray-400 tabular-nums">{references.length}/4</span>
                 </div>
@@ -332,7 +357,10 @@ export default function ImageGenModal({
                 <button
                   type="button"
                   onClick={() => void generer()}
-                  disabled={generating || description.trim().length + specifics.trim().length < 3}
+                  disabled={
+                    generating ||
+                    (!realPhotoUrl && description.trim().length + specifics.trim().length < 3)
+                  }
                   className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition disabled:opacity-50"
                 >
                   {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
