@@ -33,16 +33,44 @@ function parseYouTube(url: string): YtInfo | null {
   return { id, start };
 }
 
+type TypeQuestion = 'qcm' | 'estimation' | 'free_text';
+
+interface EstimationTier {
+  maxGap: number;
+  points: number;
+}
+
 interface Question {
   id: string;
   question: string;
+  /** absent sur les questions anterieures a migration-040, d'ou le repli sur qcm */
+  type?: TypeQuestion | null;
   answers: string[];
   correct_answer_index: number;
+  expected_answer?: string | null;
+  expected_number?: number | null;
+  estimation_scoring?: EstimationTier[] | null;
   difficulty: string[];
   music_url: string | null;
   video_youtube: string;
   image_question_url: string | null;
   image_answer_url: string | null;
+}
+
+const LIBELLES_TYPE: Record<TypeQuestion, string> = {
+  qcm: 'QCM',
+  estimation: 'Estimation',
+  free_text: 'Réponse libre',
+};
+
+const COULEURS_TYPE: Record<TypeQuestion, string> = {
+  qcm: 'bg-blue-100 text-blue-700',
+  estimation: 'bg-violet-100 text-violet-700',
+  free_text: 'bg-teal-100 text-teal-700',
+};
+
+function typeDe(q: Question): TypeQuestion {
+  return q.type === 'estimation' || q.type === 'free_text' ? q.type : 'qcm';
 }
 
 interface QuizDetail {
@@ -59,14 +87,57 @@ interface Props {
   onClose: () => void;
 }
 
-function isQuestionComplete(q: Question): boolean {
-  if (!q.question.trim()) return false;
-  const nonEmpty = (q.answers ?? []).filter((a) => a.trim().length > 0);
-  if (nonEmpty.length < 2) return false;
-  const idx = q.correct_answer_index ?? 0;
-  if (idx < 0 || idx >= (q.answers ?? []).length) return false;
-  if (!(q.answers[idx] ?? '').trim()) return false;
-  return true;
+/**
+ * Verifie une question selon SON type.
+ *
+ * La version precedente appliquait les regles du QCM a tout le monde : elle
+ * exigeait au moins deux reponses et un index de bonne reponse valide. Or une
+ * estimation et une reponse libre n'ont volontairement AUCUNE reponse en base
+ * (cf. QuestionModal, qui enregistre `answers: []` pour ces deux types). Toute
+ * question de ces types etait donc comptee incomplete, et la modale annoncait
+ * un quiz cassé alors qu'il etait parfaitement valide.
+ *
+ * Les regles reprennent une a une celles du formulaire de question, qui fait
+ * foi : si le formulaire accepte d'enregistrer, la modale doit accepter aussi.
+ *
+ * On renvoie le motif et pas seulement un booleen : « incomplete » n'aide
+ * personne, « pas de valeur attendue » se corrige en dix secondes.
+ */
+function verifierQuestion(q: Question): { ok: boolean; probleme?: string } {
+  if (!q.question?.trim()) return { ok: false, probleme: 'Question vide' };
+  if (!(q.difficulty ?? []).length) return { ok: false, probleme: 'Aucune difficulté' };
+
+  switch (typeDe(q)) {
+    case 'estimation': {
+      if (q.expected_number === null || q.expected_number === undefined) {
+        return { ok: false, probleme: 'Pas de valeur attendue' };
+      }
+      const paliers = q.estimation_scoring ?? [];
+      if (paliers.length === 0) return { ok: false, probleme: 'Aucun palier de points' };
+      if (paliers.some((t) => !(t.maxGap >= 0) || !(t.points >= 0))) {
+        return { ok: false, probleme: 'Palier de points invalide' };
+      }
+      return { ok: true };
+    }
+    case 'free_text': {
+      if (!(q.expected_answer ?? '').trim()) {
+        return { ok: false, probleme: 'Pas de réponse attendue' };
+      }
+      return { ok: true };
+    }
+    default: {
+      const reponses = q.answers ?? [];
+      const remplies = reponses.filter((a) => (a ?? '').trim().length > 0);
+      if (remplies.length < 4) {
+        return { ok: false, probleme: `${remplies.length}/4 réponses remplies` };
+      }
+      const idx = q.correct_answer_index ?? 0;
+      if (idx < 0 || idx >= reponses.length || !(reponses[idx] ?? '').trim()) {
+        return { ok: false, probleme: 'Pas de bonne réponse désignée' };
+      }
+      return { ok: true };
+    }
+  }
 }
 
 export default function QuizRecapModal({ quizId, quizName, onClose }: Props) {
@@ -90,7 +161,12 @@ export default function QuizRecapModal({ quizId, quizName, onClose }: Props) {
 
   const questions: Question[] = quiz?.questions ?? [];
   const total = questions.length;
-  const complete = questions.filter(isQuestionComplete).length;
+  const complete = questions.filter((q) => verifierQuestion(q).ok).length;
+  const parType = questions.reduce<Record<string, number>>((acc, q) => {
+    const t = typeDe(q);
+    acc[t] = (acc[t] ?? 0) + 1;
+    return acc;
+  }, {});
   const incomplete = total - complete;
   const withVideo = questions.filter((q) => q.video_youtube?.trim()).length;
   const withAudio = questions.filter((q) => q.music_url?.trim()).length;
@@ -147,6 +223,24 @@ export default function QuizRecapModal({ quizId, quizName, onClose }: Props) {
                 )}
               </div>
 
+              {/* Repartition par type : seuls les types presents sont affiches, pour
+                  ne pas encombrer un quiz 100 % QCM d'un compteur a zero. */}
+              {total > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">Types&nbsp;:</span>
+                  {(Object.keys(LIBELLES_TYPE) as TypeQuestion[])
+                    .filter((t) => (parType[t] ?? 0) > 0)
+                    .map((t) => (
+                      <span
+                        key={t}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${COULEURS_TYPE[t]}`}
+                      >
+                        {LIBELLES_TYPE[t]} <span className="tabular-nums opacity-70">{parType[t]}</span>
+                      </span>
+                    ))}
+                </div>
+              )}
+
               {/* Stats grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <StatCard label="Total questions" value={total} color="blue" />
@@ -163,8 +257,8 @@ export default function QuizRecapModal({ quizId, quizName, onClose }: Props) {
                   <h3 className="text-sm font-semibold text-gray-700 mb-2">Détail des questions</h3>
                   <div className="space-y-2">
                     {questions.map((q, i) => {
-                      const ok = isQuestionComplete(q);
-                      const correctAnswer = q.answers?.[q.correct_answer_index] ?? null;
+                      const { ok, probleme } = verifierQuestion(q);
+                      const type = typeDe(q);
                       return (
                         <div
                           key={q.id}
@@ -181,13 +275,21 @@ export default function QuizRecapModal({ quizId, quizName, onClose }: Props) {
                                 {q.question || <span className="italic text-gray-400">Question vide</span>}
                               </p>
                               <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                                {correctAnswer?.trim() ? (
-                                  <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
-                                    <CheckCircle2 className="w-3 h-3" /> {correctAnswer}
-                                  </span>
-                                ) : (
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${COULEURS_TYPE[type]}`}
+                                >
+                                  {LIBELLES_TYPE[type]}
+                                </span>
+
+                                {/* Ce qui fait office de bonne reponse depend du
+                                    type : une case cochee pour un QCM, une valeur
+                                    et ses paliers pour une estimation, un texte
+                                    attendu pour une reponse libre. */}
+                                {ok && <ResumeReponse question={q} type={type} />}
+
+                                {!ok && probleme && (
                                   <span className="inline-flex items-center gap-1 text-xs text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
-                                    <AlertTriangle className="w-3 h-3" /> Pas de bonne réponse
+                                    <AlertTriangle className="w-3 h-3" /> {probleme}
                                   </span>
                                 )}
                                 {/* Media indicators — clickable */}
@@ -263,6 +365,33 @@ export default function QuizRecapModal({ quizId, quizName, onClose }: Props) {
         <MediaLightbox preview={preview} onClose={() => setPreview(null)} />
       )}
     </div>
+  );
+}
+
+/** ce qui tient lieu de « bonne reponse », selon le type de question */
+function ResumeReponse({ question, type }: { question: Question; type: TypeQuestion }) {
+  if (type === 'estimation') {
+    const paliers = question.estimation_scoring ?? [];
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+        <CheckCircle2 className="w-3 h-3" /> {question.expected_number}
+        <span className="opacity-70">
+          · {paliers.length} palier{paliers.length > 1 ? 's' : ''}
+        </span>
+      </span>
+    );
+  }
+  if (type === 'free_text') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+        <CheckCircle2 className="w-3 h-3" /> {question.expected_answer}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+      <CheckCircle2 className="w-3 h-3" /> {question.answers?.[question.correct_answer_index]}
+    </span>
   );
 }
 
