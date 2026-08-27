@@ -48,6 +48,7 @@ import { couponsRoutes } from './routes/coupons.js';
 import { tableOrdersRoutes } from './routes/tableOrders.js';
 import { barRoutes } from './routes/bar.js';
 import { cashRoutes } from './routes/cash.js';
+import { financeReportRoutes } from './routes/financeReport.js';
 import { rolePermissionRoutes } from './routes/rolePermissions.js';
 import { initAgentBridge } from './websocket/agent-bridge.js';
 import { startLaunchScheduler } from './services/tableLaunch.js';
@@ -79,6 +80,7 @@ app.use('/public/blackjack', cors(), blackjackPublicRoutes);
 app.use('/public', cors(), publicRoutes);
 app.use('/public/tables', cors(), tablesRoutes);
 app.use('/public/live-event', cors(), liveEventStatePublicRoutes);
+app.use('/public/finance-report', cors(), financeReportRoutes);
 
 app.get('/health', cors(), (_req, res) => {
   res.json({ status: 'ok' });
