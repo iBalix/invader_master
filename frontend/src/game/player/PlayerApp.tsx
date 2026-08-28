@@ -12,7 +12,7 @@
  * change donc pas d'un pixel.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ApiError,
@@ -21,6 +21,7 @@ import {
   loadIdentity,
   questionShownAt,
   saveIdentity,
+  type GameEvent,
   type PublicState,
   type You,
   REVEAL_JOUEUR_MS,
@@ -68,6 +69,9 @@ export interface PlayerAppProps {
   deviceLabel?: string;
 }
 
+/** plancher entre deux refetch de la répartition « avis du public » */
+const AUDIENCE_REFRESH_MS = 450;
+
 export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppProps = {}) {
   const { code } = useParams<{ code?: string }>();
   const [sessionRef, setSessionRef] = useState<string | null>(code ?? null);
@@ -95,7 +99,29 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
     };
   }, [code]);
 
-  const { state, you, refresh, setYou } = useGameSession(sessionRef, { playerToken });
+  // « Avis du public » : la répartition des votes est calculée par le serveur au
+  // GET de l'état, et pour le seul joueur qui a armé le joker (elle ne voyage
+  // pas dans l'événement realtime, qui est diffusé à toute la salle). Sans le
+  // rappel ci-dessous elle n'arrivait donc qu'au poll de secours, soit jusqu'à
+  // 10 s de retard sur un vote qui dure une vingtaine de secondes : le joueur
+  // voyait la salle voter en différé. On refetch à chaque réponse encaissée,
+  // borné à AUDIENCE_REFRESH_MS pour ne pas marteler l'API, et uniquement pour
+  // les joueurs concernés.
+  const refreshRef = useRef<() => void>(() => {});
+  const audienceArme = useRef(false);
+  const dernierAudienceFetch = useRef(0);
+  const onEvent = useCallback((e: GameEvent) => {
+    if (e.event !== 'answered' || !audienceArme.current) return;
+    const maintenant = Date.now();
+    if (maintenant - dernierAudienceFetch.current < AUDIENCE_REFRESH_MS) return;
+    dernierAudienceFetch.current = maintenant;
+    refreshRef.current();
+  }, []);
+
+  const { state, you, refresh, setYou } = useGameSession(sessionRef, { playerToken, onEvent });
+  refreshRef.current = refresh;
+  audienceArme.current =
+    state?.status === 'question' && (you?.jokerPlays ?? []).some((p) => p.type === 'audience');
 
   // Reprise d'identité (rescan du QR, refresh, retour de veille)
   useEffect(() => {
