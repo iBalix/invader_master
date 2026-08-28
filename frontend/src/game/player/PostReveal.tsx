@@ -1,10 +1,11 @@
 /**
  * Séquence personnelle post-reveal, le nouveau cœur du rythme côté joueur.
  *
- * Trois temps, en SEUILS depuis phaseStartedAt (horloge serveur) :
+ * Quatre temps, en SEUILS depuis phaseStartedAt (horloge serveur) :
  *   [REVEAL_JOUEUR_MS .. SEQ_SERIE_MS[   le verdict + le podium vitesse
  *   [SEQ_SERIE_MS .. SEQ_JOKERS_MS[      la série (progresse / casse / +1)
- *   [SEQ_JOKERS_MS .. ∞[                 la main de jokers, roue si gain
+ *   [SEQ_JOKERS_MS .. SEQ_ATTENTE_MS[    la main de jokers, roue si gain
+ *   [SEQ_ATTENTE_MS .. ∞[                l'attente : « prépare-toi », le GM parle
  *
  * Des seuils et non des setTimeout en cascade : un joueur qui recharge sa page
  * retombe exactement au bon endroit de la séquence (pattern du tutoriel
@@ -26,6 +27,7 @@ import {
   JOKER_DEFS,
   JOKER_HAND_MAX,
   SPEED_BONUS,
+  SEQ_ATTENTE_MS,
   SEQ_JOKERS_MS,
   SEQ_SERIE_MS,
   serverNow,
@@ -80,8 +82,14 @@ export default function PostRevealSequence({ state, you, embedded }: Props) {
   const elapsed = now - debut;
 
   const mine = reveal?.results[you.pseudo];
-  const phase: 'verdict' | 'serie' | 'jokers' =
-    elapsed < SEQ_SERIE_MS ? 'verdict' : elapsed < SEQ_JOKERS_MS ? 'serie' : 'jokers';
+  const phase: 'verdict' | 'serie' | 'jokers' | 'attente' =
+    elapsed < SEQ_SERIE_MS
+      ? 'verdict'
+      : elapsed < SEQ_JOKERS_MS
+        ? 'serie'
+        : elapsed < SEQ_ATTENTE_MS
+          ? 'jokers'
+          : 'attente';
 
   if (!reveal) return null;
 
@@ -102,7 +110,30 @@ export default function PostRevealSequence({ state, you, embedded }: Props) {
           />
         )}
         {phase === 'jokers' && <JokersScreen state={state} you={you} embedded={embedded} />}
+        {phase === 'attente' && <AttenteScreen embedded={embedded} />}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Temps 4 : l'attente de l'animateur
+// ---------------------------------------------------------------------------
+
+/**
+ * La séquence personnelle est terminée : si l'animateur commente ou fait
+ * durer, le joueur sait que tout va bien et que la suite arrive. Sans cet
+ * écran, la main de jokers restait figée et donnait l'impression d'un blocage.
+ */
+function AttenteScreen({ embedded }: { embedded?: boolean }) {
+  const grand = Boolean(embedded);
+  return (
+    <div className="w-full text-center">
+      <div className={`anim-breathe ${grand ? 'text-8xl' : 'text-6xl'}`}>⏳</div>
+      <h2 className={`mt-5 font-black ${grand ? 'text-4xl' : 'text-2xl'}`}>Prépare-toi !</h2>
+      <p className={`mt-2 text-white/60 ${grand ? 'text-2xl' : 'text-base'}`}>
+        La prochaine question arrive... en attente de l'animateur.
+      </p>
     </div>
   );
 }

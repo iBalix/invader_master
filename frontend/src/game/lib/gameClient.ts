@@ -497,6 +497,13 @@ export const REVEAL_JOUEUR_MS = 3600;
  */
 export const SEQ_SERIE_MS = 6400;
 export const SEQ_JOKERS_MS = 9200;
+/**
+ * Apres les jokers, l'ecran d'attente. La sequence personnelle est finie ; si
+ * l'animateur parle et ne lance pas la suite, les joueurs restaient figes sur
+ * leur main de jokers sans savoir si c'etait normal. Le seuil laisse a la roue
+ * d'un gain (lancee a SEQ_JOKERS_MS, ~5,3 s) le temps de finir son tour.
+ */
+export const SEQ_ATTENTE_MS = 17000;
 /** miroir du backend : duree minimale de la phase reveal */
 export const REVEAL_MIN_MS = 12000;
 /** projecteur : duree d'affichage de l'image de reponse, avant les podiums */
