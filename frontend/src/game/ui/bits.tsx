@@ -209,18 +209,30 @@ export function FullscreenVideo({
     );
   }, []);
 
+  // le volume vit dans une ref : `lancer` ne doit dependre QUE de `cmd`,
+  // sinon un coup de mixette du GM pendant l'extrait rejoue l'effet de
+  // lecture, dont le seekTo, et la video repart au debut sur le projo
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
   const lancer = useCallback(() => {
-    if (volume !== undefined) {
-      cmd('setVolume', [Math.round(Math.min(1, Math.max(0, volume)) * 100)]);
-    }
+    const v = volumeRef.current;
+    if (v !== undefined) cmd('setVolume', [Math.round(Math.min(1, Math.max(0, v)) * 100)]);
     cmd('seekTo', [startRef.current, true]);
     cmd('playVideo');
-  }, [cmd, volume]);
+  }, [cmd]);
 
+  // lecture / pause : uniquement quand la phase bascule
   useEffect(() => {
     if (active) lancer();
     else cmd('pauseVideo');
   }, [active, lancer, cmd]);
+
+  // volume a chaud, sans toucher a la lecture en cours
+  useEffect(() => {
+    if (!active || volume === undefined) return;
+    cmd('setVolume', [Math.round(Math.min(1, Math.max(0, volume)) * 100)]);
+  }, [volume, active, cmd]);
 
   if (!parsed) return null;
   const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=0&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&enablejsapi=1${muted ? '&mute=1' : ''}`;
