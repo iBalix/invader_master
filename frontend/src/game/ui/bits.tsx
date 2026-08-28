@@ -171,11 +171,18 @@ export function YoutubeClip({
   spec,
   muted = false,
   volume,
+  playing = true,
 }: {
   spec: string;
   muted?: boolean;
   /** 0 a 1 ; absent = volume par defaut de YouTube */
   volume?: number;
+  /**
+   * Passe a false des que la fenetre de reponse se ferme. L'extrait ne
+   * s'arrete pas tout seul quand le chrono expire avant sa fin : il continuait
+   * alors que la musique de fond remontait, et on entendait les deux.
+   */
+  playing?: boolean;
 }) {
   const ref = useRef<HTMLIFrameElement | null>(null);
   const parsed = parseYoutube(spec);
@@ -192,6 +199,15 @@ export function YoutubeClip({
   useEffect(() => {
     appliquerVolume();
   }, [appliquerVolume]);
+
+  useEffect(() => {
+    const win = ref.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(
+      JSON.stringify({ event: 'command', func: playing ? 'playVideo' : 'pauseVideo', args: [] }),
+      '*',
+    );
+  }, [playing]);
 
   if (!parsed) return null;
   const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=1&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&enablejsapi=1${muted ? '&mute=1' : ''}`;

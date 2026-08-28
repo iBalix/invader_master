@@ -229,7 +229,11 @@ function ProjectorScreen({
   // ducking : extraits & annonces
   useEffect(() => {
     const q = state.question;
-    const mediaPlaying = state.status === 'question' && Boolean(q?.musicUrl || q?.videoYoutube);
+    // 'locked' compris : l'extrait vient d'etre coupe, laisser la musique de
+    // fond remonter dans la seconde donne un a-coup en pleine revelation
+    const mediaPlaying =
+      (state.status === 'question' || state.status === 'locked') &&
+      Boolean(q?.musicUrl || q?.videoYoutube);
     gameAudio.duck(mediaPlaying || state.status === 'cinematic' || state.status === 'verdict');
   }, [state.status, state.question]);
 
@@ -679,6 +683,28 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
 
 // --- Question ----------------------------------------------------------------
 
+/**
+ * Extrait audio de la question.
+ *
+ * Il se COUPE dès que la fenêtre de réponse se ferme. `QuestionProjo` reste
+ * monté en phase 'locked' (l'écran garde la question à l'affiche), donc un
+ * <audio autoPlay> continuait de jouer pendant que le ducking de la musique de
+ * fond, lui, se levait : la salle entendait la musique du bar par-dessus
+ * l'extrait de la question. Le volume passe par une propriété de l'élément et
+ * non par un attribut, sinon l'extrait sort à 100 %, hors de portée du mixer.
+ */
+function QuestionAudio({ src, volume, playing }: { src: string; volume: number; playing: boolean }) {
+  const ref = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.volume = Math.min(1, Math.max(0, volume));
+    if (playing) void el.play().catch(() => undefined);
+    else el.pause();
+  }, [playing, volume]);
+  return <audio ref={ref} src={src} autoPlay />;
+}
+
 function QuestionProjo({
   state,
   remaining,
@@ -719,7 +745,11 @@ function QuestionProjo({
           <div className="flex flex-1 items-center justify-center">
             {hasVideo && q.videoYoutube ? (
               <div className="w-full max-w-3xl">
-                <YoutubeClip spec={q.videoYoutube} volume={state.config.mediaVolume ?? 0.9} />
+                <YoutubeClip
+                  spec={q.videoYoutube}
+                  volume={state.config.mediaVolume ?? 0.9}
+                  playing={state.status === 'question'}
+                />
               </div>
             ) : hasImage ? (
               <img src={q.imageQuestionUrl ?? ''} alt="" className="max-h-[52vh] w-full rounded-3xl object-contain" />
@@ -727,14 +757,10 @@ function QuestionProjo({
               <div className="anim-glow flex h-56 w-56 items-center justify-center rounded-full border-2 border-cyan-400/40 bg-cyan-400/10 text-8xl">
                 🎵
                 {q.musicUrl && (
-                  <audio
+                  <QuestionAudio
                     src={q.musicUrl}
-                    autoPlay
-                    // le volume d'un <audio> ne se pose pas en attribut : sans ce
-                    // ref l'extrait sortait a 100 %, hors de portee du mixer
-                    ref={(el) => {
-                      if (el) el.volume = Math.min(1, Math.max(0, state.config.mediaVolume ?? 0.9));
-                    }}
+                    volume={state.config.mediaVolume ?? 0.9}
+                    playing={state.status === 'question'}
                   />
                 )}
               </div>
