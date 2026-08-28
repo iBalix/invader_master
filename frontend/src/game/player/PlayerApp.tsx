@@ -36,7 +36,7 @@ import {
 } from '../ui/bits';
 import { BattlePlayerScreen } from './BattlePlayer';
 import QuizRules from './QuizRules';
-import { JokerBar, JokerFeed, JokerSlots } from './JokerUi';
+import { JokerBar, JokerSlots } from './JokerUi';
 import PostRevealSequence from './PostReveal';
 import '../game.css';
 
@@ -548,10 +548,6 @@ function AnnounceScreen({ state, you, sessionRef, playerToken, refresh, embedded
             refresh={refresh}
             embedded={embedded}
           />
-        </div>
-
-        <div className="mt-5">
-          <JokerFeed feed={state.jokerFeed} embedded={embedded} />
         </div>
 
         <div className="mx-auto mt-8 h-1.5 w-full max-w-[240px] overflow-hidden rounded-full bg-white/10">

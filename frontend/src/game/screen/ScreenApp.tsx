@@ -27,7 +27,7 @@ import {
 } from '../ui/bits';
 import { gameAudio } from './audio';
 import { useSansZoom } from '../../hooks/useSansZoom';
-import { REVEAL_BARRES_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS, REVEAL_SERIE_MS, serverNow } from '../lib/gameClient';
+import { REVEAL_BARRES_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS, REVEAL_SERIE_MS, serverNow, STREAK_BONUS_FROM } from '../lib/gameClient';
 import { BattleProjectorBody } from './BattleScreens';
 import '../game.css';
 
@@ -532,22 +532,6 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
           {special.emoji} QUESTION SPÉCIALE : {special.label}
         </div>
       )}
-      {state.jokerFeed.length > 0 && (
-        <div className="anim-pop mt-8 flex max-w-4xl flex-wrap items-center justify-center gap-3 rounded-2xl border border-violet-400/40 bg-violet-500/15 px-8 py-4">
-          {state.jokerFeed.slice(-8).map((f, i) => (
-            <span
-              key={`${f.pseudo}-${i}`}
-              className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xl font-bold"
-              style={{ borderColor: `${JOKER_DEFS[f.type].couleur}66`, color: JOKER_DEFS[f.type].couleur }}
-            >
-              {JOKER_DEFS[f.type].emoji} {f.pseudo}
-            </span>
-          ))}
-          {state.jokerFeed.length > 8 && (
-            <span className="text-xl text-white/50">+{state.jokerFeed.length - 8}</span>
-          )}
-        </div>
-      )}
       <p className="mt-12 text-2xl uppercase tracking-[0.3em] text-white/50">Jouez vos jokers maintenant !</p>
       <div className="mt-4 h-2 w-[420px] overflow-hidden rounded-full bg-white/10">
         <div className="h-full rounded-full bg-cyan-400" style={{ width: `${progress * 100}%`, transition: 'width 0.25s linear' }} />
@@ -883,23 +867,28 @@ function RevealProjo({ state }: { state: PublicState }) {
       <div className="mt-4 grid min-h-[300px] shrink-0 grid-cols-2 items-end gap-8">
         <PodiumProjo
           titre="⚡ Les plus rapides"
-          sousTitre="+1 point chacun"
+          recompense="+1 point chacun"
           visible={rapideDevoile}
           ton="amber"
           entrees={(reveal.fastestTop ?? []).map((f) => ({
             pseudo: f.pseudo,
-            valeur: `${(f.elapsedMs / 1000).toFixed(2)} s`,
+            valeur: (f.elapsedMs / 1000).toFixed(2),
+            unite: 'secondes',
           }))}
           vide="Personne n'a trouvé"
         />
         <PodiumProjo
           titre="🔥 Les plus grosses séries"
-          sousTitre="bonnes réponses d'affilée"
+          recompense="séries en cours"
           visible={serieDevoilee}
           ton="flame"
           entrees={serieTop.map((x) => ({
             pseudo: x.pseudo,
-            valeur: `${x.streak} d'affilée${x.bonus ? ' · +1' : ''}`,
+            // le chiffre seul : « series en cours » est deja dit en en-tete
+            valeur: String(x.streak),
+            // remplissage du tube : le chemin parcouru vers le seuil de bonus
+            jauge: Math.min(1, x.streak / STREAK_BONUS_FROM),
+            note: x.bonus ? '🔥 +1 PT' : `+${STREAK_BONUS_FROM - x.streak} pour le bonus`,
             fort: x.bonus,
           }))}
           vide="Aucune série en cours"
@@ -931,79 +920,150 @@ function RevealProjo({ state }: { state: PublicState }) {
  * Podium du projecteur (vitesse, series...).
  *
  * Le 3e apparait d'abord, puis le 2e, puis le 1er : c'est l'ordre d'un vrai
- * palmares, et ca laisse le temps a la salle de reagir a chaque nom. Les
- * marches sont dessinees, pas suggerees, pour rester lisibles de loin.
- * Tout est en CSS (animation + delai) : rien ne depend de rAF, donc rien ne
+ * palmares, et ca laisse le temps a la salle de reagir a chaque nom. La valeur
+ * (temps, longueur de serie) vit DANS la marche, en tres gros : c'est le
+ * chiffre qu'on lit de loin, le pseudo n'a besoin que d'etre reconnaissable.
+ *
+ * Les marches des series se remplissent a hauteur du chemin parcouru vers le
+ * bonus : on voit d'un coup d'oeil qui approche du seuil et qui l'a franchi.
+ *
+ * Tout est en CSS (transitions + delais) : rien ne depend de rAF, donc rien ne
  * gele si le kiosque cesse de composer.
  */
 function PodiumProjo({
   titre,
-  sousTitre,
+  recompense,
   entrees,
   visible,
   ton,
   vide,
 }: {
   titre: string;
-  sousTitre: string;
-  entrees: Array<{ pseudo: string; valeur: string; fort?: boolean }>;
+  recompense: string;
+  entrees: Array<{
+    pseudo: string;
+    valeur: string;
+    unite?: string;
+    note?: string;
+    jauge?: number;
+    fort?: boolean;
+  }>;
   visible: boolean;
   ton: 'amber' | 'flame';
   vide: string;
 }) {
   const palette =
     ton === 'amber'
-      ? { bord: 'border-amber-400/60', fond: 'bg-amber-400/10', texte: 'text-amber-300', doux: 'text-amber-200/70', marche: 'border-amber-400/50 bg-amber-400/20', lueur: 'rgba(255, 176, 32, 0.45)' }
-      : { bord: 'border-orange-400/60', fond: 'bg-orange-500/10', texte: 'text-orange-300', doux: 'text-orange-200/70', marche: 'border-orange-400/50 bg-orange-500/20', lueur: 'rgba(255, 108, 32, 0.45)' };
+      ? {
+          bord: 'border-amber-400/60',
+          fond: 'bg-amber-400/10',
+          texte: 'text-amber-300',
+          doux: 'text-amber-200/70',
+          marche: 'border-amber-400/60 bg-amber-400/15',
+          remplissage: 'rgba(255, 176, 32, 0.35)',
+          lueur: 'rgba(255, 176, 32, 0.5)',
+          ruban: 'border-amber-300/70 bg-amber-400/25 text-amber-100',
+        }
+      : {
+          bord: 'border-orange-400/60',
+          fond: 'bg-orange-500/10',
+          texte: 'text-orange-300',
+          doux: 'text-orange-200/70',
+          marche: 'border-orange-400/60 bg-orange-500/15',
+          remplissage: 'rgba(255, 108, 32, 0.4)',
+          lueur: 'rgba(255, 108, 32, 0.5)',
+          ruban: 'border-orange-300/70 bg-orange-500/25 text-orange-100',
+        };
 
   // ordre d'affichage : 2e, 1er, 3e (podium classique)
   const places = [1, 0, 2].filter((i) => i < entrees.length);
-  const hauteurs = ['h-40', 'h-28', 'h-20'];
+  const hauteurs = [200, 150, 118];
   const medailles = ['🥇', '🥈', '🥉'];
 
   return (
     <div
-      className={`flex h-full flex-col justify-end rounded-3xl border-2 px-6 py-5 ${palette.bord} ${palette.fond}`}
+      className={`flex h-full flex-col justify-end rounded-3xl border-2 px-6 pb-5 pt-4 ${palette.bord} ${palette.fond}`}
       style={{
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(24px)',
         transition: 'opacity 520ms ease, transform 560ms cubic-bezier(0.3, 1.15, 0.4, 1)',
       }}
     >
-      <div className="text-center">
-        <p className={`text-2xl font-black uppercase tracking-[0.2em] ${palette.texte}`}>{titre}</p>
-        <p className={`text-lg font-semibold ${palette.doux}`}>{sousTitre}</p>
+      <div className="flex items-center justify-center gap-4">
+        <p className={`text-3xl font-black uppercase tracking-[0.15em] ${palette.texte}`}>{titre}</p>
+        <span
+          className={`rounded-full border-2 px-5 py-1.5 text-2xl font-black uppercase tracking-wider ${palette.ruban}`}
+        >
+          {recompense}
+        </span>
       </div>
+
       {entrees.length === 0 ? (
-        <p className="mt-8 text-center text-2xl text-white/35">{vide}</p>
+        <p className="mt-10 text-center text-3xl text-white/35">{vide}</p>
       ) : (
-        <div className="mt-5 flex items-end justify-center gap-6">
+        <div className="mt-4 flex items-end justify-center gap-6">
           {places.map((i) => {
+            const e = entrees[i];
             // le 3e sort en premier, le 1er en dernier
             const delai = (entrees.length - 1 - i) * 0.65;
+            const premier = i === 0;
             return (
               <div
-                key={entrees[i].pseudo}
-                className="flex flex-col items-center"
+                key={e.pseudo}
+                className="flex w-52 flex-col items-center"
                 style={{
                   opacity: visible ? 1 : 0,
                   transform: visible ? 'translateY(0) scale(1)' : 'translateY(30px) scale(0.85)',
                   transition: `opacity 420ms ease ${delai}s, transform 520ms cubic-bezier(0.25, 1.35, 0.4, 1) ${delai}s`,
                 }}
               >
-                <span className={i === 0 ? 'text-5xl' : 'text-4xl'}>{medailles[i]}</span>
+                <span className={premier ? 'text-6xl leading-none' : 'text-5xl leading-none'}>
+                  {medailles[i]}
+                </span>
                 <span
-                  className={`max-w-[14ch] truncate font-black ${palette.texte} ${i === 0 ? 'text-5xl' : 'text-3xl'}`}
+                  className={`mt-3 max-w-full truncate font-black ${palette.texte} ${premier ? 'text-5xl' : 'text-4xl'}`}
                 >
-                  {entrees[i].pseudo}
+                  {e.pseudo}
                 </span>
-                <span className={`text-xl font-bold tabular-nums ${entrees[i].fort ? palette.texte : palette.doux}`}>
-                  {entrees[i].valeur}
-                </span>
+
+                {/* la marche : le chiffre y vit, la jauge montre la progression */}
                 <div
-                  className={`mt-2 w-32 rounded-t-2xl border-2 border-b-0 ${palette.marche} ${hauteurs[i]}`}
-                  style={i === 0 && visible ? { boxShadow: `0 0 40px ${palette.lueur}` } : undefined}
-                />
+                  className={`relative mt-3 flex w-full flex-col items-center justify-center overflow-hidden rounded-t-2xl border-2 border-b-0 ${palette.marche}`}
+                  style={{
+                    height: hauteurs[i],
+                    boxShadow: premier && visible ? `0 0 45px ${palette.lueur}` : undefined,
+                  }}
+                >
+                  {e.jauge !== undefined && (
+                    <span
+                      className="absolute inset-x-0 bottom-0"
+                      style={{
+                        height: `${Math.round(e.jauge * 100)}%`,
+                        background: palette.remplissage,
+                        transition: `height 900ms cubic-bezier(0.2, 0.9, 0.3, 1) ${delai + 0.3}s`,
+                      }}
+                    />
+                  )}
+                  <span
+                    className={`relative font-black tabular-nums leading-none text-white ${premier ? 'text-7xl' : 'text-6xl'}`}
+                  >
+                    {e.valeur}
+                  </span>
+                  {e.unite && (
+                    <span className={`relative mt-1 text-xl font-bold uppercase tracking-wider ${palette.doux}`}>
+                      {e.unite}
+                    </span>
+                  )}
+                  {e.note && (
+                    <span
+                      className={`relative mt-2 rounded-full px-3 py-1 text-xl font-black uppercase tracking-wide ${
+                        e.fort ? palette.ruban + ' border-2' : palette.doux
+                      }`}
+                    >
+                      {e.note}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}

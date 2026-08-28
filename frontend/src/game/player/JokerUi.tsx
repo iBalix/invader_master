@@ -140,25 +140,3 @@ export function JokerBar({ state, you, sessionRef, playerToken, refresh, onPlaye
     </div>
   );
 }
-
-/** chips « qui a joué quoi » sur la question courante */
-export function JokerFeed({ feed, embedded }: { feed: PublicState['jokerFeed']; embedded?: boolean }) {
-  if (!feed || feed.length === 0) return null;
-  const derniers = feed.slice(-6);
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-1.5">
-      {derniers.map((f, i) => (
-        <span
-          key={`${f.pseudo}-${f.type}-${i}`}
-          className={`anim-pop inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-semibold ${embedded ? 'text-sm' : 'text-xs'}`}
-          style={{ borderColor: `${JOKER_DEFS[f.type].couleur}55`, color: JOKER_DEFS[f.type].couleur }}
-        >
-          {JOKER_DEFS[f.type].emoji} {f.pseudo}
-        </span>
-      ))}
-      {feed.length > derniers.length && (
-        <span className="text-xs text-white/40">+{feed.length - derniers.length}</span>
-      )}
-    </div>
-  );
-}
