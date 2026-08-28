@@ -73,7 +73,7 @@ function Pastille({
   return (
     <span
       className={`rounded-full border-2 font-black uppercase tracking-wider ${ton} ${
-        grand ? 'px-6 py-3 text-2xl' : 'px-3 py-1.5 text-sm'
+        grand ? 'px-6 py-3 text-3xl' : 'px-3 py-1.5 text-sm'
       }`}
     >
       {children}
@@ -98,9 +98,9 @@ function Etape({
         grand ? 'gap-3 px-6 py-6' : 'gap-1.5 px-3 py-3'
       }`}
     >
-      <span className={grand ? 'text-5xl' : 'text-3xl'}>{emoji}</span>
-      <span className={`font-black ${grand ? 'text-2xl' : 'text-sm'}`}>{titre}</span>
-      <span className={`text-white/50 ${grand ? 'text-lg' : 'text-xs'}`}>{sous}</span>
+      <span className={grand ? 'text-6xl' : 'text-3xl'}>{emoji}</span>
+      <span className={`font-black ${grand ? 'text-3xl' : 'text-sm'}`}>{titre}</span>
+      <span className={`text-white/50 ${grand ? 'text-xl' : 'text-xs'}`}>{sous}</span>
     </div>
   );
 }
@@ -118,7 +118,7 @@ const CHAPITRES: Chapitre[] = [
         <Seuil dans={dans} a={200}>
           <h1
             className={`anim-title-glow font-black uppercase ${
-              grand ? 'text-8xl tracking-[0.12em]' : 'text-4xl tracking-[0.1em]'
+              grand ? 'text-9xl tracking-[0.12em]' : 'text-4xl tracking-[0.1em]'
             }`}
           >
             Quiz Invader
@@ -127,14 +127,14 @@ const CHAPITRES: Chapitre[] = [
         <Seuil dans={dans} a={1400}>
           <p
             className={`font-black uppercase tracking-[0.35em] text-cyan-300 ${
-              grand ? 'mt-8 text-4xl' : 'mt-4 text-lg'
+              grand ? 'mt-8 text-5xl' : 'mt-4 text-lg'
             }`}
           >
             Règles du jeu
           </p>
         </Seuil>
         <Seuil dans={dans} a={3000}>
-          <p className={`text-white/60 ${grand ? 'mt-10 text-2xl' : 'mt-6 text-sm'}`}>
+          <p className={`text-white/60 ${grand ? 'mt-10 text-3xl' : 'mt-6 text-sm'}`}>
             Tout se joue sur ton écran. On t'explique, la partie démarre juste après.
           </p>
         </Seuil>
@@ -148,7 +148,7 @@ const CHAPITRES: Chapitre[] = [
     visuel: (grand, dans) => (
       <div className={`w-full ${grand ? 'max-w-2xl' : ''}`}>
         <Seuil dans={dans} a={200}>
-          <div className={`rounded-2xl border border-white/15 bg-white/5 text-center font-bold ${grand ? 'px-8 py-5 text-3xl' : 'px-3 py-1.5 text-xs'}`}>
+          <div className={`rounded-2xl border border-white/15 bg-white/5 text-center font-bold ${grand ? 'px-8 py-5 text-4xl' : 'px-3 py-1.5 text-xs'}`}>
             🎵 « Quel groupe chante Smells Like Teen Spirit ? »
           </div>
         </Seuil>
@@ -156,7 +156,7 @@ const CHAPITRES: Chapitre[] = [
           {['Pearl Jam', 'Nirvana', 'Soundgarden', 'Alice in Chains'].map((r, i) => (
             <Seuil key={r} dans={dans} a={900 + i * 260}>
               <div
-                className={`rounded-xl border-2 text-center font-bold ${grand ? 'px-4 py-4 text-2xl' : 'px-2 py-1.5 text-xs'} ${
+                className={`rounded-xl border-2 text-center font-bold ${grand ? 'px-4 py-4 text-3xl' : 'px-2 py-1.5 text-xs'} ${
                   i === 1 && dans >= 3200
                     ? 'anim-pop border-emerald-400 bg-emerald-400/20 text-emerald-200'
                     : 'border-white/15 bg-white/5 text-white/70'
@@ -168,7 +168,7 @@ const CHAPITRES: Chapitre[] = [
           ))}
         </div>
         <Seuil dans={dans} a={3600}>
-          <p className={`mt-1.5 text-center font-black text-emerald-300 ${grand ? 'text-2xl' : 'text-xs'}`}>
+          <p className={`mt-1.5 text-center font-black text-emerald-300 ${grand ? 'text-3xl' : 'text-xs'}`}>
             ✓ Bonne réponse, les points tombent !
           </p>
         </Seuil>
@@ -206,10 +206,10 @@ const CHAPITRES: Chapitre[] = [
         ].map((t, i) => (
           <Seuil key={t.titre} dans={dans} a={300 + i * 700}>
             <div className={`flex items-center rounded-2xl border border-white/15 bg-white/5 ${grand ? 'gap-5 px-6 py-4' : 'gap-2.5 px-2.5 py-1.5'}`}>
-              <span className={grand ? 'text-4xl' : 'text-xl'}>{t.emoji}</span>
+              <span className={grand ? 'text-5xl' : 'text-xl'}>{t.emoji}</span>
               <span className="text-left">
-                <span className={`block font-black ${grand ? 'text-2xl' : 'text-[13px]'}`}>{t.titre}</span>
-                <span className={`block leading-snug text-white/50 ${grand ? 'text-lg' : 'text-[11px]'}`}>{t.sous}</span>
+                <span className={`block font-black ${grand ? 'text-3xl' : 'text-[13px]'}`}>{t.titre}</span>
+                <span className={`block leading-snug text-white/50 ${grand ? 'text-xl' : 'text-[11px]'}`}>{t.sous}</span>
               </span>
             </div>
           </Seuil>
@@ -250,11 +250,11 @@ const CHAPITRES: Chapitre[] = [
         ].map((p, i) => (
           <Seuil key={i} dans={dans} a={p.a}>
             <div className="flex flex-col items-center">
-              <span className={grand ? 'text-5xl' : 'text-3xl'}>{p.m}</span>
+              <span className={grand ? 'text-6xl' : 'text-3xl'}>{p.m}</span>
               <div
                 className={`mt-2 flex w-16 items-center justify-center rounded-t-xl border-2 border-b-0 border-amber-400/60 bg-amber-400/15 ${p.h} ${grand ? 'w-24' : ''}`}
               >
-                <span className={`font-black text-amber-300 ${grand ? 'text-4xl' : 'text-xl'}`}>
+                <span className={`font-black text-amber-300 ${grand ? 'text-5xl' : 'text-xl'}`}>
                   +{p.pts}
                 </span>
               </div>
@@ -275,7 +275,7 @@ const CHAPITRES: Chapitre[] = [
             <Seuil key={i} dans={dans} a={300 + i * 420}>
               <span
                 className={`flex items-center justify-center rounded-full border-2 font-black tabular-nums ${
-                  grand ? 'h-16 w-16 text-2xl' : 'h-9 w-9 text-sm'
+                  grand ? 'h-16 w-16 text-3xl' : 'h-9 w-9 text-sm'
                 } ${
                   i + 1 >= STREAK_BONUS_FROM
                     ? 'border-amber-300 bg-amber-400/25 text-amber-200'
@@ -288,7 +288,7 @@ const CHAPITRES: Chapitre[] = [
           ))}
         </div>
         <Seuil dans={dans} a={300 + STREAK_BONUS_FROM * 420 + 300}>
-          <p className={`mt-4 font-black text-amber-200 ${grand ? 'text-3xl' : 'text-lg'}`}>
+          <p className={`mt-4 font-black text-amber-200 ${grand ? 'text-4xl' : 'text-lg'}`}>
             🔥 En feu : +1 pt par bonne réponse !
           </p>
         </Seuil>
@@ -316,11 +316,11 @@ const CHAPITRES: Chapitre[] = [
                   transition: 'box-shadow 500ms ease',
                 }}
               >
-                <span className={grand ? 'text-5xl' : 'text-2xl'}>{def.emoji}</span>
+                <span className={grand ? 'text-6xl' : 'text-2xl'}>{def.emoji}</span>
                 <span className={`font-black uppercase ${grand ? 'text-xl' : 'text-xs'}`} style={{ color: def.couleur }}>
                   {def.label}
                 </span>
-                <span className={`text-white/60 ${grand ? 'text-base' : 'text-[10px]'}`}>{def.description}</span>
+                <span className={`text-white/60 ${grand ? 'text-lg' : 'text-[10px]'}`}>{def.description}</span>
               </div>
             </Seuil>
           );
@@ -355,14 +355,14 @@ const CHAPITRES: Chapitre[] = [
                     transition: 'transform 400ms cubic-bezier(0.3, 1.2, 0.4, 1), box-shadow 400ms ease',
                   }}
                 >
-                  <span className={grand ? 'text-4xl' : 'text-xl'}>{def.emoji}</span>
+                  <span className={grand ? 'text-5xl' : 'text-xl'}>{def.emoji}</span>
                 </div>
               </Seuil>
             );
           })}
         </div>
         <Seuil dans={dans} a={2200}>
-          <p className={`text-center text-white/60 ${grand ? 'mt-4 text-2xl' : 'mt-3 text-xs'}`}>
+          <p className={`text-center text-white/60 ${grand ? 'mt-4 text-3xl' : 'mt-3 text-xs'}`}>
             🎁 L'animateur peut aussi en distribuer... reste attentif !
           </p>
         </Seuil>
@@ -377,11 +377,11 @@ const CHAPITRES: Chapitre[] = [
       <div className="flex w-full max-w-full flex-col items-center">
         <Seuil dans={dans} a={300}>
           <div className={`anim-glow flex items-center justify-center rounded-full border-4 border-cyan-300/70 bg-cyan-400/10 ${grand ? 'h-40 w-40' : 'h-24 w-24'}`}>
-            <span className={grand ? 'text-7xl' : 'text-4xl'}>🚀</span>
+            <span className={grand ? 'text-8xl' : 'text-4xl'}>🚀</span>
           </div>
         </Seuil>
         <Seuil dans={dans} a={900}>
-          <p className={`mt-5 font-black uppercase tracking-widest text-cyan-200 ${grand ? 'text-3xl' : 'text-lg'}`}>
+          <p className={`mt-5 font-black uppercase tracking-widest text-cyan-200 ${grand ? 'text-4xl' : 'text-lg'}`}>
             Que le meilleur gagne !
           </p>
         </Seuil>
@@ -467,8 +467,8 @@ export default function QuizRules({
         }`}
       >
         <div className={grand ? 'w-[42%] shrink-0' : 'w-full shrink-0 text-center'}>
-          <h2 className={`text-balance font-black ${grand ? 'text-5xl' : 'text-xl'}`}>{c.titre}</h2>
-          <p className={`text-balance text-white/60 ${grand ? 'mt-3 text-2xl leading-snug' : 'mt-1.5 text-sm leading-snug'}`}>
+          <h2 className={`text-balance font-black ${grand ? 'text-6xl' : 'text-xl'}`}>{c.titre}</h2>
+          <p className={`text-balance text-white/60 ${grand ? 'mt-3 text-3xl leading-snug' : 'mt-1.5 text-sm leading-snug'}`}>
             {c.phrase}
           </p>
         </div>
