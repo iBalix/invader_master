@@ -888,8 +888,9 @@ export async function gmAction(
             ...(session.runtime.jokerAwards[qi] ?? []),
             ...dons,
           ];
-          // le projecteur lit reveal.jokerAwards : on y ajoute les dons pour
-          // qu'ils apparaissent dans la banniere de la revelation en cours
+          // le JOUEUR lit reveal.jokerAwards au 3e temps de sa sequence : sans
+          // cet ajout, un don fait pendant la revelation ne declencherait pas
+          // sa roue de tirage. (Le projecteur, lui, n'annonce plus les jokers.)
           if (session.runtime.reveal) {
             session.runtime.reveal.jokerAwards = [
               ...(session.runtime.reveal.jokerAwards ?? []),
@@ -992,6 +993,28 @@ export async function joinSession(
  * un echec entre les deux laisse au pire un joker gratuit — jamais un joker
  * consomme sans effet, ce que faisait l'ancien ordre.
  */
+/**
+ * Repartition en direct des reponses, pour le joker « avis du public ».
+ *
+ * Appelee UNIQUEMENT pour un joueur ayant arme ce joker, pendant la question :
+ * une requete par rafraichissement de ce joueur-la, pas pour la salle entiere.
+ * C'est ce qui rend le joker vivant (les barres montent pendant que les autres
+ * repondent) alors qu'il a ete engage a l'aveugle pendant l'annonce.
+ */
+export async function audienceCounts(
+  session: SessionRow,
+  questionIndex: number,
+): Promise<{ counts: number[]; total: number }> {
+  const q = currentQuestion(session);
+  const reponses = await loadAnswers(session.id, questionIndex);
+  const counts = new Array(q?.answers.length ?? 4).fill(0) as number[];
+  for (const a of reponses) {
+    const c = a.answer.choice;
+    if (typeof c === 'number' && c >= 0 && c < counts.length) counts[c] += 1;
+  }
+  return { counts, total: reponses.length };
+}
+
 export async function playJoker(
   sessionId: string,
   player: PlayerRow,
@@ -1003,10 +1026,10 @@ export async function playJoker(
   let dejaJoue = false;
 
   await withSession(sessionId, async (session) => {
-    if (
-      (session.status !== 'announce' && session.status !== 'question') ||
-      session.current_question_index !== questionIndex
-    ) {
+    // FENETRE UNIQUE : l'annonce, avant que la question s'affiche. Tous les
+    // jokers s'engagent a l'aveugle, c'est ce qui en fait des paris et non des
+    // aides de derniere seconde. Une fois la question lancee, plus rien.
+    if (session.status !== 'announce' || session.current_question_index !== questionIndex) {
       throw Object.assign(new Error('error_bonus_window_closed'), { httpStatus: 409 });
     }
     const q = currentQuestion(session);
@@ -1040,16 +1063,12 @@ export async function playJoker(
         [faux[i], faux[j]] = [faux[j], faux[i]];
       }
       data = { removed: faux.slice(0, 2).sort((a, b) => a - b) };
-    } else if (type === 'audience' && q) {
-      // snapshot de la repartition au moment T : c'est l'avis du public a
-      // l'instant ou on le demande, il ne se met pas a jour ensuite
-      const reponses = await loadAnswers(session.id, questionIndex);
-      const counts = new Array(q.answers.length).fill(0) as number[];
-      for (const a of reponses) {
-        const c = a.answer.choice;
-        if (typeof c === 'number' && c >= 0 && c < counts.length) counts[c] += 1;
-      }
-      data = { counts, total: reponses.length };
+    } else if (type === 'audience') {
+      // Rien a calculer ici : le joker s'arme AVANT la question, personne n'a
+      // encore repondu. La repartition est produite en direct pendant la
+      // question (cf. audienceCounts), le joueur voit donc la salle voter au
+      // lieu d'un cliche fige.
+      data = { armed: true };
     }
 
     const play: JokerPlay = { playerId: player.id, pseudo: player.pseudo, type, data };

@@ -498,4 +498,4 @@ export const SEQ_JOKERS_MS = 9200;
 /** miroir du backend : duree minimale de la phase reveal */
 export const REVEAL_MIN_MS = 12000;
 /** projecteur : banniere des jokers gagnes */
-export const REVEAL_JOKERS_MS = 6200;
+export const REVEAL_SERIE_MS = 7400;

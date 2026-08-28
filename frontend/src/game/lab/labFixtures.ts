@@ -15,9 +15,16 @@ import {
   type You,
 } from '../lib/gameClient';
 
+/**
+ * 40 pseudos : l'effectif d'une vraie soiree pleine. C'est volontairement le
+ * cas le plus dur (classement, podiums, feed), pas un echantillon confortable.
+ */
 const PSEUDOS = [
   'Marco', 'Léa', 'Sam', 'Nina', 'Hugo', 'Emma', 'Tom', 'Julie',
   'Alex', 'Zoé', 'Max', 'Lily', 'Nico', 'Eva', 'Paul', 'Mia',
+  'Théo', 'Jade', 'Louis', 'Anna', 'Rémi', 'Clara', 'Yanis', 'Manon',
+  'Enzo', 'Inès', 'Adam', 'Sarah', 'Noah', 'Camille', 'Lucas', 'Alice',
+  'Gab', 'Chloé', 'Kevin', 'Marie', 'Bastien', 'Elsa', 'Jules', 'Roxane',
 ];
 
 function baseState(over: Partial<PublicState>): PublicState {
@@ -78,18 +85,22 @@ const QUESTION_QCM = {
   answers: ['Master System', 'NES', 'Game Boy', 'PC Engine'],
 };
 
+/** series en cours plausibles : quelques gros scores, beaucoup de petits */
+const SERIES = [7, 6, 5, 4, 4, 3, 3, 3, 2, 2];
+
 function revealBase(): RevealData {
   const results: RevealData['results'] = {};
   PSEUDOS.forEach((p, i) => {
     const correct = i % 3 !== 0;
+    const serie = correct ? (SERIES[i] ?? (i % 3) + 1) : 0;
     results[p] = {
-      answered: true,
+      answered: i % 7 !== 5,
       correct,
       points: correct ? 2 : 0,
       allIn: false,
-      streak: correct ? (i % 5) + 1 : 0,
-      streakBefore: i % 5,
-      streakBonus: false,
+      streak: serie,
+      streakBefore: Math.max(0, serie - 1),
+      streakBonus: serie >= 5,
       value: correct ? 1 : 0,
     };
   });
@@ -131,7 +142,7 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'annonce',
     groupe: 'Joueur',
     label: 'Annonce + jokers',
-    description: 'Fenêtre des jokers ouverte, deux en main.',
+    description: "Seule fenêtre de jeu des jokers, avant la question.",
     state: () =>
       baseState({
         status: 'announce',
@@ -148,7 +159,7 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'question',
     groupe: 'Joueur',
     label: 'Question QCM',
-    description: 'Grille de réponses, jokers jouables en bas.',
+    description: 'Grille de réponses, plein écran pour le pouce.',
     state: () =>
       baseState({
         status: 'question',
@@ -160,8 +171,8 @@ export const SCENARIOS: LabScenario[] = [
   {
     cle: 'question-fifty',
     groupe: 'Joueur',
-    label: 'Question + 50/50 joué',
-    description: 'Deux mauvaises réponses barrées.',
+    label: 'Question + 50/50 armé',
+    description: 'Joué à l’annonce : deux mauvaises réponses barrées.',
     state: () =>
       baseState({
         status: 'question',
@@ -178,7 +189,7 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'question-audience',
     groupe: 'Joueur',
     label: 'Question + avis du public',
-    description: 'Jauges de répartition sur les choix.',
+    description: 'Répartition en direct, elle monte pendant la question.',
     state: () =>
       baseState({
         status: 'question',
@@ -296,7 +307,7 @@ export const SCENARIOS: LabScenario[] = [
           position: i + 1,
           positionChange: i === 2 ? 3 : i === 5 ? -2 : 0,
           device: 'mobile',
-          score: 30 - i * 2,
+          score: Math.max(1, 44 - i * 3),
         })),
       }),
     you: () => baseYou({}),
@@ -323,25 +334,31 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'projo-reveal',
     groupe: 'Projecteur',
     label: 'Révélation (projo)',
-    description: 'Barres → réponse → podium ⚡ → gains 🎁.',
-    state: () => {
-      const r = revealBase();
-      r.jokerAwards = [
-        { pseudo: 'Nina', type: 'fifty' },
-        { pseudo: 'Hugo', type: 'audience' },
-        { pseudo: 'Emma', type: 'all_in' },
-        { pseudo: 'Tom', type: 'fifty' },
-      ];
-      r.results.Léa.streakBonus = true;
-      r.results.Léa.streak = 6;
-      return baseState({ status: 'reveal', question: QUESTION_QCM, reveal: r });
-    },
+    description: 'Barres → réponse → podium ⚡ → podium 🔥.',
+    state: () => baseState({ status: 'reveal', question: QUESTION_QCM, reveal: revealBase() }),
+  },
+  {
+    cle: 'projo-classement-moyen',
+    groupe: 'Projecteur',
+    label: 'Classement (projo) · 18 joueurs',
+    description: 'Podium plein + 2 colonnes, soirée normale.',
+    state: () =>
+      baseState({
+        status: 'leaderboard',
+        standings: PSEUDOS.slice(0, 18).map((p, i) => ({
+          pseudo: p,
+          position: i + 1,
+          positionChange: i === 1 ? 2 : i === 4 ? -1 : 0,
+          device: 'mobile',
+          score: Math.max(1, 46 - i * 2),
+        })),
+      }),
   },
   {
     cle: 'projo-classement',
     groupe: 'Projecteur',
-    label: 'Classement (projo)',
-    description: 'Podium + colonnes.',
+    label: 'Classement (projo) · 40 joueurs',
+    description: 'Podium compact + 4 colonnes, salle pleine.',
     state: () =>
       baseState({
         status: 'leaderboard',
@@ -350,7 +367,7 @@ export const SCENARIOS: LabScenario[] = [
           position: i + 1,
           positionChange: i === 1 ? 2 : i === 4 ? -1 : 0,
           device: 'mobile',
-          score: 34 - i * 2,
+          score: Math.max(1, 62 - i * 3 + (i % 3)),
         })),
       }),
   },

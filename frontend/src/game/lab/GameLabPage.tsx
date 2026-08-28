@@ -17,20 +17,29 @@ import JokerWheel from '../components/JokerWheel';
 import { PlayerScreen } from '../player/PlayerApp';
 import { ProjectorBody } from '../screen/ScreenApp';
 import { JOKER_TYPES, type JokerType, type PublicState, type You } from '../lib/gameClient';
+import QuizRules, { NB_CHAPITRES_REGLES } from '../player/QuizRules';
 import { SCENARIOS } from './labFixtures';
 import '../game.css';
 
-type Gabarit = 'phone' | 'table' | 'projo';
+type Gabarit = 'mini' | 'phone' | 'table' | 'projo';
+
+/**
+ * Le gabarit « mini » (375x667, iPhone SE) est le pire cas reel du parc : c'est
+ * lui qui dit si un ecran tient vraiment, pas le grand telephone. Zero
+ * defilement etant la regle, tout doit entrer ici aussi.
+ */
+const HAUTEURS: Record<'mini' | 'phone', number> = { mini: 667, phone: 812 };
 
 const GABARITS: Array<{ cle: Gabarit; label: string; note: string }> = [
-  { cle: 'phone', label: '📱 Téléphone', note: '375 px' },
+  { cle: 'mini', label: '📱 Petit', note: '375×667' },
+  { cle: 'phone', label: '📱 Grand', note: '375×812' },
   { cle: 'table', label: '🖥 Table', note: '1920×1080, zoom 1.4' },
   { cle: 'projo', label: '📽 Projecteur', note: '1920×1080' },
 ];
 
 export default function GameLabPage() {
   const [scenarioCle, setScenarioCle] = useState(SCENARIOS[0].cle);
-  const [gabarit, setGabarit] = useState<Gabarit>('phone');
+  const [gabarit, setGabarit] = useState<Gabarit>('mini');
   const [runId, setRunId] = useState(0);
   /**
    * Saut dans le temps de la sequence : regenere l'etat avec un phaseStartedAt
@@ -39,6 +48,8 @@ export default function GameLabPage() {
    * precis, et pour les captures.
    */
   const [sautMs, setSautMs] = useState(0);
+  /** regles : chapitre fige, ou null pour laisser la sequence tourner */
+  const [chapitre, setChapitre] = useState<number | null>(null);
 
   const scenario = SCENARIOS.find((s) => s.cle === scenarioCle) ?? SCENARIOS[0];
   // regeneres a chaque "rejouer" : phaseStartedAt repart de maintenant
@@ -67,7 +78,7 @@ export default function GameLabPage() {
   // inversement : on bascule automatiquement pour eviter les etats absurdes
   useEffect(() => {
     if (scenario.groupe === 'Projecteur' && gabarit !== 'projo') setGabarit('projo');
-    if (scenario.groupe === 'Joueur' && gabarit === 'projo') setGabarit('phone');
+    if (scenario.groupe === 'Joueur' && gabarit === 'projo') setGabarit('mini');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario.groupe]);
 
@@ -93,6 +104,7 @@ export default function GameLabPage() {
                     onClick={() => {
                       setScenarioCle(s.cle);
                       setSautMs(0);
+                      setChapitre(null);
                       setRunId((v) => v + 1);
                     }}
                     className={`rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
@@ -129,6 +141,34 @@ export default function GameLabPage() {
                 {g.label} <span className="text-[10px] font-normal text-white/40">{g.note}</span>
               </button>
             ))}
+            {scenario.cle === 'regles' && (
+              <span className="flex items-center gap-1 rounded-lg border border-white/10 px-1 py-1">
+                <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-white/40">
+                  Chapitre
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setChapitre(null)}
+                  className={`rounded px-2 py-1 text-xs font-bold ${
+                    chapitre === null ? 'bg-white/15' : 'text-white/50 hover:bg-white/5'
+                  }`}
+                >
+                  auto
+                </button>
+                {Array.from({ length: NB_CHAPITRES_REGLES }, (_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setChapitre(i)}
+                    className={`rounded px-2 py-1 text-xs font-bold ${
+                      chapitre === i ? 'bg-white/15' : 'text-white/50 hover:bg-white/5'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </span>
+            )}
             {state.status === 'reveal' && (
               <span className="flex items-center gap-1 rounded-lg border border-white/10 px-1 py-1">
                 <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-white/40">
@@ -171,8 +211,22 @@ export default function GameLabPage() {
 
           {scenario.cle === 'roue' ? (
             <RoueEnBoucle key={runId} />
-          ) : gabarit === 'phone' ? (
-            <CadrePhone key={runId}>
+          ) : scenario.cle === 'regles' && chapitre !== null ? (
+            gabarit === 'phone' || gabarit === 'mini' ? (
+              <CadrePhone key={`${runId}-${chapitre}`} hauteur={HAUTEURS[gabarit]}>
+                <div className="game-bg h-full w-full overflow-hidden text-white">
+                  <QuizRules phaseStartedAt={state.phaseStartedAt} chapitreForce={chapitre} />
+                </div>
+              </CadrePhone>
+            ) : (
+              <CadreLarge key={`${runId}-${chapitre}`}>
+                <div className="game-bg h-full w-full overflow-hidden text-white" style={{ zoom: 1.4 }}>
+                  <QuizRules phaseStartedAt={state.phaseStartedAt} embedded chapitreForce={chapitre} />
+                </div>
+              </CadreLarge>
+            )
+          ) : gabarit === 'phone' || gabarit === 'mini' ? (
+            <CadrePhone key={runId} hauteur={HAUTEURS[gabarit]}>
               <SceneJoueur state={state} you={you} embedded={false} />
             </CadrePhone>
           ) : (
@@ -205,7 +259,7 @@ function SceneJoueur({
   embedded: boolean;
 }) {
   return (
-    <div className={`game-bg flex flex-col text-white ${embedded ? 'h-full' : 'min-h-full'}`}>
+    <div className="game-bg flex h-full flex-col overflow-hidden text-white">
       <PlayerScreen
         state={state}
         you={you}
@@ -221,12 +275,24 @@ function SceneJoueur({
   );
 }
 
-/** cadre téléphone : taille réelle 375 px, centré */
-function CadrePhone({ children }: { children: React.ReactNode }) {
+/**
+ * Cadre téléphone : 375 px de large, hauteur au choix, taille réelle.
+ *
+ * PAS de defilement interne : c'est justement ce qu'on veut verifier ici. Si
+ * un ecran deborde de ce cadre, il debordera sur un vrai telephone, et le
+ * labo doit le montrer plutot que le masquer derriere une barre.
+ */
+function CadrePhone({ children, hauteur }: { children: React.ReactNode; hauteur: number }) {
   return (
-    <div className="flex justify-center">
-      <div className="h-[740px] w-[375px] overflow-hidden rounded-[2rem] border-4 border-white/15 bg-black shadow-2xl">
-        <div className="h-full w-full overflow-y-auto">{children}</div>
+    // shrink-0 imperatif : sans lui, une fenetre etroite ecrase le cadre a
+    // quelques pixels de large et le rendu observe n'a plus rien a voir avec
+    // un telephone. Le labo doit montrer 375 px, toujours.
+    <div className="flex justify-center overflow-x-auto">
+      <div
+        className="w-[375px] shrink-0 overflow-hidden rounded-[2rem] border-4 border-white/15 bg-black shadow-2xl"
+        style={{ height: hauteur }}
+      >
+        {children}
       </div>
     </div>
   );

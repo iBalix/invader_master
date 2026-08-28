@@ -13,7 +13,7 @@ import {
   markDirty,
   withSession,
 } from '../games/engine.js';
-import { playJoker, joinSession, submitAnswer } from '../games/quizFlow.js';
+import { audienceCounts, playJoker, joinSession, submitAnswer } from '../games/quizFlow.js';
 // import à effet de bord indispensable : enregistre l'advancer 'battle'
 import { joinBattleSession, submitBattleAnswer } from '../games/battleFlow.js';
 import { buildPublicState, buildYou } from '../games/views.js';
@@ -99,6 +99,15 @@ gamePublicRoutes.get('/:idOrCode/state', async (req, res) => {
     const token = (req.query.playerToken as string) || undefined;
     const player = await findPlayerByToken(session.id, token);
     const you = player ? buildYou(session, player, await hasAnswered(session, player)) : null;
+    // « Avis du public » : arme pendant l'annonce, il n'a alors aucune donnee.
+    // On calcule sa repartition ici, en direct, pour le seul joueur concerne.
+    if (you && session.status === 'question') {
+      const plays = you.jokerPlays as Array<{ type: string; data: unknown }>;
+      if (plays.some((x) => x.type === 'audience')) {
+        const live = await audienceCounts(session, session.current_question_index);
+        you.jokerPlays = plays.map((x) => (x.type === 'audience' ? { ...x, data: live } : x));
+      }
+    }
     if (player) {
       // heartbeat de présence (best effort)
       void supabaseAdmin

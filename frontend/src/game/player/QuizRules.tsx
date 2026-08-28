@@ -25,6 +25,9 @@ import {
 
 const CHAPITRE_MS = 8000;
 
+/** nombre de chapitres, pour le selecteur du laboratoire */
+export const NB_CHAPITRES_REGLES = 9;
+
 interface Chapitre {
   cle: string;
   titre: string;
@@ -112,15 +115,15 @@ const CHAPITRES: Chapitre[] = [
     visuel: (grand, dans) => (
       <div className={`w-full ${grand ? 'max-w-2xl' : ''}`}>
         <Seuil dans={dans} a={200}>
-          <div className={`rounded-2xl border border-white/15 bg-white/5 text-center font-bold ${grand ? 'px-8 py-5 text-3xl' : 'px-4 py-3 text-base'}`}>
+          <div className={`rounded-2xl border border-white/15 bg-white/5 text-center font-bold ${grand ? 'px-8 py-5 text-3xl' : 'px-3 py-1.5 text-xs'}`}>
             🎵 « Quel groupe chante Smells Like Teen Spirit ? »
           </div>
         </Seuil>
-        <div className={`mt-3 grid grid-cols-2 ${grand ? 'gap-4' : 'gap-2'}`}>
+        <div className={`mt-2 grid grid-cols-2 ${grand ? 'gap-4' : 'gap-1'}`}>
           {['Pearl Jam', 'Nirvana', 'Soundgarden', 'Alice in Chains'].map((r, i) => (
             <Seuil key={r} dans={dans} a={900 + i * 260}>
               <div
-                className={`rounded-xl border-2 text-center font-bold ${grand ? 'px-4 py-4 text-2xl' : 'px-2 py-2.5 text-sm'} ${
+                className={`rounded-xl border-2 text-center font-bold ${grand ? 'px-4 py-4 text-2xl' : 'px-2 py-1.5 text-xs'} ${
                   i === 1 && dans >= 3200
                     ? 'anim-pop border-emerald-400 bg-emerald-400/20 text-emerald-200'
                     : 'border-white/15 bg-white/5 text-white/70'
@@ -132,7 +135,7 @@ const CHAPITRES: Chapitre[] = [
           ))}
         </div>
         <Seuil dans={dans} a={3600}>
-          <p className={`mt-3 text-center font-black text-emerald-300 ${grand ? 'text-2xl' : 'text-base'}`}>
+          <p className={`mt-1.5 text-center font-black text-emerald-300 ${grand ? 'text-2xl' : 'text-xs'}`}>
             ✓ Bonne réponse, les points tombent !
           </p>
         </Seuil>
@@ -142,11 +145,11 @@ const CHAPITRES: Chapitre[] = [
   {
     cle: 'deroule',
     titre: "Le déroulé d'une question",
-    phrase: "Trois temps, toujours les mêmes. Les jokers se jouent pendant l'annonce ou la question.",
+    phrase: 'Trois temps, toujours les mêmes. Les jokers se jouent à l’annonce, pas après.',
     visuel: (grand, dans) => (
       <div className={`grid w-full grid-cols-3 ${grand ? 'max-w-3xl gap-5' : 'gap-2'}`}>
         {[
-          { emoji: '📣', titre: 'Annonce', sous: 'Le thème arrive, joue tes jokers' },
+          { emoji: '📣', titre: 'Annonce', sous: 'Thème et difficulté : joue tes jokers' },
           { emoji: '⏱️', titre: 'Question', sous: 'Réponds avant la fin du chrono' },
           { emoji: '✨', titre: 'Révélation', sous: 'Verdict, série et jokers gagnés' },
         ].map((e, i) => (
@@ -162,18 +165,18 @@ const CHAPITRES: Chapitre[] = [
     titre: 'Trois façons de répondre',
     phrase: 'QCM, estimation au plus proche, ou réponse libre jugée par une IA (et rattrapable par l\'animateur).',
     visuel: (grand, dans) => (
-      <div className={`flex w-full flex-col ${grand ? 'max-w-2xl gap-4' : 'gap-2'}`}>
+      <div className={`flex w-full flex-col ${grand ? 'max-w-2xl gap-4' : 'gap-1.5'}`}>
         {[
           { emoji: '🔤', titre: 'QCM', sous: '4 choix, un seul est bon' },
           { emoji: '🔢', titre: 'Estimation', sous: 'Un nombre : plus tu es proche, plus tu marques' },
           { emoji: '✍️', titre: 'Réponse libre', sous: 'Écris ta réponse, l\'orthographe approximative passe' },
         ].map((t, i) => (
           <Seuil key={t.titre} dans={dans} a={300 + i * 700}>
-            <div className={`flex items-center rounded-2xl border border-white/15 bg-white/5 ${grand ? 'gap-5 px-6 py-4' : 'gap-3 px-3 py-2.5'}`}>
-              <span className={grand ? 'text-4xl' : 'text-2xl'}>{t.emoji}</span>
+            <div className={`flex items-center rounded-2xl border border-white/15 bg-white/5 ${grand ? 'gap-5 px-6 py-4' : 'gap-2.5 px-2.5 py-1.5'}`}>
+              <span className={grand ? 'text-4xl' : 'text-xl'}>{t.emoji}</span>
               <span className="text-left">
-                <span className={`block font-black ${grand ? 'text-2xl' : 'text-sm'}`}>{t.titre}</span>
-                <span className={`block text-white/50 ${grand ? 'text-lg' : 'text-xs'}`}>{t.sous}</span>
+                <span className={`block font-black ${grand ? 'text-2xl' : 'text-[13px]'}`}>{t.titre}</span>
+                <span className={`block leading-snug text-white/50 ${grand ? 'text-lg' : 'text-[11px]'}`}>{t.sous}</span>
               </span>
             </div>
           </Seuil>
@@ -259,7 +262,7 @@ const CHAPITRES: Chapitre[] = [
   {
     cle: 'jokers',
     titre: 'Les jokers',
-    phrase: 'Trois pouvoirs, deux en main au maximum. Joue-les au bon moment.',
+    phrase: "Trois pouvoirs, deux en main au maximum. Ils se jouent tous pendant l'annonce, avant la question.",
     visuel: (grand, dans) => (
       <div className={`grid w-full grid-cols-3 ${grand ? 'max-w-3xl gap-5' : 'gap-2'}`}>
         {JOKER_TYPES.map((t, i) => {
@@ -305,8 +308,8 @@ const CHAPITRES: Chapitre[] = [
                 <div
                   className={`flex flex-col items-center justify-center rounded-2xl border-2 ${
                     grand
-                      ? centre ? 'h-36 w-28' : 'h-28 w-22'
-                      : centre ? 'h-24 w-20' : 'h-18 w-14'
+                      ? centre ? 'h-36 w-28' : 'h-28 w-24'
+                      : centre ? 'h-20 w-16' : 'h-14 w-12'
                   }`}
                   style={{
                     borderColor: centre ? def.couleur : `${def.couleur}44`,
@@ -316,14 +319,14 @@ const CHAPITRES: Chapitre[] = [
                     transition: 'transform 400ms cubic-bezier(0.3, 1.2, 0.4, 1), box-shadow 400ms ease',
                   }}
                 >
-                  <span className={grand ? 'text-4xl' : 'text-2xl'}>{def.emoji}</span>
+                  <span className={grand ? 'text-4xl' : 'text-xl'}>{def.emoji}</span>
                 </div>
               </Seuil>
             );
           })}
         </div>
         <Seuil dans={dans} a={2200}>
-          <p className={`mt-4 text-center text-white/60 ${grand ? 'text-2xl' : 'text-sm'}`}>
+          <p className={`text-center text-white/60 ${grand ? 'mt-4 text-2xl' : 'mt-3 text-xs'}`}>
             🎁 L'animateur peut aussi en distribuer... reste attentif !
           </p>
         </Seuil>
@@ -354,9 +357,12 @@ const CHAPITRES: Chapitre[] = [
 export default function QuizRules({
   phaseStartedAt,
   embedded,
+  chapitreForce,
 }: {
   phaseStartedAt: number | null;
   embedded?: boolean;
+  /** labo uniquement : fige un chapitre pour l'inspecter (jamais en partie) */
+  chapitreForce?: number;
 }) {
   const grand = Boolean(embedded);
 
@@ -368,15 +374,17 @@ export default function QuizRules({
   }, []);
 
   const ecoule = phaseStartedAt === null ? 0 : Math.max(0, serverNow() - phaseStartedAt);
-  const index = Math.floor(ecoule / CHAPITRE_MS) % CHAPITRES.length;
-  const dansChapitre = ecoule % CHAPITRE_MS;
+  const naturel = Math.floor(ecoule / CHAPITRE_MS) % CHAPITRES.length;
+  const index = chapitreForce === undefined ? naturel : chapitreForce % CHAPITRES.length;
+  // chapitre fige : on garde l'avancement interne pour voir les sous-etapes
+  const dansChapitre = chapitreForce === undefined ? ecoule % CHAPITRE_MS : Math.min(CHAPITRE_MS - 1, ecoule % CHAPITRE_MS);
   const c = CHAPITRES[index];
 
   return (
-    <div className={`flex h-full w-full flex-col ${grand ? 'px-12 py-8' : 'px-5 py-6'}`}>
+    <div className={`flex h-full w-full flex-col overflow-hidden ${grand ? 'px-12 py-8' : 'px-4 py-4'}`}>
       <p
         className={`shrink-0 text-center font-black uppercase tracking-[0.3em] text-cyan-300 ${
-          grand ? 'text-xl' : 'text-xs'
+          grand ? 'text-xl' : 'text-[11px]'
         }`}
       >
         Comment on joue
@@ -385,23 +393,24 @@ export default function QuizRules({
       {/* key = re-jeu de l'animation d'entree a chaque bascule de chapitre */}
       <div
         key={c.cle}
-        className={`anim-fade-up flex min-h-0 flex-1 ${
-          grand ? 'mt-6 flex-row items-center gap-12' : 'mt-4 flex-col items-center justify-center gap-5'
+        className={`anim-fade-up flex min-h-0 flex-1 overflow-hidden ${
+          grand ? 'mt-6 flex-row items-center gap-12' : 'mt-3 flex-col items-center justify-center gap-4'
         }`}
       >
-        <div className={grand ? 'w-[42%] shrink-0' : 'w-full text-center'}>
-          <h2 className={`text-balance font-black ${grand ? 'text-5xl' : 'text-2xl'}`}>{c.titre}</h2>
-          <p className={`mt-3 text-balance text-white/60 ${grand ? 'text-2xl leading-snug' : 'text-base'}`}>
+        <div className={grand ? 'w-[42%] shrink-0' : 'w-full shrink-0 text-center'}>
+          <h2 className={`text-balance font-black ${grand ? 'text-5xl' : 'text-xl'}`}>{c.titre}</h2>
+          <p className={`text-balance text-white/60 ${grand ? 'mt-3 text-2xl leading-snug' : 'mt-1.5 text-sm leading-snug'}`}>
             {c.phrase}
           </p>
         </div>
-        <div className={`flex min-h-0 items-center justify-center ${grand ? 'flex-1' : 'w-full'}`}>
+        {/* seule zone qui cede quand l'ecran est court : le visuel */}
+        <div className={`flex min-h-0 items-center justify-center overflow-hidden ${grand ? 'flex-1' : 'w-full flex-1'}`}>
           {c.visuel(grand, dansChapitre)}
         </div>
       </div>
 
       {/* barre de progression du chapitre + pastilles, comme le blackjack */}
-      <div className="shrink-0">
+      <div className={`shrink-0 ${grand ? '' : 'mt-3'}`}>
         <div className={`mx-auto overflow-hidden rounded-full bg-white/10 ${grand ? 'h-1.5 w-72' : 'h-1 w-40'}`}>
           <div
             className="h-full rounded-full bg-cyan-300/70"

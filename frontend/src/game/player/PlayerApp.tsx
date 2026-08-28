@@ -189,12 +189,14 @@ function Shell({ children, onResync, embedded, onExit, exitWarning }: ShellProps
   };
 
   return (
-    // embedded : la borne fournit deja la hauteur, min-h-dvh y creerait une
-    // seconde barre de defilement. Sur telephone, min-h-dvh reste necessaire.
+    // ZERO DEFILEMENT, sur tous les appareils : la surface de jeu fait
+    // exactement la hauteur disponible (h-dvh sur telephone, h-full dans la
+    // borne qui la fournit deja) et masque tout debordement. Chaque ecran doit
+    // donc tenir dans sa hauteur : c'est un jeu, pas une page web.
     // `relative` : sans lui, le bouton Retour en `absolute` s'ancrait sur le
     // bloc conteneur initial, donc au coin de l'ECRAN et non de la surface de
     // jeu. Sur une dalle, il se retrouvait orphelin a 550 px de la colonne.
-    <div className={`game-bg relative flex flex-col text-white ${embedded ? 'h-full overflow-y-auto' : 'min-h-dvh'}`}>
+    <div className={`game-bg relative flex flex-col overflow-hidden text-white ${embedded ? 'h-full' : 'h-dvh'}`}>
       {/* Dans le flux et non en absolute : agrandi pour le tactile, il
           recouvrait le pseudo de la barre d'etat. Ce bouton n'existe que sur la
           borne (seul TablePlayPage passe onExit), le rendu telephone est donc
@@ -271,7 +273,11 @@ function Shell({ children, onResync, embedded, onExit, exitWarning }: ShellProps
 }
 
 export function Center({ children }: { children: React.ReactNode }) {
-  return <div className="flex flex-1 flex-col items-center justify-center px-5 py-8">{children}</div>;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden px-5 py-6">
+      {children}
+    </div>
+  );
 }
 
 export function Spinner() {
@@ -385,7 +391,7 @@ export function PlayerScreen(props: ScreenProps) {
   })();
 
   return (
-    <div className={`flex flex-col ${props.embedded ? 'flex-1' : 'min-h-dvh'}`}>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <StatusBar state={state} you={you} />
       {body}
     </div>
@@ -585,15 +591,15 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'recorded' | 'failed'>(
     you.answered ? 'recorded' : 'idle',
   );
-  // Effets des jokers d'information. Initialises depuis you.jokerPlays (retour
-  // apres refresh) et mis a jour en direct par le callback de la JokerBar.
-  const [fiftyRemoved, setFiftyRemoved] = useState<number[]>(
-    () => (you.jokerPlays.find((x) => x.type === 'fifty')?.data?.removed ?? []) as number[],
-  );
-  const [audience, setAudience] = useState<{ counts: number[]; total: number } | null>(() => {
-    const d = you.jokerPlays.find((x) => x.type === 'audience')?.data;
-    return d?.counts ? { counts: d.counts, total: d.total ?? 0 } : null;
-  });
+  // Effets des jokers, DERIVES de you.jokerPlays et non stockes en local : les
+  // jokers sont joues pendant l'annonce, le serveur fait foi. L'avis du public
+  // est recalcule a chaque rafraichissement, ses barres montent donc en direct
+  // pendant que la salle repond.
+  const fiftyRemoved = (you.jokerPlays.find((x) => x.type === 'fifty')?.data?.removed ?? []) as number[];
+  const audienceData = you.jokerPlays.find((x) => x.type === 'audience')?.data;
+  const audience = audienceData?.counts
+    ? { counts: audienceData.counts, total: audienceData.total ?? 0 }
+    : null;
   const allInArme = you.jokerPlays.some((x) => x.type === 'all_in');
 
   // repère l'affichage réel de la question (mesure du temps de réponse)
@@ -605,8 +611,6 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
       setNumberValue('');
       setTextValue('');
       setSendState(you.answered ? 'recorded' : 'idle');
-      setFiftyRemoved([]);
-      setAudience(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q?.index]);
@@ -615,14 +619,6 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
     if (you.answered && sendState === 'idle') setSendState('recorded');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [you.answered]);
-
-  useEffect(() => {
-    const f = you.jokerPlays.find((x) => x.type === 'fifty')?.data?.removed;
-    if (f && f.length > 0) setFiftyRemoved(f as number[]);
-    const a = you.jokerPlays.find((x) => x.type === 'audience')?.data;
-    if (a?.counts) setAudience({ counts: a.counts, total: a.total ?? 0 });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [you.jokerPlays.length]);
 
   // vibration au début de la question
   useEffect(() => {
@@ -660,8 +656,8 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
   const totalMs = state.phaseEndsAt && state.phaseStartedAt ? state.phaseEndsAt - state.phaseStartedAt : state.config.questionMs;
 
   return (
-    <div className="flex flex-1 flex-col px-4 pb-16 pt-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-3">
+      <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-widest text-white/40">
             Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''}
@@ -695,8 +691,8 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
         </Center>
       ) : q.type === 'qcm' ? (
         <div
-          className={`grid flex-1 gap-2.5 ${
-            embedded ? 'grid-cols-2 grid-rows-2 content-stretch gap-5' : 'content-start'
+          className={`grid min-h-0 flex-1 ${
+            embedded ? 'grid-cols-2 grid-rows-2 gap-5' : 'grid-rows-4 gap-2'
           }`}
         >
           {(q.answers ?? []).map((a, i) => {
@@ -713,8 +709,8 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
                   setSelected(i);
                   void send({ choice: i });
                 }}
-                className={`relative overflow-hidden rounded-xl border-2 text-left font-semibold leading-snug transition-transform active:scale-[0.98] ${
-                  embedded ? 'flex items-center px-8 text-3xl' : 'px-4 py-3.5 text-base'
+                className={`relative flex min-h-[52px] items-center overflow-hidden rounded-xl border-2 text-left font-semibold leading-snug transition-transform active:scale-[0.98] ${
+                  embedded ? 'px-8 text-3xl' : 'px-4 py-2 text-base'
                 } ${
                   selected === i
                     ? 'border-white bg-white/20'
@@ -775,31 +771,12 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
       )}
 
       {allInArme && !answered && (
-        <div className="anim-pop mt-3 rounded-xl border-2 border-fuchsia-400/60 bg-fuchsia-500/15 px-4 py-2 text-center font-black text-fuchsia-200">
+        <div className="anim-pop mt-2 shrink-0 rounded-xl border-2 border-fuchsia-400/60 bg-fuchsia-500/15 px-3 py-1.5 text-center text-sm font-black text-fuchsia-200">
           🎰 ALL-IN : ×3 si bon, −{q.points} si faux
         </div>
       )}
 
-      {!answered && !locked && (
-        <div className="mt-4">
-          <JokerBar
-            state={state}
-            you={you}
-            sessionRef={sessionRef}
-            playerToken={playerToken}
-            refresh={refresh}
-            embedded={embedded}
-            onPlayed={(type, data) => {
-              if (type === 'fifty' && data?.removed) setFiftyRemoved(data.removed);
-              if (type === 'audience' && data?.counts) {
-                setAudience({ counts: data.counts, total: data.total ?? 0 });
-              }
-            }}
-          />
-        </div>
-      )}
-
-      <div className="mt-4 min-h-[44px] text-center">
+      <div className="mt-2 min-h-[40px] shrink-0 text-center">
         {sendState === 'recorded' && (
           <p className="anim-pop inline-flex items-center gap-2 rounded-full bg-emerald-400/15 px-4 py-2 font-bold text-emerald-300">
             ✓ Réponse enregistrée
@@ -923,7 +900,7 @@ function RevealScreen({ state, you, embedded }: { state: PublicState; you: You; 
   // La sequence personnelle (verdict -> serie -> jokers) prend le relais.
   // Le fond rouge pulse uniquement pendant le temps du verdict.
   return (
-    <div className={`flex flex-1 flex-col ${mine && !mine.correct && mine.answered ? 'anim-bg-pulse-red' : ''}`}>
+    <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${mine && !mine.correct && mine.answered ? 'anim-bg-pulse-red' : ''}`}>
       <PostRevealSequence state={state} you={you} embedded={embedded} />
     </div>
   );

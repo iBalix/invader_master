@@ -85,7 +85,7 @@ export default function PostRevealSequence({ state, you, embedded }: Props) {
   if (!reveal) return null;
 
   return (
-    <div className="flex w-full flex-1 flex-col items-center justify-center px-4">
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center overflow-hidden px-4">
       {/* key = re-jeu de l'animation d'entree a chaque changement de temps */}
       <div key={phase} className="anim-fade-up w-full">
         {phase === 'verdict' && <VerdictScreen state={state} you={you} embedded={embedded} elapsed={elapsed} />}

@@ -1,11 +1,14 @@
 /**
- * UI des jokers côté joueur : slots de main (StatusBar) et barre d'activation
- * (annonce + question).
+ * UI des jokers côté joueur : slots de main (StatusBar) et barre d'activation.
  *
- * La barre est le remplaçant du bloc « quitte ou double » : un bouton par joker
- * réellement en main, chacun avec son état joué/jouable. Le 50/50 et l'avis du
- * public sont grisés hors QCM (le serveur les refuse de toute façon, mais un
- * bouton qui échoue est pire qu'un bouton grisé).
+ * La barre ne vit QUE pendant l'annonce, avant que la question s'affiche : les
+ * trois jokers s'engagent à l'aveugle, sur la seule promesse du thème et de la
+ * difficulté. C'est un pari, pas une aide de dernière seconde, et ça évite au
+ * joueur d'avoir à lire une question tout en arbitrant ses jokers.
+ *
+ * Le 50/50 et l'avis du public sont grisés hors QCM (le serveur les refuse de
+ * toute façon, mais un bouton qui échoue est pire qu'un bouton grisé) : le type
+ * de question est annoncé, le joueur sait donc à quoi s'en tenir.
  */
 
 import { useState } from 'react';
@@ -23,7 +26,7 @@ import {
 const ERROR_LABELS: Record<string, string> = {
   error_no_joker: "Tu n'as pas ce joker",
   error_joker_type: 'Ce joker ne marche que sur les QCM',
-  error_bonus_window_closed: 'Trop tard pour cette question !',
+  error_bonus_window_closed: 'Trop tard, la question est lancée !',
 };
 
 /** slots de main compacts pour la barre de statut */
@@ -101,8 +104,8 @@ export function JokerBar({ state, you, sessionRef, playerToken, refresh, onPlaye
         {visibles.map((type, i) => {
           const def = JOKER_DEFS[type];
           const actif = played.has(type);
-          // le 50/50 et l'avis n'ont de sens que la question affichee (QCM)
-          const inutilisable = !actif && (type === 'fifty' || type === 'audience') && (!isQcm || state.status === 'announce');
+          // le 50/50 et l'avis ne s'appliquent qu'a un QCM
+          const inutilisable = !actif && (type === 'fifty' || type === 'audience') && !isQcm;
           return (
             <button
               key={`${type}-${i}`}
@@ -127,7 +130,7 @@ export function JokerBar({ state, you, sessionRef, playerToken, refresh, onPlaye
                 {def.label}
               </span>
               <span className={`mt-0.5 font-semibold uppercase tracking-wider text-white/45 ${embedded ? 'text-xs' : 'text-[9px]'}`}>
-                {busy === type ? '...' : actif ? 'Activé' : inutilisable ? (isQcm ? 'Pendant la question' : 'QCM seulement') : 'Jouer'}
+                {busy === type ? '...' : actif ? 'Armé' : inutilisable ? 'QCM seulement' : 'Jouer'}
               </span>
             </button>
           );
