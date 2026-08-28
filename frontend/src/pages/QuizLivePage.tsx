@@ -40,6 +40,7 @@ import {
   Pause,
   Play,
   Plus,
+  QrCode,
   RotateCcw,
   ScrollText,
   Smartphone,
@@ -451,6 +452,11 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
 // ---------------------------------------------------------------------------
 
 function HeaderBar({ state, onStop }: { state: GmState; onStop: () => void }) {
+  // QR de la console : il n'existait que sur l'ecran de lancement, or c'est
+  // souvent EN PLEINE PARTIE qu'un animateur perd le lien (telephone verrouille,
+  // onglet ferme). On l'affiche a la demande, sans quitter la console.
+  const [qrOuvert, setQrOuvert] = useState(false);
+  const urlConsole = `${window.location.origin}/evenements/quiz-live`;
   const progress =
     state.totalQuestions > 0
       ? Math.max(0, Math.min(1, (state.currentQuestionIndex + (state.status === 'reveal' || state.status === 'leaderboard' ? 1 : 0)) / state.totalQuestions))
@@ -474,6 +480,16 @@ function HeaderBar({ state, onStop }: { state: GmState; onStop: () => void }) {
         {/* Actions en ICONES SEULES sous lg : a trois libelles, l'en-tete ne
             tenait plus en 375 px et le nom du quiz etait ecrase a zero. */}
         <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setQrOuvert(true)}
+            title="QR code de la console"
+            aria-label="QR code de la console"
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/5"
+          >
+            <QrCode size={15} />
+            <span className="hidden lg:inline">QR console</span>
+          </button>
           <a
             href={`${window.location.origin}/play/${state.joinCode}`}
             target="_blank"
@@ -515,6 +531,35 @@ function HeaderBar({ state, onStop }: { state: GmState; onStop: () => void }) {
           style={{ width: `${progress * 100}%`, transition: 'width 400ms ease' }}
         />
       </div>
+
+      {qrOuvert && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6"
+          onClick={() => setQrOuvert(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-900 p-6 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="font-black">Reprendre la console</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Scanne avec le téléphone de l'animateur : il retombe directement sur cette
+              partie. Connexion back-office demandée s'il n'est pas identifié.
+            </p>
+            <div className="mt-4 flex justify-center rounded-xl bg-white p-4">
+              <QrCanvas value={urlConsole} size={220} />
+            </div>
+            <p className="mt-3 break-all font-mono text-xs text-slate-500">{urlConsole}</p>
+            <button
+              type="button"
+              onClick={() => setQrOuvert(false)}
+              className="mt-4 w-full rounded-xl bg-white/10 px-4 py-3 font-bold hover:bg-white/15"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
