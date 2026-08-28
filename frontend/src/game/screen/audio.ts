@@ -204,19 +204,18 @@ export class GameAudio {
    * jusqu'à un quart de seconde de dérive sur le chiffre affiché. Là, le coup
    * sonne exactement quand le chrono change de seconde.
    *
-   * La montée : au fil de la question le battement gagne en volume. À 5 s
-   * l'anneau du chrono passe au rouge, le battement se dédouble en pouls. À
-   * 3 s les lumières du bar virent au rouge, le pouls descend d'un cran et
-   * frappe plus fort. Les seuils sont ceux de l'image et des lumières, pour
-   * que l'oreille et l'oeil disent la même chose au même instant.
+   * Le battement ne vit QUE sur les trois dernières secondes, celles où
+   * l'anneau du chrono et les lumières du bar sont au rouge : un coup par
+   * seconde pendant toute la question lassait et marchait sur les extraits
+   * audio. Le reste de la fenêtre de réponse se joue en silence, l'oreille et
+   * l'oeil basculent ensemble au même instant.
    */
-  startAnswerTimer(remainingMs: number, totalMs: number, key: string): void {
+  startAnswerTimer(remainingMs: number, key: string): void {
     if (!this.ctx || !this.sfxGain || !this.enabled) return;
     if (this.timerKey === key) return;
     this.stopAnswerTimer();
     this.timerKey = key;
 
-    const total = Math.max(1000, totalMs);
     const beats = Math.floor(remainingMs / 1000);
     // décalage jusqu'au prochain changement de seconde affichée
     const first = (remainingMs % 1000) / 1000;
@@ -224,24 +223,13 @@ export class GameAudio {
 
     for (let i = 0; i < beats; i++) {
       const left = beats - i;            // secondes encore affichées après ce coup
+      if (left > 3) continue;
+      // Pouls lourd, calé sur le rouge. Registre autour de 104 à 124 Hz :
+      // plus bas, la diffusion du bar ne le restitue pas ; plus haut, on
+      // retombe sur le bip strident d'origine.
       const when = t0 + first + i;
-      // Registre : autour de 120 à 210 Hz. Plus bas (le premier essai tapait à
-      // 52-110 Hz) le battement ne passe tout simplement pas sur la diffusion
-      // du bar, on ne l'entend pas. Plus haut, on retombe sur le bip strident
-      // qu'on voulait justement supprimer.
-      if (left <= 3) {
-        // lumières du bar au rouge : le pouls s'emballe et s'alourdit
-        this.thud(when, 124, 0.72);
-        this.thud(when + 0.17, 104, 0.56);
-      } else if (left <= 5) {
-        // anneau du chrono au rouge : le pouls s'installe
-        this.thud(when, 156, 0.56);
-        this.thud(when + 0.2, 128, 0.4);
-      } else {
-        // croisière : un seul coup mat, de plus en plus présent
-        const progress = Math.max(0, Math.min(1, 1 - (left * 1000) / total));
-        this.thud(when, 208, 0.3 + progress * 0.2);
-      }
+      this.thud(when, 124, 0.72);
+      this.thud(when + 0.17, 104, 0.56);
     }
   }
 

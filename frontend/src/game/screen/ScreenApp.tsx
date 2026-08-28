@@ -327,12 +327,9 @@ function ProjectorScreen({
       gameAudio.stopAnswerTimer();
       return;
     }
-    const totalMs = state.phaseStartedAt
-      ? state.phaseEndsAt - state.phaseStartedAt
-      : state.config.questionMs;
-    gameAudio.startAnswerTimer(state.phaseEndsAt - serverNow(), totalMs, String(state.phaseEndsAt));
+    gameAudio.startAnswerTimer(state.phaseEndsAt - serverNow(), String(state.phaseEndsAt));
     return () => gameAudio.stopAnswerTimer();
-  }, [state.status, state.phaseEndsAt, state.phaseStartedAt, state.config.questionMs, soundOn]);
+  }, [state.status, state.phaseEndsAt, soundOn]);
 
   // décompte de reprise après la pause, même mécanique de programmation
   useEffect(() => {
