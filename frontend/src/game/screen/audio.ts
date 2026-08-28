@@ -53,7 +53,10 @@ export class GameAudio {
       if (this.musicEl) this.musicEl.volume = Math.min(1, target);
       return;
     }
-    this.musicGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.4);
+    // Coupure totale : fondu court (~0.4 s pour devenir inaudible), sinon la
+    // musique s'entend encore pendant les premieres secondes de l'extrait.
+    // Les autres mouvements gardent leur fondu doux.
+    this.musicGain.gain.setTargetAtTime(target, this.ctx.currentTime, this.duckFull ? 0.12 : 0.4);
   }
 
   setMusic(url: string | null): void {

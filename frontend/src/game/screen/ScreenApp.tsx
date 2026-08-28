@@ -229,15 +229,17 @@ function ProjectorScreen({
   // ducking : extraits & annonces
   useEffect(() => {
     const q = state.question;
-    // Pendant l'extrait video plein ecran : SILENCE TOTAL de la musique de
-    // fond, seule la video parle. Pendant un extrait audio ('locked' compris :
-    // l'extrait vient d'etre coupe, laisser la musique remonter dans la
-    // seconde donne un a-coup en pleine revelation) : ducking classique.
-    const fullSilence = state.status === 'media';
-    const mediaPlaying =
-      (state.status === 'question' || state.status === 'locked') && Boolean(q?.musicUrl);
+    // Pendant un media de question (video plein ecran OU extrait audio) :
+    // SILENCE TOTAL de la musique de fond, seul le media parle. 'locked'
+    // compris pour l'audio : l'extrait vient d'etre coupe, laisser la musique
+    // remonter dans la seconde donnerait un a-coup en pleine revelation.
+    // Le ducking a 22 % ne sert plus qu'aux moments de scene (cinematique,
+    // verdict), ou la musique reste un tapis sous le roulement de tambour.
+    const fullSilence =
+      state.status === 'media' ||
+      ((state.status === 'question' || state.status === 'locked') && Boolean(q?.musicUrl));
     gameAudio.duck(
-      fullSilence || mediaPlaying || state.status === 'cinematic' || state.status === 'verdict',
+      fullSilence || state.status === 'cinematic' || state.status === 'verdict',
       fullSilence,
     );
   }, [state.status, state.question]);
