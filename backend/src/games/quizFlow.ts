@@ -52,8 +52,15 @@ import {
 // Timing
 // ---------------------------------------------------------------------------
 
+/**
+ * Taper une reponse au clavier (nombre ou texte) prend plus de temps que
+ * toucher une case de QCM : 20 s pour un QCM, 25 s pour les deux autres types.
+ */
+const NON_QCM_EXTRA_MS = 5000;
+
 export function questionWindowMs(q: QuestionSnapshot, config: SessionConfig): number {
   let ms = config.questionMs;
+  if (q.type !== 'qcm') ms += NON_QCM_EXTRA_MS;
   if (q.musicUrl) ms += AUDIO_EXTRA_MS;
   if (q.imageQuestionUrl) ms += IMAGE_EXTRA_MS;
   // La video ne rallonge PLUS cette fenetre : elle se joue desormais plein

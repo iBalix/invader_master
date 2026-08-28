@@ -145,7 +145,9 @@ export interface SessionConfig {
 
 export const DEFAULT_CONFIG: SessionConfig = {
   announceMs: 8000,
-  questionMs: 23000,
+  // fenetre de reponse d'un QCM ; les types a saisie (estimation, reponse
+  // libre) recoivent un rab via NON_QCM_EXTRA_MS (cf. questionWindowMs)
+  questionMs: 20000,
   speedBonus: true,
   showScores: true,
   // valeurs de depart du mixer projo : celles que l'ecran appliquait en dur
