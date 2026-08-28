@@ -24,7 +24,8 @@ import {
   STREAK_BONUS_FROM,
 } from '../lib/gameClient';
 
-const CHAPITRE_MS = 8000;
+// 5 s par slide : les 8 s d'origine trainaient, la salle decroche vite
+const CHAPITRE_MS = 5000;
 
 interface Chapitre {
   cle: string;
@@ -133,7 +134,7 @@ const CHAPITRES: Chapitre[] = [
             Règles du jeu
           </p>
         </Seuil>
-        <Seuil dans={dans} a={3000}>
+        <Seuil dans={dans} a={2600}>
           <p className={`text-white/60 ${grand ? 'mt-10 text-3xl' : 'mt-6 text-sm'}`}>
             Tout se joue sur ton écran. On t'explique, la partie démarre juste après.
           </p>
@@ -167,7 +168,7 @@ const CHAPITRES: Chapitre[] = [
             </Seuil>
           ))}
         </div>
-        <Seuil dans={dans} a={3600}>
+        <Seuil dans={dans} a={2800}>
           <p className={`mt-1.5 text-center font-black text-emerald-300 ${grand ? 'text-3xl' : 'text-xs'}`}>
             ✓ Bonne réponse, les points tombent !
           </p>
