@@ -547,6 +547,24 @@ export const SCENARIOS: LabScenario[] = [
       }),
   },
   {
+    cle: 'projo-fin-animee',
+    groupe: 'Projecteur',
+    label: 'Fin de partie (projo, animée)',
+    description: 'La vraie séquence aux vrais timings : cinématique, récompenses, fin. ~60 s en boucle.',
+    state: () =>
+      baseState({
+        status: 'cinematic',
+        cinematic: { step: 0 },
+        standings: PSEUDOS.map((p, i) => ({
+          pseudo: p,
+          position: i + 1,
+          positionChange: 0,
+          device: 'mobile',
+          score: Math.max(1, 62 - i * 3 + (i % 3)),
+        })),
+      }),
+  },
+  {
     cle: 'projo-classement-final',
     groupe: 'Projecteur',
     label: 'Classement final (projo)',

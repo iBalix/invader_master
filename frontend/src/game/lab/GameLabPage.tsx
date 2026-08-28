@@ -215,6 +215,10 @@ export default function GameLabPage() {
 
           {scenario.cle === 'roue' ? (
             <RoueEnBoucle key={runId} />
+          ) : scenario.cle === 'projo-fin-animee' ? (
+            <CadreLarge key={runId}>
+              <FinDePartieAnimee state={state} />
+            </CadreLarge>
           ) : estRegles && chapitre !== null ? (
             gabarit === 'phone' || gabarit === 'mini' ? (
               <CadrePhone key={`${runId}-${chapitre}`} hauteur={HAUTEURS[gabarit]}>
@@ -345,6 +349,66 @@ function CadreLarge({ children }: { children: React.ReactNode }) {
 }
 
 /** la roue seule, qui enchaîne les trois jokers en boucle */
+/**
+ * Rejoue la VRAIE séquence de fin de partie, aux vrais timings serveur :
+ * cinématique (tambour, puis 5e -> 1er, puis classement complet), récompenses
+ * dévoilées une à une, écran de fin. Les fixtures figées n'en montraient que
+ * des instantanés, et la séquence réelle paraissait « vraiment différente ».
+ * Boucle en continu ; « Rejouer la séquence » repart du tambour.
+ */
+const ETAPES_FIN: Array<{ duree: number; patch: Partial<PublicState> }> = [
+  { duree: 3800, patch: { status: 'cinematic', cinematic: { step: 0 } } }, // tambour
+  { duree: 4500, patch: { status: 'cinematic', cinematic: { step: 1 } } }, // 5e
+  { duree: 4500, patch: { status: 'cinematic', cinematic: { step: 2 } } }, // 4e
+  { duree: 4500, patch: { status: 'cinematic', cinematic: { step: 3 } } }, // 3e
+  { duree: 4500, patch: { status: 'cinematic', cinematic: { step: 4 } } }, // 2e
+  { duree: 4500, patch: { status: 'cinematic', cinematic: { step: 5 } } }, // 1er
+  { duree: 7000, patch: { status: 'cinematic', cinematic: { step: 6 } } }, // classement complet
+  ...[1, 2, 3, 4].map((revealed) => ({
+    duree: 6000,
+    patch: {
+      status: 'rewards',
+      rewards: {
+        revealed,
+        fastest: { pseudo: 'Léa', avgMs: 3120 },
+        bestRatio: { pseudo: 'Marco', correct: 18, answered: 20 },
+        bestStrike: { pseudo: 'Sam', strike: 9 },
+        bonnetDane: { pseudo: 'Tom', correct: 3, answered: 19 },
+      },
+    } as Partial<PublicState>,
+  })),
+  {
+    duree: 10000,
+    patch: {
+      status: 'end',
+      endTexts: {
+        winnerText: 'Félicitations à Marco qui remporte un Cocktail signature !',
+        endText: 'Rendez-vous mercredi pour le quiz Séries cultes !',
+      },
+    },
+  },
+];
+
+function FinDePartieAnimee({ state }: { state: PublicState }) {
+  const [etape, setEtape] = useState(0);
+  useEffect(() => {
+    const t = setTimeout(
+      () => setEtape((v) => (v + 1) % ETAPES_FIN.length),
+      ETAPES_FIN[etape].duree,
+    );
+    return () => clearTimeout(t);
+  }, [etape]);
+  const courant = { ...state, ...ETAPES_FIN[etape].patch } as PublicState;
+  return (
+    <div className="game-bg flex h-full w-full flex-col text-white">
+      {/* key = les animations d'entree (anim-pop...) rejouent a chaque etape */}
+      <div key={etape} className="flex min-h-0 flex-1 flex-col">
+        <ProjectorBody state={courant} remaining={null} answeredCount={0} />
+      </div>
+    </div>
+  );
+}
+
 function RoueEnBoucle() {
   const [i, setI] = useState(0);
   const [visible, setVisible] = useState(true);
