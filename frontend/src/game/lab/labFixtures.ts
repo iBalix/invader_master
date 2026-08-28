@@ -133,7 +133,7 @@ export const SCENARIOS: LabScenario[] = [
   {
     cle: 'regles',
     groupe: 'Joueur',
-    label: 'Règles (9 chapitres)',
+    label: 'Règles (titre + 9 chapitres)',
     description: "8 s par chapitre, puis ça se fige sur l'attente.",
     state: () => baseState({ status: 'rules' }),
     you: () => baseYou({}),

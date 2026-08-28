@@ -1,5 +1,5 @@
 /**
- * Écran de règles du quiz/blindtest — séquence animée en 8 chapitres.
+ * Écran de règles du quiz/blindtest — séquence animée : slide titre puis chapitres.
  *
  * MÊME MÉCANIQUE QUE LE TUTORIEL BLACKJACK : tout est cadencé sur
  * `phaseStartedAt` (horloge serveur) et non sur le montage du composant. Une
@@ -25,9 +25,6 @@ import {
 } from '../lib/gameClient';
 
 const CHAPITRE_MS = 8000;
-
-/** nombre de chapitres, pour le selecteur du laboratoire */
-export const NB_CHAPITRES_REGLES = 9;
 
 interface Chapitre {
   cle: string;
@@ -109,6 +106,41 @@ function Etape({
 }
 
 const CHAPITRES: Chapitre[] = [
+  {
+    // Slide TITRE, meme esprit que l'intro du tutoriel blackjack : on pose le
+    // cadre avant d'expliquer quoi que ce soit. Rendu plein ecran dedie dans
+    // le composant (pas de colonne titre/visuel pour celle-ci).
+    cle: 'titre',
+    titre: 'Quiz Invader',
+    phrase: 'Règles du jeu',
+    visuel: (grand, dans) => (
+      <div className="flex flex-col items-center text-center">
+        <Seuil dans={dans} a={200}>
+          <h1
+            className={`anim-title-glow font-black uppercase ${
+              grand ? 'text-8xl tracking-[0.12em]' : 'text-4xl tracking-[0.1em]'
+            }`}
+          >
+            Quiz Invader
+          </h1>
+        </Seuil>
+        <Seuil dans={dans} a={1400}>
+          <p
+            className={`font-black uppercase tracking-[0.35em] text-cyan-300 ${
+              grand ? 'mt-8 text-4xl' : 'mt-4 text-lg'
+            }`}
+          >
+            Règles du jeu
+          </p>
+        </Seuil>
+        <Seuil dans={dans} a={3000}>
+          <p className={`text-white/60 ${grand ? 'mt-10 text-2xl' : 'mt-6 text-sm'}`}>
+            Tout se joue sur ton écran. On t'explique, la partie démarre juste après.
+          </p>
+        </Seuil>
+      </div>
+    ),
+  },
   {
     cle: 'but',
     titre: 'Le but du jeu',
@@ -370,6 +402,9 @@ const CHAPITRES: Chapitre[] = [
   },
 ];
 
+/** nombre de chapitres, pour le selecteur du laboratoire */
+export const NB_CHAPITRES_REGLES = CHAPITRES.length;
+
 export default function QuizRules({
   phaseStartedAt,
   embedded,
@@ -408,15 +443,23 @@ export default function QuizRules({
 
   return (
     <div className={`flex h-full w-full flex-col overflow-hidden ${grand ? 'px-12 py-8' : 'px-4 py-4'}`}>
-      <p
-        className={`shrink-0 text-center font-black uppercase tracking-[0.3em] text-cyan-300 ${
-          grand ? 'text-xl' : 'text-[11px]'
-        }`}
-      >
-        Comment on joue
-      </p>
+      {c.cle !== 'titre' && (
+        <p
+          className={`shrink-0 text-center font-black uppercase tracking-[0.3em] text-cyan-300 ${
+            grand ? 'text-xl' : 'text-[11px]'
+          }`}
+        >
+          Comment on joue
+        </p>
+      )}
 
       {/* key = re-jeu de l'animation d'entree a chaque bascule de chapitre */}
+      {c.cle === 'titre' ? (
+        // slide titre : plein ecran centre, sans colonne titre/visuel
+        <div key={c.cle} className="anim-fade-up flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+          {c.visuel(grand, dansChapitre)}
+        </div>
+      ) : (
       <div
         key={c.cle}
         className={`anim-fade-up flex min-h-0 flex-1 overflow-hidden ${
@@ -441,6 +484,7 @@ export default function QuizRules({
           {c.visuel(grand, dansChapitre)}
         </div>
       </div>
+      )}
 
       {/* barre de progression du chapitre + pastilles, comme le blackjack */}
       <div className={`shrink-0 ${grand ? '' : 'mt-3'}`}>
