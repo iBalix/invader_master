@@ -181,7 +181,10 @@ export class GameAudio {
       this.timerNodes.push(osc);
     };
     mk(freq, gain, 'sine');
-    mk(freq * 2, gain * 0.3, 'triangle');
+    // l'harmonique porte le son sur les enceintes qui ne descendent pas bas :
+    // a 0.3 elle etait trop discrete et le battement passait inapercu
+    mk(freq * 2, gain * 0.5, 'triangle');
+    mk(freq * 3, gain * 0.18, 'triangle');
   }
 
   /**
@@ -214,18 +217,22 @@ export class GameAudio {
     for (let i = 0; i < beats; i++) {
       const left = beats - i;            // secondes encore affichées après ce coup
       const when = t0 + first + i;
+      // Registre : autour de 120 à 210 Hz. Plus bas (le premier essai tapait à
+      // 52-110 Hz) le battement ne passe tout simplement pas sur la diffusion
+      // du bar, on ne l'entend pas. Plus haut, on retombe sur le bip strident
+      // qu'on voulait justement supprimer.
       if (left <= 3) {
         // lumières du bar au rouge : le pouls s'emballe et s'alourdit
-        this.thud(when, 66, 0.42);
-        this.thud(when + 0.17, 52, 0.34);
+        this.thud(when, 124, 0.72);
+        this.thud(when + 0.17, 104, 0.56);
       } else if (left <= 5) {
         // anneau du chrono au rouge : le pouls s'installe
-        this.thud(when, 84, 0.30);
-        this.thud(when + 0.2, 66, 0.2);
+        this.thud(when, 156, 0.56);
+        this.thud(when + 0.2, 128, 0.4);
       } else {
         // croisière : un seul coup mat, de plus en plus présent
         const progress = Math.max(0, Math.min(1, 1 - (left * 1000) / total));
-        this.thud(when, 110, 0.1 + progress * 0.13);
+        this.thud(when, 208, 0.3 + progress * 0.2);
       }
     }
   }
@@ -250,8 +257,8 @@ export class GameAudio {
     for (let i = 0; i < beats; i++) {
       const left = beats - i;
       // 5 -> 1 : la hauteur monte, le volume aussi, mais on reste grave
-      const freq = 132 + (5 - Math.min(5, left)) * 26;
-      this.thud(t0 + first + i, freq, 0.2 + (5 - Math.min(5, left)) * 0.035);
+      const freq = 186 + (5 - Math.min(5, left)) * 34;
+      this.thud(t0 + first + i, freq, 0.38 + (5 - Math.min(5, left)) * 0.05);
     }
   }
 
