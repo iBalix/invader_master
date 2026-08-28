@@ -84,10 +84,13 @@ export default function GameLabPage() {
   }, [scenario.groupe]);
 
   return (
-    <div className="min-h-dvh bg-[#0a0817] text-white">
-      <div className="mx-auto flex max-w-[1500px] flex-col gap-4 px-4 py-5 lg:flex-row">
-        {/* panneau de gauche : scenarios */}
-        <aside className="shrink-0 lg:w-72">
+    // h-dvh + overflow-hidden sur la coque : chaque colonne gere SON propre
+    // defilement. Avant, la page entiere defilait d'un bloc et choisir un
+    // scenario en bas de liste faisait sortir l'apercu de l'ecran.
+    <div className="h-dvh overflow-hidden bg-[#0a0817] text-white">
+      <div className="mx-auto flex h-full max-w-[1500px] flex-col gap-4 px-4 py-5 lg:flex-row">
+        {/* panneau de gauche : scenarios, defilement independant */}
+        <aside className="shrink-0 overflow-y-auto pb-4 lg:h-full lg:w-72">
           <h1 className="font-black uppercase tracking-[0.25em] text-cyan-300">Game Lab</h1>
           <p className="mt-1 text-xs text-white/40">
             Écrans du quiz montés avec des données factices. Aucun impact sur les vraies parties.
@@ -124,7 +127,7 @@ export default function GameLabPage() {
         </aside>
 
         {/* scene */}
-        <main className="min-w-0 flex-1">
+        <main className="min-w-0 flex-1 overflow-y-auto pb-6 lg:h-full">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {GABARITS.map((g) => (
               <button

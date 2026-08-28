@@ -546,6 +546,45 @@ export const SCENARIOS: LabScenario[] = [
         })),
       }),
   },
+  {
+    cle: 'projo-classement-final',
+    groupe: 'Projecteur',
+    label: 'Classement final (projo)',
+    description: 'Fin de cinématique : le classement complet, scores dévoilés.',
+    state: () =>
+      baseState({
+        status: 'cinematic',
+        cinematic: { step: 6 },
+        standings: PSEUDOS.map((p, i) => ({
+          pseudo: p,
+          position: i + 1,
+          positionChange: i === 1 ? 2 : i === 4 ? -1 : 0,
+          device: 'mobile',
+          score: Math.max(1, 62 - i * 3 + (i % 3)),
+        })),
+      }),
+  },
+  {
+    cle: 'projo-fin',
+    groupe: 'Projecteur',
+    label: 'Écran de fin (projo)',
+    description: 'Gagnant, podium et texte de fin, confettis.',
+    state: () =>
+      baseState({
+        status: 'end',
+        endTexts: {
+          winnerText: 'Félicitations à Marco qui remporte un Cocktail signature !',
+          endText: 'Rendez-vous mercredi pour le quiz Séries cultes !',
+        },
+        standings: PSEUDOS.slice(0, 12).map((p, i) => ({
+          pseudo: p,
+          position: i + 1,
+          positionChange: 0,
+          device: 'mobile',
+          score: Math.max(1, 46 - i * 3),
+        })),
+      }),
+  },
 ];
 
 export type { JokerType };
