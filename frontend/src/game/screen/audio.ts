@@ -274,10 +274,16 @@ export class GameAudio {
     this.timerKey = null;
   }
 
-  /** fin de la fenêtre de réponse */
+  /**
+   * Fin de la fenêtre de réponse : un « ding » clair, façon cloche de
+   * comptoir. L'ancien « braaam » descendant (sawtooth + souffle) sonnait
+   * comme une erreur ; ici une note franche qui laisse la révélation arriver.
+   * La partielle à 2,52× (inharmonique, comme une vraie cloche) donne le
+   * timbre métallique sans siffler.
+   */
   lockSting(): void {
-    this.tone(440, 0.4, { type: 'sawtooth', gain: 0.3, slideTo: 180 });
-    this.noise(0.25, { gain: 0.16, lowpass: 1200 });
+    this.tone(1318, 0.9, { type: 'sine', gain: 0.5 });
+    this.tone(1318 * 2.52, 0.45, { type: 'sine', gain: 0.12 });
   }
 
   /** montée de suspense avant les pourcentages */
