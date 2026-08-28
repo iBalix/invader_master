@@ -70,10 +70,19 @@ export function JokerBar({ state, you, sessionRef, playerToken, refresh, onPlaye
   if (!q) return null;
 
   const isQcm = q.type === 'qcm';
-  const played = new Set(you.jokerPlays.map((p) => p.type));
-  // main + jokers deja joues sur CETTE question : un joker joue reste visible
-  // en etat "actif" au lieu de disparaitre de la barre
-  const visibles: JokerType[] = [...you.jokers, ...you.jokerPlays.map((p) => p.type)];
+  const joues = new Set(you.jokerPlays.map((p) => p.type));
+
+  // UN BOUTON PAR EXEMPLAIRE, pas par type. Avec deux 50/50 en main, jouer
+  // l'un marquait les DEUX comme armes : l'etat etait deduit du type. On liste
+  // donc les exemplaires joues (verrouilles) puis ceux encore en main.
+  //
+  // Un exemplaire en main dont le type a deja ete joue cette question reste
+  // affiche mais inactif : le serveur n'accepte qu'un joker de chaque type par
+  // question, il servira au tour suivant.
+  const visibles: Array<{ type: JokerType; joue: boolean }> = [
+    ...you.jokerPlays.map((p) => ({ type: p.type, joue: true })),
+    ...you.jokers.map((t) => ({ type: t, joue: false })),
+  ];
 
   if (visibles.length === 0) {
     return (
@@ -101,11 +110,11 @@ export function JokerBar({ state, you, sessionRef, playerToken, refresh, onPlaye
   return (
     <div className="w-full">
       <div className={`flex w-full items-stretch justify-center gap-2 ${embedded ? 'gap-4' : ''}`}>
-        {visibles.map((type, i) => {
+        {visibles.map(({ type, joue }, i) => {
           const def = JOKER_DEFS[type];
-          const actif = played.has(type);
-          // le 50/50 et l'avis ne s'appliquent qu'a un QCM
-          const inutilisable = !actif && (type === 'fifty' || type === 'audience') && !isQcm;
+          const actif = joue;
+          // hors QCM pour le 50/50 et l'avis, ou meme type deja joue ce tour
+          const inutilisable = !actif && (((type === 'fifty' || type === 'audience') && !isQcm) || joues.has(type));
           return (
             <button
               key={`${type}-${i}`}
@@ -130,7 +139,15 @@ export function JokerBar({ state, you, sessionRef, playerToken, refresh, onPlaye
                 {def.label}
               </span>
               <span className={`mt-0.5 font-semibold uppercase tracking-wider text-white/45 ${embedded ? 'text-xs' : 'text-[9px]'}`}>
-                {busy === type ? '...' : actif ? 'Armé' : inutilisable ? 'QCM seulement' : 'Jouer'}
+                {busy === type
+                  ? '...'
+                  : actif
+                    ? 'Armé'
+                    : joues.has(type)
+                      ? 'Déjà joué'
+                      : inutilisable
+                        ? 'QCM seulement'
+                        : 'Jouer'}
               </span>
             </button>
           );

@@ -104,10 +104,15 @@ publicRoutes.get('/quizzes/:id', async (req, res) => {
     let questions: Record<string, unknown>[] = [];
     if (links && links.length > 0) {
       const ids = links.map((l) => l.question_id);
+      // Bride ancien moteur : cette route publique n'est consommee que par
+      // invader_admin / invader_table, qui ne savent jouer que des QCM. Depuis
+      // migration-040 une question peut etre 'estimation' ou 'free_text' : elle
+      // arrive avec answers: [] et casserait la partie -> on ne la sert pas.
       const { data: qData } = await supabaseAdmin
         .from('questions')
         .select('*')
-        .in('id', ids);
+        .in('id', ids)
+        .eq('type', 'qcm');
 
       if (qData) {
         const posMap = new Map(links.map((l) => [l.question_id, l.position]));

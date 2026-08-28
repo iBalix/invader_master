@@ -263,6 +263,16 @@ export function buildGmState(
         hasImageQ: Boolean(qq.imageQuestionUrl),
         hasImageR: Boolean(qq.imageAnswerUrl),
         helpAnimator: qq.helpAnimator,
+        // LA REPONSE ATTENDUE, quel que soit le type : l'animateur doit
+        // pouvoir la lire a voix haute sans quitter sa liste, et sur une
+        // estimation ou une reponse libre elle n'existe nulle part ailleurs
+        // dans sa console.
+        answer:
+          qq.type === 'estimation'
+            ? String(qq.expectedNumber ?? '')
+            : qq.type === 'free_text'
+              ? (qq.expectedAnswer ?? '')
+              : (qq.answers?.[qq.correctIndex] ?? ''),
         state:
           i < session.current_question_index
             ? 'done'

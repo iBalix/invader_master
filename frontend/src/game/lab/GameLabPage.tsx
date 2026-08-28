@@ -52,6 +52,7 @@ export default function GameLabPage() {
   const [chapitre, setChapitre] = useState<number | null>(null);
 
   const scenario = SCENARIOS.find((s) => s.cle === scenarioCle) ?? SCENARIOS[0];
+  const estRegles = scenario.cle === 'regles' || scenario.cle === 'projo-regles';
   // regeneres a chaque "rejouer" : phaseStartedAt repart de maintenant
   const { state: stateBrut, you } = useMemo(
     () => ({ state: scenario.state(), you: scenario.you?.() ?? null }),
@@ -141,7 +142,7 @@ export default function GameLabPage() {
                 {g.label} <span className="text-[10px] font-normal text-white/40">{g.note}</span>
               </button>
             ))}
-            {scenario.cle === 'regles' && (
+            {estRegles && (
               <span className="flex items-center gap-1 rounded-lg border border-white/10 px-1 py-1">
                 <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-white/40">
                   Chapitre
@@ -211,7 +212,7 @@ export default function GameLabPage() {
 
           {scenario.cle === 'roue' ? (
             <RoueEnBoucle key={runId} />
-          ) : scenario.cle === 'regles' && chapitre !== null ? (
+          ) : estRegles && chapitre !== null ? (
             gabarit === 'phone' || gabarit === 'mini' ? (
               <CadrePhone key={`${runId}-${chapitre}`} hauteur={HAUTEURS[gabarit]}>
                 <div className="game-bg h-full w-full overflow-hidden text-white">
@@ -220,7 +221,11 @@ export default function GameLabPage() {
               </CadrePhone>
             ) : (
               <CadreLarge key={`${runId}-${chapitre}`}>
-                <div className="game-bg h-full w-full overflow-hidden text-white" style={{ zoom: 1.4 }}>
+                {/* zoom 1.4 sur la borne uniquement ; le projecteur rend a 1 */}
+                <div
+                  className="game-bg h-full w-full overflow-hidden text-white"
+                  style={gabarit === 'table' ? { zoom: 1.4 } : undefined}
+                >
                   <QuizRules phaseStartedAt={state.phaseStartedAt} embedded chapitreForce={chapitre} />
                 </div>
               </CadreLarge>

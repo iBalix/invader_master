@@ -86,6 +86,8 @@ interface GmQuestionListItem {
   hasImageQ: boolean;
   hasImageR: boolean;
   helpAnimator: string | null;
+  /** reponse attendue, tous types confondus (l'animateur doit pouvoir la lire) */
+  answer: string;
   state: 'done' | 'current' | 'todo';
 }
 
@@ -902,6 +904,18 @@ function QuestionsPanel({ state }: { state: GmState }) {
                   {qq.helpAnimator && <span className="ml-1 text-indigo-400">💡</span>}
                 </p>
               </button>
+              {/* La reponse attendue est TOUJOURS lisible : sur une estimation
+                  ou une reponse libre, elle n'apparaissait nulle part dans la
+                  liste, et l'animateur ne pouvait pas la donner de vive voix. */}
+              {qq.answer && (
+                <p
+                  className={`mt-1 truncate text-xs font-bold ${
+                    estCourante ? 'text-emerald-300' : 'text-emerald-400/60'
+                  }`}
+                >
+                  ✔ {qq.answer}
+                </p>
+              )}
               {helpVisible && qq.helpAnimator && (
                 <p className="mt-1 rounded-lg bg-indigo-400/10 px-2 py-1.5 text-xs text-indigo-200">
                   {qq.helpAnimator}

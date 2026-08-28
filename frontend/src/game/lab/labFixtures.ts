@@ -111,9 +111,9 @@ function revealBase(): RevealData {
     correctIndex: 1,
     correctAnswer: 'NES',
     fastestTop: [
-      { pseudo: 'Léa', elapsedMs: 1840 },
-      { pseudo: 'Toi', elapsedMs: 2120 },
-      { pseudo: 'Max', elapsedMs: 2480 },
+      { pseudo: 'Léa', elapsedMs: 1840, bonus: 2 },
+      { pseudo: 'Toi', elapsedMs: 2120, bonus: 1 },
+      { pseudo: 'Max', elapsedMs: 2480, bonus: 1 },
     ],
     fastest: 'Léa',
     special: null,
@@ -133,8 +133,8 @@ export const SCENARIOS: LabScenario[] = [
   {
     cle: 'regles',
     groupe: 'Joueur',
-    label: 'Règles (8 chapitres)',
-    description: 'La séquence boucle, chaque chapitre dure 8 s.',
+    label: 'Règles (9 chapitres)',
+    description: "8 s par chapitre, puis ça se fige sur l'attente.",
     state: () => baseState({ status: 'rules' }),
     you: () => baseYou({}),
   },
@@ -227,9 +227,9 @@ export const SCENARIOS: LabScenario[] = [
         streak: 5, streakBefore: 4, streakBonus: true, value: 1,
       };
       r.fastestTop = [
-        { pseudo: 'Toi', elapsedMs: 1710 },
-        { pseudo: 'Léa', elapsedMs: 1840 },
-        { pseudo: 'Max', elapsedMs: 2480 },
+        { pseudo: 'Toi', elapsedMs: 1710, bonus: 2 },
+        { pseudo: 'Léa', elapsedMs: 1840, bonus: 1 },
+        { pseudo: 'Max', elapsedMs: 2480, bonus: 1 },
       ];
       r.fastest = 'Toi';
       return baseState({ status: 'reveal', question: QUESTION_QCM, reveal: r });
@@ -314,6 +314,33 @@ export const SCENARIOS: LabScenario[] = [
   },
   // --- projecteur ---
   {
+    cle: 'projo-regles',
+    groupe: 'Projecteur',
+    label: 'Règles (projo)',
+    description: 'La même séquence que les joueurs, en grand.',
+    state: () => baseState({ status: 'rules' }),
+  },
+  {
+    cle: 'projo-lobby',
+    groupe: 'Projecteur',
+    label: "Salle d'attente (projo)",
+    description: 'Deux étapes empilées, un seul QR.',
+    state: () =>
+      baseState({
+        status: 'lobby',
+        currentQuestionIndex: -1,
+        config: {
+          announceMs: 8000,
+          questionMs: 23000,
+          showScores: true,
+          wifiSsid: 'INVADER BAR',
+          wifiPassword: 'invader2026',
+          pauseText: '',
+          musicUrl: null,
+        },
+      }),
+  },
+  {
     cle: 'projo-annonce',
     groupe: 'Projecteur',
     label: 'Annonce (projo)',
@@ -336,6 +363,59 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Révélation (projo)',
     description: 'Barres → réponse → podium ⚡ → podium 🔥.',
     state: () => baseState({ status: 'reveal', question: QUESTION_QCM, reveal: revealBase() }),
+  },
+  {
+    cle: 'projo-reveal-image',
+    groupe: 'Projecteur',
+    label: 'Révélation + image (projo)',
+    description: "L'image occupe la place des podiums, puis s'efface.",
+    state: () => {
+      const r = revealBase();
+      return baseState({
+        status: 'reveal',
+        question: {
+          ...QUESTION_QCM,
+          question:
+            'Dans quel jeu culte de 1998 incarne-t-on un héros muet armé d’un pied-de-biche, coincé dans un complexe de recherche ?',
+          imageAnswerUrl:
+            'data:image/svg+xml;utf8,' +
+            encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#1b1040"/><text x="50%" y="50%" fill="#7ef" font-size="42" font-family="sans-serif" text-anchor="middle">IMAGE DE RÉPONSE</text></svg>',
+            ),
+        },
+        reveal: r,
+      });
+    },
+  },
+  {
+    cle: 'projo-reveal-estimation',
+    groupe: 'Projecteur',
+    label: 'Révélation estimation (projo)',
+    description: 'Pas de bonus vitesse : les séries prennent tout.',
+    state: () => {
+      const r = revealBase();
+      r.correctIndex = undefined;
+      r.correctAnswer = undefined;
+      r.expectedNumber = 1998;
+      r.percents = undefined;
+      r.fastestTop = [];
+      r.bestEstimations = [
+        { pseudo: 'Léa', value: 1998, gap: 0, points: 3 },
+        { pseudo: 'Sam', value: 1996, gap: 2, points: 2 },
+        { pseudo: 'Nina', value: 2001, gap: 3, points: 1 },
+      ];
+      return baseState({
+        status: 'reveal',
+        question: {
+          ...QUESTION_QCM,
+          type: 'estimation',
+          answers: undefined,
+          question: 'En quelle année est sortie la PlayStation 1 au Japon ?',
+          musicUrl: 'https://exemple.invalid/extrait.mp3',
+        },
+        reveal: r,
+      });
+    },
   },
   {
     cle: 'projo-classement-moyen',

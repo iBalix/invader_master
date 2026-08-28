@@ -20,6 +20,7 @@ import {
   JOKER_DEFS,
   JOKER_TYPES,
   serverNow,
+  SPEED_BONUS,
   STREAK_BONUS_FROM,
 } from '../lib/gameClient';
 
@@ -111,7 +112,7 @@ const CHAPITRES: Chapitre[] = [
   {
     cle: 'but',
     titre: 'Le but du jeu',
-    phrase: 'Réponds juste, réponds vite, grimpe au classement. Ton téléphone est ta manette.',
+    phrase: 'Réponds juste, réponds vite, grimpe au classement. Ton écran est ta manette.',
     visuel: (grand, dans) => (
       <div className={`w-full ${grand ? 'max-w-2xl' : ''}`}>
         <Seuil dans={dans} a={200}>
@@ -189,7 +190,7 @@ const CHAPITRES: Chapitre[] = [
     titre: 'Difficulté et points',
     phrase: 'La couleur annonce la mise. Les estimations paient selon ta précision.',
     visuel: (grand, dans) => (
-      <div className={`flex flex-wrap items-center justify-center ${grand ? 'gap-6' : 'gap-3'}`}>
+      <div className={`flex w-full max-w-full flex-wrap items-center justify-center ${grand ? 'gap-6' : 'gap-3'}`}>
         {[
           { l: 'Facile · 1 pt', ton: 'border-emerald-400/70 bg-emerald-400/15 text-emerald-200' },
           { l: 'Moyen · 2 pts', ton: 'border-amber-400/70 bg-amber-400/15 text-amber-200' },
@@ -207,21 +208,24 @@ const CHAPITRES: Chapitre[] = [
   {
     cle: 'rapidite',
     titre: 'Le podium de rapidité',
-    phrase: 'Sur les QCM, les 3 bons répondeurs les plus rapides gagnent chacun +1 point.',
+    phrase: `Sur les QCM, le plus rapide des bons répondeurs prend +${SPEED_BONUS[0]} points, les 2e et 3e +${SPEED_BONUS[1]}.`,
     visuel: (grand, dans) => (
       <div className={`flex items-end justify-center ${grand ? 'gap-8' : 'gap-4'}`}>
         {[
-          { m: '🥈', h: grand ? 'h-24' : 'h-14', a: 900 },
-          { m: '🥇', h: grand ? 'h-32' : 'h-20', a: 400 },
-          { m: '🥉', h: grand ? 'h-20' : 'h-11', a: 1400 },
+          { m: '🥈', h: grand ? 'h-24' : 'h-14', a: 900, pts: SPEED_BONUS[1] },
+          { m: '🥇', h: grand ? 'h-32' : 'h-20', a: 400, pts: SPEED_BONUS[0] },
+          { m: '🥉', h: grand ? 'h-20' : 'h-11', a: 1400, pts: SPEED_BONUS[2] },
         ].map((p, i) => (
           <Seuil key={i} dans={dans} a={p.a}>
             <div className="flex flex-col items-center">
               <span className={grand ? 'text-5xl' : 'text-3xl'}>{p.m}</span>
               <div
-                className={`mt-2 w-16 rounded-t-xl border-2 border-b-0 border-amber-400/60 bg-amber-400/15 ${p.h} ${grand ? 'w-24' : ''}`}
-              />
-              <span className={`mt-1 font-black text-amber-300 ${grand ? 'text-2xl' : 'text-sm'}`}>+1</span>
+                className={`mt-2 flex w-16 items-center justify-center rounded-t-xl border-2 border-b-0 border-amber-400/60 bg-amber-400/15 ${p.h} ${grand ? 'w-24' : ''}`}
+              >
+                <span className={`font-black text-amber-300 ${grand ? 'text-4xl' : 'text-xl'}`}>
+                  +{p.pts}
+                </span>
+              </div>
             </div>
           </Seuil>
         ))}
@@ -233,7 +237,7 @@ const CHAPITRES: Chapitre[] = [
     titre: 'La série',
     phrase: `${STREAK_BONUS_FROM} bonnes réponses d'affilée, et chaque bonne réponse paie +1. Une erreur, et tout repart de zéro.`,
     visuel: (grand, dans) => (
-      <div className="flex flex-col items-center">
+      <div className="flex w-full max-w-full flex-col items-center">
         <div className={`flex items-center ${grand ? 'gap-3' : 'gap-1.5'}`}>
           {Array.from({ length: STREAK_BONUS_FROM }, (_, i) => (
             <Seuil key={i} dans={dans} a={300 + i * 420}>
@@ -297,7 +301,7 @@ const CHAPITRES: Chapitre[] = [
     titre: 'Comment on les gagne',
     phrase: 'Chaque bonne réponse peut déclencher un tirage. Plus tu es bas au classement, plus tu as de chances !',
     visuel: (grand, dans) => (
-      <div className="flex flex-col items-center">
+      <div className="flex w-full max-w-full flex-col items-center">
         {/* mini-roue décorative : trois cartes, celle du centre en avant */}
         <div className={`flex items-center ${grand ? 'gap-4' : 'gap-2'}`}>
           {JOKER_TYPES.map((t, i) => {
@@ -336,9 +340,9 @@ const CHAPITRES: Chapitre[] = [
   {
     cle: 'pret',
     titre: 'Prêt ?',
-    phrase: "Garde ton téléphone en main, l'animateur lance la première question.",
+    phrase: "Tu sais tout. L'animateur lance la partie dans un instant, reste sur cet écran.",
     visuel: (grand, dans) => (
-      <div className="flex flex-col items-center">
+      <div className="flex w-full max-w-full flex-col items-center">
         <Seuil dans={dans} a={300}>
           <div className={`anim-glow flex items-center justify-center rounded-full border-4 border-cyan-300/70 bg-cyan-400/10 ${grand ? 'h-40 w-40' : 'h-24 w-24'}`}>
             <span className={grand ? 'text-7xl' : 'text-4xl'}>🚀</span>
@@ -348,6 +352,18 @@ const CHAPITRES: Chapitre[] = [
           <p className={`mt-5 font-black uppercase tracking-widest text-cyan-200 ${grand ? 'text-3xl' : 'text-lg'}`}>
             Que le meilleur gagne !
           </p>
+        </Seuil>
+        {/* trois points qui respirent : on attend, et ca se voit */}
+        <Seuil dans={dans} a={1500}>
+          <div className={`flex items-center justify-center gap-2 ${grand ? 'mt-6' : 'mt-4'}`}>
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className={`anim-pulse-soft rounded-full bg-cyan-300/70 ${grand ? 'h-4 w-4' : 'h-2.5 w-2.5'}`}
+                style={{ animationDelay: `${i * 0.22}s` }}
+              />
+            ))}
+          </div>
         </Seuil>
       </div>
     ),
@@ -374,11 +390,21 @@ export default function QuizRules({
   }, []);
 
   const ecoule = phaseStartedAt === null ? 0 : Math.max(0, serverNow() - phaseStartedAt);
-  const naturel = Math.floor(ecoule / CHAPITRE_MS) % CHAPITRES.length;
+  // PAS DE BOUCLE : au dernier chapitre on s'arrete et on attend l'animateur.
+  // Une boucle infinie donnait l'impression que rien ne se passait ; le joueur
+  // doit savoir qu'il a tout lu et qu'il n'attend plus que le lancement.
+  const naturel = Math.min(Math.floor(ecoule / CHAPITRE_MS), CHAPITRES.length - 1);
   const index = chapitreForce === undefined ? naturel : chapitreForce % CHAPITRES.length;
-  // chapitre fige : on garde l'avancement interne pour voir les sous-etapes
-  const dansChapitre = chapitreForce === undefined ? ecoule % CHAPITRE_MS : Math.min(CHAPITRE_MS - 1, ecoule % CHAPITRE_MS);
+  // Temps ecoule DANS le chapitre courant. Sur le dernier il continue de
+  // croitre au lieu de repartir a zero : sans ca, les elements deja apparus
+  // disparaitraient toutes les 8 s en clignotant.
+  const dansNaturel = ecoule - naturel * CHAPITRE_MS;
+  // Labo : un chapitre choisi s'affiche dans son etat FINAL, tous les seuils
+  // franchis. C'est ce qu'on veut pour regler une mise en page ; l'animation
+  // se regarde en mode « auto ».
+  const dansChapitre = chapitreForce === undefined ? dansNaturel : CHAPITRE_MS;
   const c = CHAPITRES[index];
+  const dernier = index === CHAPITRES.length - 1;
 
   return (
     <div className={`flex h-full w-full flex-col overflow-hidden ${grand ? 'px-12 py-8' : 'px-4 py-4'}`}>
@@ -403,18 +429,34 @@ export default function QuizRules({
             {c.phrase}
           </p>
         </div>
-        {/* seule zone qui cede quand l'ecran est court : le visuel */}
-        <div className={`flex min-h-0 items-center justify-center overflow-hidden ${grand ? 'flex-1' : 'w-full flex-1'}`}>
+        {/* Seule zone qui cede quand l'ecran est court : le visuel.
+            min-w-0 IMPERATIF : sans lui, un enfant plus large que la colonne
+            (une phrase, une rangee de cartes) elargit la zone au lieu d'y
+            tenir, et le contenu debordait sous le bloc titre. */}
+        <div
+          className={`flex min-h-0 min-w-0 items-center justify-center overflow-hidden ${
+            grand ? 'h-full flex-1' : 'w-full flex-1'
+          }`}
+        >
           {c.visuel(grand, dansChapitre)}
         </div>
       </div>
 
       {/* barre de progression du chapitre + pastilles, comme le blackjack */}
       <div className={`shrink-0 ${grand ? '' : 'mt-3'}`}>
+        {dernier && (
+          <p
+            className={`mb-2 text-center font-bold uppercase tracking-[0.25em] text-cyan-300/70 ${
+              grand ? 'text-xl' : 'text-[11px]'
+            }`}
+          >
+            En attente de l'animateur
+          </p>
+        )}
         <div className={`mx-auto overflow-hidden rounded-full bg-white/10 ${grand ? 'h-1.5 w-72' : 'h-1 w-40'}`}>
           <div
             className="h-full rounded-full bg-cyan-300/70"
-            style={{ width: `${(dansChapitre / CHAPITRE_MS) * 100}%` }}
+            style={{ width: `${Math.min(1, dansChapitre / CHAPITRE_MS) * 100}%` }}
           />
         </div>
         <div className={`flex items-center justify-center gap-2 ${grand ? 'mt-3' : 'mt-2'}`}>

@@ -21,14 +21,15 @@ import {
   QrCanvas,
   SPECIAL_LABELS,
   TimerRing,
+  mediaLabel,
   TYPE_LABELS,
-  wifiQrValue,
   YoutubeClip,
 } from '../ui/bits';
 import { gameAudio } from './audio';
 import { useSansZoom } from '../../hooks/useSansZoom';
-import { REVEAL_BARRES_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS, REVEAL_SERIE_MS, serverNow, STREAK_BONUS_FROM } from '../lib/gameClient';
+import { REVEAL_BARRES_MS, REVEAL_IMAGE_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS, REVEAL_SERIE_MS, serverNow, SPEED_BONUS } from '../lib/gameClient';
 import { BattleProjectorBody } from './BattleScreens';
+import QuizRules from '../player/QuizRules';
 import '../game.css';
 
 export function playUrl(joinCode: string): string {
@@ -167,7 +168,7 @@ export default function ScreenApp() {
 
 function IdleScreen({ hostname }: { hostname: string }) {
   return (
-    <div className="game-bg flex min-h-dvh flex-col items-center justify-center overflow-hidden text-white">
+    <div className="game-bg flex h-dvh flex-col items-center justify-center overflow-hidden text-white">
       <h1 className="anim-title-glow text-6xl font-black tracking-[0.3em]">INVADER</h1>
       <p className="mt-4 text-white/30">{hostname}</p>
     </div>
@@ -176,7 +177,7 @@ function IdleScreen({ hostname }: { hostname: string }) {
 
 function BarScreen({ state }: { state: PublicState }) {
   return (
-    <div className="game-bg flex min-h-dvh flex-col items-center justify-center gap-8 overflow-hidden px-8 text-center text-white">
+    <div className="game-bg flex h-dvh flex-col items-center justify-center gap-8 overflow-hidden px-8 text-center text-white">
       <p className="anim-pop rounded-full border border-cyan-400/40 bg-cyan-400/10 px-6 py-2 text-xl font-bold uppercase tracking-widest text-cyan-300">
         🎮 Partie en cours
       </p>
@@ -319,7 +320,7 @@ function ProjectorScreen({
   }, [remaining, state.status]);
 
   return (
-    <div className="game-bg relative flex min-h-dvh flex-col overflow-hidden text-white">
+    <div className="game-bg relative flex h-dvh flex-col overflow-hidden text-white">
       {!soundOn && (
         <button
           type="button"
@@ -397,7 +398,7 @@ export function ProjectorBody({
     case 'lobby':
       return <LobbyProjo state={state} />;
     case 'rules':
-      return <RulesProjo />;
+      return <RulesProjo state={state} />;
     case 'announce':
       return <AnnounceProjo state={state} remaining={remaining} />;
     case 'question':
@@ -443,31 +444,47 @@ export function LobbyProjo({ state }: { state: PublicState }) {
       <h1 className="anim-title-glow mb-10 mt-2 text-balance text-center text-6xl font-black">
         {state.quizName}
       </h1>
-      <div className="grid w-full max-w-5xl grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="anim-fade-up rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-          <p className="mb-1 text-xl font-black text-cyan-300">ÉTAPE 1</p>
-          <h2 className="mb-4 text-3xl font-bold">Connecte-toi au WiFi</h2>
-          <div className="flex justify-center"><QrCanvas value={wifiQrValue(state.config.wifiSsid, state.config.wifiPassword)} size={220} /></div>
-          <p className="mt-4 text-xl text-white/70">
-            Scanne, ou choisis le réseau{' '}
-            <span className="font-black text-white">{state.config.wifiSsid}</span>
+      {/* Deux etapes EMPILEES, un seul QR. Le QR wifi d'avant faisait deux
+          codes cote a cote sur le mur : la salle scannait l'un pour l'autre et
+          n'arrivait nulle part. Le wifi se lit et se tape, le QR sert a jouer. */}
+      <div className="flex w-full max-w-4xl flex-col gap-6">
+        <div className="anim-fade-up flex items-center gap-8 rounded-3xl border border-white/10 bg-white/5 px-10 py-7">
+          <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-cyan-400/60 bg-cyan-400/10 text-4xl font-black text-cyan-300">
+            1
+          </span>
+          <div className="min-w-0 text-left">
+            <h2 className="text-3xl font-bold">Connecte-toi au WiFi</h2>
+            <p className="mt-2 text-4xl font-black text-cyan-300">{state.config.wifiSsid}</p>
             {state.config.wifiPassword && (
-              <>
-                <br />
+              <p className="mt-1 text-2xl text-white/70">
                 mot de passe <span className="font-black text-white">{state.config.wifiPassword}</span>
-              </>
+              </p>
             )}
-          </p>
+          </div>
         </div>
-        <div className="anim-fade-up rounded-3xl border border-white/10 bg-white/5 p-8 text-center" style={{ animationDelay: '0.15s' }}>
-          <p className="mb-1 text-xl font-black text-violet-300">ÉTAPE 2</p>
-          <h2 className="mb-4 text-3xl font-bold">Scanne pour jouer</h2>
-          <div className="flex justify-center"><QrCanvas value={playUrl(state.joinCode)} size={220} /></div>
-          <p className="mt-4 text-xl text-white/70">
-            Choisis ton pseudo d'équipe et c'est parti !
-          </p>
+
+        <div
+          className="anim-fade-up flex items-center gap-8 rounded-3xl border-2 border-violet-400/40 bg-violet-500/10 px-10 py-7"
+          style={{ animationDelay: '0.15s' }}
+        >
+          <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-violet-400/60 bg-violet-400/10 text-4xl font-black text-violet-300">
+            2
+          </span>
+          <div className="min-w-0 flex-1 text-left">
+            <h2 className="text-3xl font-bold">Scanne pour jouer</h2>
+            <p className="mt-2 text-2xl text-white/70">
+              Choisis ton pseudo d'équipe et c'est parti !
+            </p>
+            <p className="mt-2 text-xl text-white/40">
+              ou {playUrl(state.joinCode).replace(/^https?:\/\//, '')}
+            </p>
+          </div>
+          <div className="shrink-0">
+            <QrCanvas value={playUrl(state.joinCode)} size={230} />
+          </div>
         </div>
       </div>
+
       <div className="anim-pop mt-10 rounded-full border border-white/15 bg-white/5 px-8 py-3 text-2xl">
         <span className="font-black text-cyan-300 tabular-nums">{state.playerCount}</span>
         <span className="text-white/60"> joueur{state.playerCount > 1 ? 's' : ''} connecté{state.playerCount > 1 ? 's' : ''}</span>
@@ -481,31 +498,21 @@ export function LobbyProjo({ state }: { state: PublicState }) {
   );
 }
 
-function RulesProjo() {
-  const rules = [
-    { emoji: '📱', text: 'Réponds sur ton téléphone avant la fin du temps' },
-    { emoji: '⭐', text: 'Chaque question annonce ses points : Facile 1, Moyen 2, Difficile 3' },
-    { emoji: '⚡', text: 'Les 3 plus rapides des bons répondeurs gagnent +1 point (QCM)' },
-    { emoji: '🔥', text: 'Série : à partir de 5 bonnes réponses d\'affilée, chaque bonne réponse rapporte +1' },
-    { emoji: '🃏', text: 'Des JOKERS à gagner en jouant, à jouer AVANT la question : All-In (×3 ou perte), Avis du public, 50/50' },
-    { emoji: '🏆', text: 'Classement final en cinématique... et des récompenses à gagner !' },
-  ];
+/**
+ * Regles du projecteur : LA MEME SEQUENCE que les joueurs, en grand.
+ *
+ * Avant, le mur affichait une liste statique pendant que les telephones
+ * jouaient une sequence animee : deux jeux de regles a maintenir, et deux
+ * discours differents dans la meme salle. Tout est cadence sur phaseStartedAt,
+ * donc le mur et les joueurs tournent la meme page au meme instant.
+ */
+function RulesProjo({ state }: { state: PublicState }) {
   return (
-    <FullCenter>
-      <h1 className="mb-12 text-6xl font-black uppercase tracking-wider">Les règles</h1>
-      <div className="flex max-w-4xl flex-col gap-6">
-        {rules.map((r, i) => (
-          <div key={i} className="anim-fade-up flex items-center gap-6 rounded-2xl border border-white/10 bg-white/5 px-8 py-5" style={{ animationDelay: `${i * 0.12}s` }}>
-            <span className="text-5xl">{r.emoji}</span>
-            <span className="text-2xl font-semibold">{r.text}</span>
-          </div>
-        ))}
-      </div>
-    </FullCenter>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <QuizRules phaseStartedAt={state.phaseStartedAt} embedded />
+    </div>
   );
 }
-
-// --- Annonce -----------------------------------------------------------------
 
 function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: number | null }) {
   const q = state.question;
@@ -526,6 +533,11 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
         <span className="rounded-full border border-white/15 bg-white/5 px-6 py-2 text-2xl text-white/70">
           {TYPE_LABELS[q.type]}
         </span>
+        {mediaLabel(q) && (
+          <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-6 py-2 text-2xl font-bold uppercase text-cyan-300">
+            {mediaLabel(q)}
+          </span>
+        )}
       </div>
       {special && (
         <div className="anim-pop mt-8 rounded-2xl border-2 border-amber-400/60 bg-amber-400/15 px-10 py-5 text-4xl font-black text-amber-300">
@@ -617,7 +629,7 @@ function QuestionProjo({
             <div className="col-span-2 text-center">
               <div className="text-7xl">{q.type === 'estimation' ? '🔢' : '⌨️'}</div>
               <p className="mt-4 text-3xl font-bold text-white/70">
-                {q.type === 'estimation' ? 'Donne ton estimation sur ton téléphone !' : 'Tape ta réponse sur ton téléphone !'}
+                {q.type === 'estimation' ? 'Donne ton estimation sur ton écran !' : 'Tape ta réponse sur ton écran !'}
               </p>
             </div>
           )}
@@ -764,8 +776,19 @@ function RevealProjo({ state }: { state: PublicState }) {
 
   const ecoule = maintenant - (state.phaseStartedAt ?? maintenant);
   const devoilee = ecoule >= REVEAL_REPONSE_MS;
-  const rapideDevoile = ecoule >= REVEAL_RAPIDE_MS;
-  const serieDevoilee = ecoule >= REVEAL_SERIE_MS;
+
+  // IMAGE DE REPONSE : elle prend TOUTE la place des podiums pendant quelques
+  // secondes, puis s'efface pour leur rendre la main. Avant, elle s'ajoutait
+  // au-dessus d'eux et poussait la page hors de l'ecran : le projecteur du bar
+  // se retrouvait avec une barre de defilement verticale.
+  const imageReponse = state.question?.imageAnswerUrl ?? null;
+  const finImage = REVEAL_REPONSE_MS + REVEAL_IMAGE_MS;
+  const imageVisible = Boolean(imageReponse) && ecoule >= REVEAL_REPONSE_MS && ecoule < finImage;
+  // les podiums attendent la fin de l'image quand il y en a une
+  const tRapide = imageReponse ? finImage + 200 : REVEAL_RAPIDE_MS;
+  const tSerie = imageReponse ? finImage + 2600 : REVEAL_SERIE_MS;
+  const rapideDevoile = ecoule >= tRapide;
+  const serieDevoilee = ecoule >= tSerie;
 
   if (!q || !reveal) return null;
   if (reveal.cancelled) {
@@ -785,14 +808,23 @@ function RevealProjo({ state }: { state: PublicState }) {
   // Top 3 des series EN COURS, calcule depuis les resultats (aucun aller-retour
   // serveur : reveal.results porte deja le strike de chacun apres la question).
   // Seuil a 2 : une serie de 1 n'est pas une serie.
-  const serieTop = Object.entries(reveal.results)
-    .filter(([, r]) => (r.streak ?? 0) >= 2)
-    .sort((a, b) => (b[1].streak ?? 0) - (a[1].streak ?? 0))
+  //
+  // Seuil a 1 et non 2 : des la premiere question, ceux qui ont trouve sont en
+  // serie de 1 et doivent apparaitre, sinon le podium reste vide toute la
+  // premiere manche. L'ordre entre ex-aequo est arbitraire et on ne cherche pas
+  // a les departager : on annonce simplement combien d'autres joueurs avaient
+  // le meme droit d'y figurer.
+  const enSerie = Object.entries(reveal.results)
+    .filter(([, r]) => (r.streak ?? 0) >= 1)
+    .sort((a, b) => (b[1].streak ?? 0) - (a[1].streak ?? 0));
+  const serieTop = enSerie
     .slice(0, 3)
     .map(([pseudo, r]) => ({ pseudo, streak: r.streak ?? 0, bonus: Boolean(r.streakBonus) }));
+  const seuilPodium = serieTop[serieTop.length - 1]?.streak ?? 0;
+  const exAequo = enSerie.filter(([, r]) => (r.streak ?? 0) >= seuilPodium).length - serieTop.length;
 
   return (
-    <div className="flex flex-1 flex-col px-12 py-10">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-12 py-8">
       <div className="mb-6 shrink-0">
         <h1 className="text-balance text-4xl font-black">{q.question}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -808,11 +840,16 @@ function RevealProjo({ state }: { state: PublicState }) {
           <span className="rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xl font-bold text-white/50">
             {TYPE_LABELS[q.type]}
           </span>
+          {mediaLabel(q) && (
+            <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-1.5 text-xl font-bold uppercase text-cyan-300">
+              {mediaLabel(q)}
+            </span>
+          )}
         </div>
       </div>
 
       {q.type === 'qcm' && (
-        <div className="grid flex-1 content-center gap-4">
+        <div className="grid min-h-0 flex-1 content-center gap-3 overflow-hidden">
           {(q.answers ?? []).map((a, i) => (
             <LigneReponseProjo
               key={i}
@@ -829,7 +866,7 @@ function RevealProjo({ state }: { state: PublicState }) {
       )}
 
       {q.type === 'estimation' && (
-        <div className="flex flex-1 flex-col items-center justify-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden">
           <p className="text-2xl uppercase tracking-widest text-white/40">La bonne réponse était</p>
           <p className="anim-pop my-6 text-8xl font-black text-emerald-300 tabular-nums">{reveal.expectedNumber}</p>
           <div className="mt-4 w-full max-w-2xl">
@@ -845,7 +882,7 @@ function RevealProjo({ state }: { state: PublicState }) {
       )}
 
       {q.type === 'free_text' && (
-        <div className="flex flex-1 flex-col items-center justify-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden">
           <p className="text-2xl uppercase tracking-widest text-white/40">La bonne réponse était</p>
           <p className="anim-pop my-6 text-balance text-center text-6xl font-black text-emerald-300">{reveal.expectedAnswer}</p>
           <p className="text-3xl text-white/70">
@@ -857,26 +894,44 @@ function RevealProjo({ state }: { state: PublicState }) {
         </div>
       )}
 
-      {q.imageQuestionUrl && devoilee && state.question?.imageAnswerUrl && (
-        <div className="flex justify-center"><img src={state.question.imageAnswerUrl} alt="" className="max-h-[30vh] rounded-2xl object-contain" /></div>
-      )}
-
-      {/* Deux podiums, devoiles l'un apres l'autre : d'abord la vitesse, puis
-          les series en cours. Chacun monte du 3e vers le 1er, le 1er arrive en
-          dernier et reste le plus gros. */}
-      <div className="mt-4 grid min-h-[300px] shrink-0 grid-cols-2 items-end gap-8">
+      {/* Zone basse : l'image de reponse OU les deux podiums, jamais les deux a
+          la fois. Hauteur fixe, donc rien ne pousse et rien ne defile. */}
+      {imageVisible && imageReponse ? (
+        <div className="anim-pop mt-4 flex h-[430px] shrink-0 items-center justify-center">
+          <img
+            src={imageReponse}
+            alt=""
+            className="max-h-full max-w-full rounded-3xl border-2 border-white/15 object-contain"
+          />
+        </div>
+      ) : (
+      /* Deux podiums, devoiles l'un apres l'autre : d'abord la vitesse, puis
+         les series en cours. Chacun monte du 3e vers le 1er, le 1er arrive en
+         dernier et reste le plus gros. */
+      /* Hors QCM, aucun bonus de rapidite n'est attribue (cf. scoring) : le
+         podium des plus rapides n'aurait rien a montrer, les series prennent
+         toute la largeur. */
+      <div
+        className={`mt-4 grid h-[430px] shrink-0 items-end gap-8 ${
+          q.type === 'qcm' ? 'grid-cols-2' : 'grid-cols-1'
+        }`}
+      >
+        {q.type === 'qcm' && (
         <PodiumProjo
           titre="⚡ Les plus rapides"
-          recompense="+1 point chacun"
+          recompense={`+${SPEED_BONUS[0]} pour le 1er · +${SPEED_BONUS[1]} ensuite`}
           visible={rapideDevoile}
           ton="amber"
-          entrees={(reveal.fastestTop ?? []).map((f) => ({
+          entrees={(reveal.fastestTop ?? []).map((f, i) => ({
             pseudo: f.pseudo,
             valeur: (f.elapsedMs / 1000).toFixed(2),
             unite: 'secondes',
+            note: `+${f.bonus ?? SPEED_BONUS[i] ?? 1} PT`,
+            fort: i === 0,
           }))}
           vide="Personne n'a trouvé"
         />
+        )}
         <PodiumProjo
           titre="🔥 Les plus grosses séries"
           recompense="séries en cours"
@@ -884,16 +939,17 @@ function RevealProjo({ state }: { state: PublicState }) {
           ton="flame"
           entrees={serieTop.map((x) => ({
             pseudo: x.pseudo,
-            // le chiffre seul : « series en cours » est deja dit en en-tete
+            // le chiffre seul : « series en cours » est deja dit en en-tete, et
+            // un decompte vers le bonus dans chaque tube faisait trop de texte
             valeur: String(x.streak),
-            // remplissage du tube : le chemin parcouru vers le seuil de bonus
-            jauge: Math.min(1, x.streak / STREAK_BONUS_FROM),
-            note: x.bonus ? '🔥 +1 PT' : `+${STREAK_BONUS_FROM - x.streak} pour le bonus`,
+            note: x.bonus ? '🔥 +1 PT' : undefined,
             fort: x.bonus,
           }))}
+          surplus={exAequo}
           vide="Aucune série en cours"
         />
       </div>
+      )}
 
       <div className="mt-3 flex min-h-[52px] shrink-0 flex-wrap items-center justify-center gap-4">
         {rapideDevoile && allInWinners.length > 0 && (
@@ -937,6 +993,7 @@ function PodiumProjo({
   visible,
   ton,
   vide,
+  surplus = 0,
 }: {
   titre: string;
   recompense: string;
@@ -945,12 +1002,13 @@ function PodiumProjo({
     valeur: string;
     unite?: string;
     note?: string;
-    jauge?: number;
     fort?: boolean;
   }>;
   visible: boolean;
   ton: 'amber' | 'flame';
   vide: string;
+  /** joueurs a egalite avec le dernier du podium, annonces sous les marches */
+  surplus?: number;
 }) {
   const palette =
     ton === 'amber'
@@ -960,7 +1018,6 @@ function PodiumProjo({
           texte: 'text-amber-300',
           doux: 'text-amber-200/70',
           marche: 'border-amber-400/60 bg-amber-400/15',
-          remplissage: 'rgba(255, 176, 32, 0.35)',
           lueur: 'rgba(255, 176, 32, 0.5)',
           ruban: 'border-amber-300/70 bg-amber-400/25 text-amber-100',
         }
@@ -970,14 +1027,13 @@ function PodiumProjo({
           texte: 'text-orange-300',
           doux: 'text-orange-200/70',
           marche: 'border-orange-400/60 bg-orange-500/15',
-          remplissage: 'rgba(255, 108, 32, 0.4)',
           lueur: 'rgba(255, 108, 32, 0.5)',
           ruban: 'border-orange-300/70 bg-orange-500/25 text-orange-100',
         };
 
   // ordre d'affichage : 2e, 1er, 3e (podium classique)
   const places = [1, 0, 2].filter((i) => i < entrees.length);
-  const hauteurs = [200, 150, 118];
+  const hauteurs = [168, 128, 100];
   const medailles = ['🥇', '🥈', '🥉'];
 
   return (
@@ -1026,41 +1082,34 @@ function PodiumProjo({
                   {e.pseudo}
                 </span>
 
-                {/* la marche : le chiffre y vit, la jauge montre la progression */}
+                {/* La note vit AU-DESSUS de la marche : dans le tube, elle se
+                    faisait rogner sur les marches basses (3e place). */}
+                {e.note && (
+                  <span
+                    className={`mt-1 rounded-full px-3 py-0.5 text-xl font-black uppercase tracking-wide ${
+                      e.fort ? `border-2 ${palette.ruban}` : palette.doux
+                    }`}
+                  >
+                    {e.note}
+                  </span>
+                )}
+
+                {/* la marche : le chiffre y vit, lisible de tout le bar */}
                 <div
-                  className={`relative mt-3 flex w-full flex-col items-center justify-center overflow-hidden rounded-t-2xl border-2 border-b-0 ${palette.marche}`}
+                  className={`mt-2 flex w-full flex-col items-center justify-center rounded-t-2xl border-2 border-b-0 ${palette.marche}`}
                   style={{
                     height: hauteurs[i],
                     boxShadow: premier && visible ? `0 0 45px ${palette.lueur}` : undefined,
                   }}
                 >
-                  {e.jauge !== undefined && (
-                    <span
-                      className="absolute inset-x-0 bottom-0"
-                      style={{
-                        height: `${Math.round(e.jauge * 100)}%`,
-                        background: palette.remplissage,
-                        transition: `height 900ms cubic-bezier(0.2, 0.9, 0.3, 1) ${delai + 0.3}s`,
-                      }}
-                    />
-                  )}
                   <span
-                    className={`relative font-black tabular-nums leading-none text-white ${premier ? 'text-7xl' : 'text-6xl'}`}
+                    className={`font-black tabular-nums leading-none text-white ${premier ? 'text-7xl' : 'text-6xl'}`}
                   >
                     {e.valeur}
                   </span>
                   {e.unite && (
-                    <span className={`relative mt-1 text-xl font-bold uppercase tracking-wider ${palette.doux}`}>
+                    <span className={`mt-1 text-xl font-bold uppercase tracking-wider ${palette.doux}`}>
                       {e.unite}
-                    </span>
-                  )}
-                  {e.note && (
-                    <span
-                      className={`relative mt-2 rounded-full px-3 py-1 text-xl font-black uppercase tracking-wide ${
-                        e.fort ? palette.ruban + ' border-2' : palette.doux
-                      }`}
-                    >
-                      {e.note}
                     </span>
                   )}
                 </div>
@@ -1068,6 +1117,11 @@ function PodiumProjo({
             );
           })}
         </div>
+      )}
+      {surplus > 0 && (
+        <p className={`mt-3 text-center text-xl font-bold ${palette.doux}`}>
+          + {surplus} autre{surplus > 1 ? 's' : ''} joueur{surplus > 1 ? 's' : ''} à égalité
+        </p>
       )}
     </div>
   );

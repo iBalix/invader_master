@@ -13,7 +13,7 @@ import type {
   SessionConfig,
   SpecialQuestion,
 } from './types.js';
-import { STREAK_BONUS_FROM } from './types.js';
+import { SPEED_BONUS, STREAK_BONUS_FROM } from './types.js';
 
 interface ComputeInput {
   question: QuestionSnapshot;
@@ -66,9 +66,10 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
     .slice()
     .sort((a, b) => a.maxGap - b.maxGap);
 
-  // Bonus vitesse : les 3 QCM corrects les plus rapides (temps client plausible)
-  // prennent chacun +1. Avant : un seul gagnant ; a 40 joueurs, un seul +1 etait
-  // invisible et decourageant, le podium fait vivre trois personnes par question.
+  // Bonus vitesse : les QCM corrects les plus rapides (temps client plausible)
+  // se partagent SPEED_BONUS, 2 points pour le premier puis 1. Avant : un seul
+  // gagnant a +1 ; a 40 joueurs c'etait invisible, le podium fait vivre trois
+  // personnes par question sans diluer la prime du plus rapide.
   const rapides: Array<{ playerId: string; pseudo: string; elapsed: number }> = [];
 
   const estimationEntries: Array<{ pseudo: string; value: number; gap: number; points: number }> =
@@ -165,15 +166,16 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
     };
   }
 
-  // Applique le +1 vitesse aux 3 plus rapides. Egalite parfaite de temps :
+  // Applique le bonus vitesse place par place. Egalite parfaite de temps :
   // l'ordre d'inscription tranche, comme avant pour le gagnant unique.
   rapides.sort((x, y) => x.elapsed - y.elapsed);
-  const fastestTop = rapides.slice(0, 3);
-  for (const r of fastestTop) {
-    results[r.pseudo].points += 1;
-    perPlayer[r.playerId].delta += 1;
-    if (perAnswer[r.playerId]) perAnswer[r.playerId].points += 1;
-  }
+  const fastestTop = rapides.slice(0, SPEED_BONUS.length);
+  fastestTop.forEach((r, place) => {
+    const prime = SPEED_BONUS[place];
+    results[r.pseudo].points += prime;
+    perPlayer[r.playerId].delta += prime;
+    if (perAnswer[r.playerId]) perAnswer[r.playerId].points += prime;
+  });
 
   estimationEntries.sort((a, b) => a.gap - b.gap);
 
@@ -181,7 +183,11 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
     answeredCount: answers.length,
     results,
     percents,
-    fastestTop: fastestTop.map((r) => ({ pseudo: r.pseudo, elapsedMs: r.elapsed })),
+    fastestTop: fastestTop.map((r, place) => ({
+      pseudo: r.pseudo,
+      elapsedMs: r.elapsed,
+      bonus: SPEED_BONUS[place],
+    })),
     fastest: fastestTop[0]?.pseudo ?? null,
     special,
     ...(q.type === 'qcm'

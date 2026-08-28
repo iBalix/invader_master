@@ -25,6 +25,7 @@ import JokerWheel from '../components/JokerWheel';
 import {
   JOKER_DEFS,
   JOKER_HAND_MAX,
+  SPEED_BONUS,
   SEQ_JOKERS_MS,
   SEQ_SERIE_MS,
   serverNow,
@@ -195,7 +196,8 @@ function VerdictScreen({
             className={`mt-3 inline-block rounded-full bg-amber-400/15 px-4 py-1.5 font-bold text-amber-300 ${grand ? 'text-2xl' : ''}`}
           >
             {['🥇', '🥈', '🥉'][monRang]} {monRang + 1}
-            {monRang === 0 ? 'er' : 'e'} plus rapide · +1 pt
+            {monRang === 0 ? 'er' : 'e'} plus rapide · +
+            {reveal.fastestTop?.[monRang]?.bonus ?? SPEED_BONUS[monRang] ?? 1} pt
           </p>
         </Seuil>
       )}

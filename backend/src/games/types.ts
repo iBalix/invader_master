@@ -207,6 +207,14 @@ export const JOKER_WEIGHTS: Record<JokerType, number> = { fifty: 40, audience: 3
 export const STREAK_BONUS_FROM = 5;
 
 /**
+ * Bonus de rapidite, par place : le 1er prend 2 points, les 2e et 3e 1 point.
+ * Recompenser les trois fait vivre le podium a 40 joueurs, mais etre LE plus
+ * rapide doit rester au-dessus du lot, sinon la course perd son enjeu.
+ * Le nombre de places recompensees est la longueur de ce tableau.
+ */
+export const SPEED_BONUS = [2, 1, 1];
+
+/**
  * Duree minimale de la phase reveal. Cote joueur, une sequence personnelle
  * (verdict -> serie -> jokers) se joue apres la revelation ; le GM ne peut pas
  * lancer la suite avant la fin, sinon la question suivante court-circuite la
@@ -270,7 +278,7 @@ export interface RevealData {
    * Podium de rapidite : les 3 QCM corrects les plus rapides, +1 chacun.
    * `fastest` reste servi (= fastestTop[0]) pour les consommateurs annexes.
    */
-  fastestTop?: Array<{ pseudo: string; elapsedMs: number }>;
+  fastestTop?: Array<{ pseudo: string; elapsedMs: number; bonus: number }>;
   fastest?: string | null;
   /** jokers gagnes a cette revelation (tirages + dons GM), pour le projecteur */
   jokerAwards?: Array<{ pseudo: string; type: JokerType }>;

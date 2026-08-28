@@ -63,6 +63,8 @@ export const JOKER_HAND_MAX = 2;
 
 /** la serie rapporte +1 a partir de cette longueur (miroir du backend) */
 export const STREAK_BONUS_FROM = 5;
+/** miroir du backend : bonus de rapidite par place (1er, 2e, 3e) */
+export const SPEED_BONUS = [2, 1, 1];
 
 /** ce que J'AI joue sur la question courante, restitue apres refresh */
 export interface JokerPlayYou {
@@ -110,7 +112,7 @@ export interface RevealData {
   answeredCount: number;
   results: Record<string, PlayerResult>;
   /** podium des 3 QCM corrects les plus rapides, +1 chacun */
-  fastestTop?: Array<{ pseudo: string; elapsedMs: number }>;
+  fastestTop?: Array<{ pseudo: string; elapsedMs: number; bonus: number }>;
   fastest?: string | null;
   /** jokers gagnes a cette revelation (tirage + dons GM) */
   jokerAwards?: Array<{ pseudo: string; type: JokerType }>;
@@ -497,5 +499,7 @@ export const SEQ_SERIE_MS = 6400;
 export const SEQ_JOKERS_MS = 9200;
 /** miroir du backend : duree minimale de la phase reveal */
 export const REVEAL_MIN_MS = 12000;
-/** projecteur : banniere des jokers gagnes */
+/** projecteur : duree d'affichage de l'image de reponse, avant les podiums */
+export const REVEAL_IMAGE_MS = 3500;
+/** projecteur : les podiums (vitesse puis series) */
 export const REVEAL_SERIE_MS = 7400;

@@ -23,14 +23,6 @@ export function QrCanvas({ value, size = 200 }: { value: string; size?: number }
   return <canvas ref={ref} className="rounded-xl bg-white p-1" style={{ width: size, height: size }} />;
 }
 
-/** QR de connexion WiFi (format standard, scannable par l'appareil photo) */
-export function wifiQrValue(ssid: string, password: string): string {
-  const esc = (s: string) => s.replace(/([\\;,:"])/g, '\\$1');
-  return password
-    ? `WIFI:T:WPA;S:${esc(ssid)};P:${esc(password)};;`
-    : `WIFI:T:nopass;S:${esc(ssid)};;`;
-}
-
 // ---------------------------------------------------------------------------
 // Timer circulaire synchronisé serveur
 // ---------------------------------------------------------------------------
@@ -122,6 +114,27 @@ export const TYPE_LABELS: Record<string, string> = {
   estimation: 'Estimation',
   free_text: 'Réponse libre',
 };
+
+/**
+ * Libelle de MEDIA, distinct du type : « vidéo », « image » ou « audio ».
+ *
+ * Le type d'une question n'est que QCM, Estimation ou Réponse libre. Le support
+ * est une information a part, affichee dans sa propre etiquette : « QCM » +
+ * « vidéo », jamais « QCM vidéo sans média » ni autre bouillie.
+ *
+ * L'image de REPONSE est volontairement ignoree : elle sert a expliciter la
+ * solution une fois le suspense fini, elle ne dit rien de la maniere de jouer.
+ */
+export function mediaLabel(q: {
+  musicUrl?: string | null;
+  videoYoutube?: string | null;
+  imageQuestionUrl?: string | null;
+}): string | null {
+  if (q.videoYoutube) return 'vidéo';
+  if (q.musicUrl) return 'audio';
+  if (q.imageQuestionUrl) return 'image';
+  return null;
+}
 
 export const SPECIAL_LABELS: Record<string, { label: string; emoji: string }> = {
   double: { label: 'POINTS X2', emoji: '✨' },

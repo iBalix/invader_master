@@ -32,6 +32,7 @@ import {
   PointsBadge,
   SPECIAL_LABELS,
   TimerRing,
+  mediaLabel,
   TYPE_LABELS,
 } from '../ui/bits';
 import { BattlePlayerScreen } from './BattlePlayer';
@@ -485,7 +486,7 @@ function LobbyScreen({ state, you, sessionRef, playerToken, onLeft }: ScreenProp
         <div className="mb-2 text-5xl">✅</div>
         <h2 className="text-2xl font-extrabold">Tu es dans la partie !</h2>
         <p className="mt-2 text-white/60">
-          La partie démarre bientôt, garde ton téléphone à portée de main.
+          La partie démarre bientôt, reste sur cet écran.
         </p>
         <p className="mt-6 text-sm text-white/40">
           {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} connecté{state.playerCount > 1 ? 's' : ''}
@@ -532,6 +533,11 @@ function AnnounceScreen({ state, you, sessionRef, playerToken, refresh, embedded
           <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-sm text-white/60">
             {TYPE_LABELS[q.type]}
           </span>
+          {mediaLabel(q) && (
+            <span className={`rounded-full border border-cyan-400/30 bg-cyan-400/10 font-bold uppercase text-cyan-300 ${embedded ? 'px-4 py-1.5 text-lg' : 'px-2.5 py-1 text-xs'}`}>
+              {mediaLabel(q)}
+            </span>
+          )}
         </div>
         {special && (
           <div className="anim-pop mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 font-black text-amber-300">
