@@ -3,7 +3,7 @@
  * Design : dark néon, cohérent avec le launcher des tables tactiles.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 
 // ---------------------------------------------------------------------------
@@ -215,12 +215,45 @@ export function FullscreenVideo({
   const volumeRef = useRef(volume);
   volumeRef.current = volume;
 
+  // Fin de lecture : la video atteint son `end` un peu AVANT la fin de la
+  // phase 'media' (battement serveur). Sans rien faire, la salle voyait le
+  // lecteur arrete (vignette, bouton replay) pendant ce battement. On ecoute
+  // donc l'evenement de fin du lecteur et on fond l'iframe vers le noir : la
+  // sequence devient video -> noir -> question, jamais de lecteur fige.
+  const [finie, setFinie] = useState(false);
+
   const lancer = useCallback(() => {
     const v = volumeRef.current;
     if (v !== undefined) cmd('setVolume', [Math.round(Math.min(1, Math.max(0, v)) * 100)]);
     cmd('seekTo', [startRef.current, true]);
     cmd('playVideo');
+    // demande au lecteur d'emettre ses evenements (protocole widget YouTube) ;
+    // renvoye a chaque lancement, un doublon est sans effet
+    ref.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*');
   }, [cmd]);
+
+  useEffect(() => {
+    if (!active) {
+      setFinie(false);
+      return;
+    }
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== ref.current?.contentWindow || typeof e.data !== 'string') return;
+      try {
+        const d = JSON.parse(e.data) as { event?: string; info?: unknown };
+        // la fin arrive sous deux formes selon les versions du lecteur
+        const etat =
+          d.event === 'onStateChange'
+            ? (d.info as number)
+            : (d.info as { playerState?: number } | undefined)?.playerState;
+        if (etat === 0) setFinie(true);
+      } catch {
+        // message non JSON d'une autre iframe : ignorer
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [active]);
 
   // lecture / pause : uniquement quand la phase bascule
   useEffect(() => {
@@ -244,7 +277,7 @@ export function FullscreenVideo({
     >
       <iframe
         ref={ref}
-        className="h-full w-full"
+        className={`h-full w-full transition-opacity duration-500 ${finie ? 'opacity-0' : 'opacity-100'}`}
         src={src}
         title="Extrait vidéo"
         allow="autoplay; encrypted-media"

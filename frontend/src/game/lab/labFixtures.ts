@@ -357,12 +357,13 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'projo-media',
     groupe: 'Projecteur',
     label: 'Extrait vidéo (projo)',
-    description: 'La vidéo plein écran avant la question, chrono coupé.',
+    description: 'La vidéo plein écran avant la question, fondu au noir à la fin.',
     state: () =>
       baseState({
         status: 'media',
         phaseStartedAt: serverNow(),
-        phaseEndsAt: serverNow() + 32000,
+        // extrait court : la fin (et son fondu) se verifient sans attendre
+        phaseEndsAt: serverNow() + 9200,
         question: {
           index: 4,
           total: 30,
@@ -370,7 +371,7 @@ export const SCENARIOS: LabScenario[] = [
           difficulty: 'Difficile',
           points: 4,
           theme: 'QCM · vidéo',
-          videoYoutube: 'hoHUIN0bX-c?time=0&duration=30',
+          videoYoutube: 'hoHUIN0bX-c?time=0&duration=8',
         } as PublicState['question'],
       }),
   },
