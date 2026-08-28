@@ -136,6 +136,7 @@ $script:SceneParams = @{}
 $script:WarnAtMs   = $null
 $script:WarnScene  = $null
 $script:LastSeq    = [long]-1
+$script:CueEpoch   = $null   # process emetteur des cues (cf. boucle d'entree)
 $script:TokensGroup  = @{}
 $script:LastRefill   = [DateTime]::UtcNow
 $script:Sent = New-Object System.Collections.ArrayList
@@ -468,6 +469,33 @@ while ($true) {
                 # [long] et non [int] : robustesse si un emetteur envoie un
                 # numero de sequence base sur un timestamp
                 $seq = [long]$cue['seq']
+
+                # Le compteur de cues vit dans la MEMOIRE du backend : il repart
+                # a zero a chaque redemarrage (redeploiement, reveil de
+                # l'hebergeur). Ce worker, lui, tourne des semaines d'affilee et
+                # gardait son dernier seq. Resultat : apres chaque redeploiement,
+                # tous les cues suivants etaient plus petits que le dernier joue,
+                # donc pris pour des retardataires et ignores. Les lumieres
+                # restaient figees jusqu'a ce que le backend ait re-emis autant de
+                # cues qu'avant sa coupure, soit une soiree entiere.
+                # L'epoque identifie le process emetteur : quand elle change, sa
+                # numerotation repart de zero et la notre doit suivre.
+                $epoch = if ($cue.ContainsKey('epoch')) { [long]$cue['epoch'] } else { 0 }
+                if ($epoch -ne $script:CueEpoch) {
+                    if ($null -ne $script:CueEpoch) {
+                        Write-HueLog "Nouvel emetteur (epoque $epoch), numerotation des cues repartie a $seq"
+                    }
+                    $script:CueEpoch = $epoch
+                    $script:LastSeq  = [long]-1
+                }
+                # Emetteur sans epoque (backend anterieur a ce correctif) : le
+                # transport est un WebSocket, donc ordonne. Un compteur qui recule
+                # ne peut pas venir d'un desordre reseau, c'est un redemarrage.
+                elseif ($epoch -eq 0 -and $seq -lt $script:LastSeq) {
+                    Write-HueLog "Compteur reparti en arriere (seq=$seq, dernier=$($script:LastSeq)) : emetteur redemarre" 'WARN'
+                    $script:LastSeq = [long]-1
+                }
+
                 # un cue plus ancien que le dernier joue est ignore (reordonnancement)
                 if ($seq -lt $script:LastSeq) {
                     Write-HueLog "Cue seq=$seq ignore (dernier=$($script:LastSeq))"

@@ -41,6 +41,13 @@ export interface LightCue {
   v: 1;
   /** monotone par session : l'agent ignore un cue plus ancien que le dernier joué */
   seq: number;
+  /**
+   * Identifie le process émetteur. `seq` vit en mémoire et repart à zéro à
+   * chaque redémarrage du backend, alors que le worker Hue du bar tourne des
+   * semaines sans bouger : sans cette époque, il prenait tous les cues d'après
+   * un redéploiement pour des retardataires et les ignorait.
+   */
+  epoch: number;
   scene: SceneName;
   params: {
     durationMs?: number;

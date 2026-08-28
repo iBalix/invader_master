@@ -38,6 +38,16 @@ function nextSeq(): number {
   cueSeq = (cueSeq + 1) % 2_000_000_000;
   return cueSeq;
 }
+/**
+ * Époque = ce process-ci. `cueSeq` est en mémoire : il repart à zéro à chaque
+ * redémarrage (redéploiement, réveil de l'hébergeur), tandis que le worker Hue
+ * du bar tourne des semaines et garde son dernier seq. Il prenait alors les
+ * cues d'après un redéploiement pour des retardataires et les ignorait tous :
+ * le bar restait dans le noir jusqu'à ce que le compteur rattrape son niveau
+ * d'avant la coupure. L'époque lui dit « nouvel émetteur, oublie l'ancienne
+ * numérotation ».
+ */
+const cueEpoch = Date.now();
 /** session autorisée à piloter les lumières (une seule partie éclaire le bar) */
 let activeSessionId: string | null = null;
 let activeSessionCheckedAt = 0;
@@ -266,6 +276,7 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
     const sent = sendLightCue({
       v: 1,
       seq,
+      epoch: cueEpoch,
       scene: computed.scene,
       params: computed.params,
     });
@@ -283,5 +294,5 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
 
 /** Cue ponctuel hors partie (bouton Tester, extinction manuelle) */
 export function sendManualCue(scene: SceneName): boolean {
-  return sendLightCue({ v: 1, seq: nextSeq(), scene, params: {} });
+  return sendLightCue({ v: 1, seq: nextSeq(), epoch: cueEpoch, scene, params: {} });
 }
