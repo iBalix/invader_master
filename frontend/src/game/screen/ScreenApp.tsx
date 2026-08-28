@@ -218,6 +218,13 @@ function ProjectorScreen({
   const prevCineStep = useRef(-1);
   const remaining = usePhaseCountdown(state.phaseEndsAt);
 
+  // fin REELLE du media de la question courante (audio ou video), remontee par
+  // les lecteurs ; remise a zero a chaque question et a chaque rejeu
+  const [mediaFini, setMediaFini] = useState(false);
+  useEffect(() => {
+    setMediaFini(false);
+  }, [state.currentQuestionIndex, state.status === 'announce']);
+
   // musique de fond + volumes
   useEffect(() => {
     gameAudio.setMusic(state.config.musicUrl);
@@ -230,19 +237,22 @@ function ProjectorScreen({
   useEffect(() => {
     const q = state.question;
     // Pendant un media de question (video plein ecran OU extrait audio) :
-    // SILENCE TOTAL de la musique de fond, seul le media parle. 'locked'
-    // compris pour l'audio : l'extrait vient d'etre coupe, laisser la musique
-    // remonter dans la seconde donnerait un a-coup en pleine revelation.
+    // SILENCE TOTAL de la musique de fond, seul le media parle. Des que le
+    // media est REELLEMENT termine (evenement de fin du lecteur, remonte via
+    // mediaFini), la musique revient en fondu doux au lieu de laisser un blanc
+    // jusqu'a la question suivante : un extrait de 20 s dans une fenetre de
+    // 30 s laissait la salle dans le silence complet pendant 10 s.
     // Le ducking a 22 % ne sert plus qu'aux moments de scene (cinematique,
     // verdict), ou la musique reste un tapis sous le roulement de tambour.
     const fullSilence =
-      state.status === 'media' ||
-      ((state.status === 'question' || state.status === 'locked') && Boolean(q?.musicUrl));
+      !mediaFini &&
+      (state.status === 'media' ||
+        (state.status === 'question' && Boolean(q?.musicUrl)));
     gameAudio.duck(
       fullSilence || state.status === 'cinematic' || state.status === 'verdict',
       fullSilence,
     );
-  }, [state.status, state.question]);
+  }, [state.status, state.question, mediaFini]);
 
   // cues de transition
   useEffect(() => {
@@ -398,7 +408,12 @@ function ProjectorScreen({
         )}
       </div>
 
-      <ProjectorBody state={state} remaining={remaining} answeredCount={answeredCount} />
+      <ProjectorBody
+        state={state}
+        remaining={remaining}
+        answeredCount={answeredCount}
+        onMediaEnded={() => setMediaFini(true)}
+      />
     </div>
   );
 }
@@ -407,10 +422,13 @@ export function ProjectorBody({
   state,
   remaining,
   answeredCount,
+  onMediaEnded,
 }: {
   state: PublicState;
   remaining: number | null;
   answeredCount: number;
+  /** le media de la question (audio ou video) vient de se terminer */
+  onMediaEnded?: () => void;
 }) {
   if (state.mode === 'battle') {
     return <BattleProjectorBody state={state} remaining={remaining} answeredCount={answeredCount} />;
@@ -429,7 +447,14 @@ export function ProjectorBody({
       return null;
     case 'question':
     case 'locked':
-      return <QuestionProjo state={state} remaining={remaining} answeredCount={answeredCount} />;
+      return (
+        <QuestionProjo
+          state={state}
+          remaining={remaining}
+          answeredCount={answeredCount}
+          onMediaEnded={onMediaEnded}
+        />
+      );
     case 'reveal':
       return <RevealProjo state={state} />;
     case 'leaderboard':
@@ -461,6 +486,7 @@ export function ProjectorBody({
         spec={q.videoYoutube}
         active={state.status === 'media'}
         volume={state.config.mediaVolume ?? 0.9}
+        onEnded={onMediaEnded}
       />
     ) : null;
 
@@ -725,26 +751,45 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
  * l'extrait de la question. Le volume passe par une propriété de l'élément et
  * non par un attribut, sinon l'extrait sort à 100 %, hors de portée du mixer.
  */
-function QuestionAudio({ src, volume, playing }: { src: string; volume: number; playing: boolean }) {
+function QuestionAudio({
+  src,
+  volume,
+  playing,
+  onEnded,
+}: {
+  src: string;
+  volume: number;
+  playing: boolean;
+  /** fin de l'extrait, naturelle ou coupee par le verrou */
+  onEnded?: () => void;
+}) {
   const ref = useRef<HTMLAudioElement | null>(null);
+  const onEndedRef = useRef(onEnded);
+  onEndedRef.current = onEnded;
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.volume = Math.min(1, Math.max(0, volume));
     if (playing) void el.play().catch(() => undefined);
-    else el.pause();
+    else {
+      el.pause();
+      // coupe par le verrou : pour la musique de fond, c'est une fin aussi
+      onEndedRef.current?.();
+    }
   }, [playing, volume]);
-  return <audio ref={ref} src={src} autoPlay />;
+  return <audio ref={ref} src={src} autoPlay onEnded={() => onEndedRef.current?.()} />;
 }
 
 function QuestionProjo({
   state,
   remaining,
   answeredCount,
+  onMediaEnded,
 }: {
   state: PublicState;
   remaining: number | null;
   answeredCount: number;
+  onMediaEnded?: () => void;
 }) {
   const q = state.question;
   if (!q) return null;
@@ -786,6 +831,7 @@ function QuestionProjo({
                     src={q.musicUrl}
                     volume={state.config.mediaVolume ?? 0.9}
                     playing={state.status === 'question'}
+                    onEnded={onMediaEnded}
                   />
                 )}
               </div>
@@ -1042,12 +1088,16 @@ function RevealProjo({ state }: { state: PublicState }) {
       )}
 
       {q.type === 'estimation' && (
+        // shrink-0 sur le titre et le nombre, min-h-0 sur la liste : quand la
+        // hauteur manque, c'est la liste qui se comprime, jamais le titre. En
+        // justify-center sans ces gardes, le debordement rognait des DEUX
+        // cotes et « La bonne reponse etait » disparaissait en haut.
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden">
-          <p className="text-2xl uppercase tracking-widest text-white/40">La bonne réponse était</p>
-          <p className="anim-pop my-6 text-8xl font-black text-emerald-300 tabular-nums">{reveal.expectedNumber}</p>
-          <div className="mt-4 w-full max-w-2xl">
+          <p className="shrink-0 text-2xl uppercase tracking-widest text-white/40">La bonne réponse était</p>
+          <p className="anim-pop my-3 shrink-0 text-7xl font-black text-emerald-300 tabular-nums">{reveal.expectedNumber}</p>
+          <div className="mt-2 min-h-0 w-full max-w-2xl overflow-hidden">
             {(reveal.bestEstimations ?? []).map((e, i) => (
-              <div key={i} className="anim-fade-up flex items-center justify-between border-b border-white/10 px-4 py-3 text-2xl" style={{ animationDelay: `${i * 0.15}s` }}>
+              <div key={i} className="anim-fade-up flex items-center justify-between border-b border-white/10 px-4 py-2 text-2xl" style={{ animationDelay: `${i * 0.15}s` }}>
                 <span className="font-bold">{i === 0 ? '🎯 ' : ''}{e.pseudo}</span>
                 <span className="text-white/60 tabular-nums">{e.value} (écart {e.gap})</span>
                 <span className="font-black text-cyan-300">+{e.points}</span>
@@ -1059,8 +1109,8 @@ function RevealProjo({ state }: { state: PublicState }) {
 
       {q.type === 'free_text' && (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden">
-          <p className="text-2xl uppercase tracking-widest text-white/40">La bonne réponse était</p>
-          <p className="anim-pop my-6 text-balance text-center text-6xl font-black text-emerald-300">{reveal.expectedAnswer}</p>
+          <p className="shrink-0 text-2xl uppercase tracking-widest text-white/40">La bonne réponse était</p>
+          <p className="anim-pop my-4 min-h-0 text-balance text-center text-6xl font-black text-emerald-300">{reveal.expectedAnswer}</p>
           <p className="text-3xl text-white/70">
             {Object.values(reveal.results).filter((r) => r.correct).length} bonne
             {Object.values(reveal.results).filter((r) => r.correct).length > 1 ? 's' : ''} réponse
@@ -1088,7 +1138,11 @@ function RevealProjo({ state }: { state: PublicState }) {
          podium des plus rapides n'aurait rien a montrer, les series prennent
          toute la largeur. */
       <div
-        className={`mt-4 grid h-[430px] shrink-0 items-end gap-8 ${
+        // 300 px et non plus 430 : les podiums ecrasaient la zone centrale, ou
+        // le classement des meilleures estimations doit pouvoir respirer quand
+        // la salle est pleine. L'image de reponse, elle, garde ses 430 px :
+        // elle vit seule a l'ecran.
+        className={`mt-4 grid h-[300px] shrink-0 items-end gap-8 ${
           q.type === 'qcm' ? 'grid-cols-2' : 'grid-cols-1'
         }`}
       >
@@ -1209,31 +1263,31 @@ function PodiumProjo({
 
   // ordre d'affichage : 2e, 1er, 3e (podium classique)
   const places = [1, 0, 2].filter((i) => i < entrees.length);
-  const hauteurs = [168, 128, 100];
+  const hauteurs = [112, 86, 68];
   const medailles = ['🥇', '🥈', '🥉'];
 
   return (
     <div
-      className={`flex h-full flex-col justify-end rounded-3xl border-2 px-6 pb-5 pt-4 ${palette.bord} ${palette.fond}`}
+      className={`flex h-full flex-col justify-end rounded-3xl border-2 px-6 pb-3 pt-3 ${palette.bord} ${palette.fond}`}
       style={{
         opacity: visible ? 1 : 0,
         transform: visible ? 'translateY(0)' : 'translateY(24px)',
         transition: 'opacity 520ms ease, transform 560ms cubic-bezier(0.3, 1.15, 0.4, 1)',
       }}
     >
-      <div className="flex items-center justify-center gap-4">
-        <p className={`text-3xl font-black uppercase tracking-[0.15em] ${palette.texte}`}>{titre}</p>
+      <div className="flex items-center justify-center gap-3">
+        <p className={`text-2xl font-black uppercase tracking-[0.15em] ${palette.texte}`}>{titre}</p>
         <span
-          className={`rounded-full border-2 px-5 py-1.5 text-2xl font-black uppercase tracking-wider ${palette.ruban}`}
+          className={`rounded-full border-2 px-4 py-1 text-lg font-black uppercase tracking-wider ${palette.ruban}`}
         >
           {recompense}
         </span>
       </div>
 
       {entrees.length === 0 ? (
-        <p className="mt-10 text-center text-3xl text-white/35">{vide}</p>
+        <p className="mt-6 text-center text-2xl text-white/35">{vide}</p>
       ) : (
-        <div className="mt-4 flex items-end justify-center gap-6">
+        <div className="mt-3 flex items-end justify-center gap-5">
           {places.map((i) => {
             const e = entrees[i];
             // le 3e sort en premier, le 1er en dernier
@@ -1242,18 +1296,18 @@ function PodiumProjo({
             return (
               <div
                 key={e.pseudo}
-                className="flex w-52 flex-col items-center"
+                className="flex w-44 flex-col items-center"
                 style={{
                   opacity: visible ? 1 : 0,
                   transform: visible ? 'translateY(0) scale(1)' : 'translateY(30px) scale(0.85)',
                   transition: `opacity 420ms ease ${delai}s, transform 520ms cubic-bezier(0.25, 1.35, 0.4, 1) ${delai}s`,
                 }}
               >
-                <span className={premier ? 'text-6xl leading-none' : 'text-5xl leading-none'}>
+                <span className={premier ? 'text-4xl leading-none' : 'text-3xl leading-none'}>
                   {medailles[i]}
                 </span>
                 <span
-                  className={`mt-3 max-w-full truncate font-black ${palette.texte} ${premier ? 'text-5xl' : 'text-4xl'}`}
+                  className={`mt-1.5 max-w-full truncate font-black ${palette.texte} ${premier ? 'text-4xl' : 'text-3xl'}`}
                 >
                   {e.pseudo}
                 </span>
@@ -1262,7 +1316,7 @@ function PodiumProjo({
                     faisait rogner sur les marches basses (3e place). */}
                 {e.note && (
                   <span
-                    className={`mt-1 rounded-full px-3 py-0.5 text-xl font-black uppercase tracking-wide ${
+                    className={`mt-1 rounded-full px-3 py-0.5 text-base font-black uppercase tracking-wide ${
                       e.fort ? `border-2 ${palette.ruban}` : palette.doux
                     }`}
                   >
@@ -1279,12 +1333,12 @@ function PodiumProjo({
                   }}
                 >
                   <span
-                    className={`font-black tabular-nums leading-none text-white ${premier ? 'text-7xl' : 'text-6xl'}`}
+                    className={`font-black tabular-nums leading-none text-white ${premier ? 'text-5xl' : 'text-4xl'}`}
                   >
                     {e.valeur}
                   </span>
                   {e.unite && (
-                    <span className={`mt-1 text-xl font-bold uppercase tracking-wider ${palette.doux}`}>
+                    <span className={`mt-1 text-base font-bold uppercase tracking-wider ${palette.doux}`}>
                       {e.unite}
                     </span>
                   )}
@@ -1295,7 +1349,7 @@ function PodiumProjo({
         </div>
       )}
       {surplus > 0 && (
-        <p className={`mt-3 text-center text-xl font-bold ${palette.doux}`}>
+        <p className={`mt-2 text-center text-lg font-bold ${palette.doux}`}>
           + {surplus} autre{surplus > 1 ? 's' : ''} joueur{surplus > 1 ? 's' : ''} à égalité
         </p>
       )}

@@ -187,6 +187,7 @@ export function FullscreenVideo({
   active,
   muted = false,
   volume,
+  onEnded,
 }: {
   spec: string;
   /** vrai pendant la phase 'media' : la vidéo se montre et se lance */
@@ -194,6 +195,8 @@ export function FullscreenVideo({
   muted?: boolean;
   /** 0 a 1 ; ignore si muted */
   volume?: number;
+  /** fin de lecture detectee (le projo y ramene la musique de fond en fondu) */
+  onEnded?: () => void;
 }) {
   const ref = useRef<HTMLIFrameElement | null>(null);
   const activeRef = useRef(active);
@@ -221,6 +224,8 @@ export function FullscreenVideo({
   // donc l'evenement de fin du lecteur et on fond l'iframe vers le noir : la
   // sequence devient video -> noir -> question, jamais de lecteur fige.
   const [finie, setFinie] = useState(false);
+  const onEndedRef = useRef(onEnded);
+  onEndedRef.current = onEnded;
 
   const lancer = useCallback(() => {
     const v = volumeRef.current;
@@ -246,7 +251,10 @@ export function FullscreenVideo({
           d.event === 'onStateChange'
             ? (d.info as number)
             : (d.info as { playerState?: number } | undefined)?.playerState;
-        if (etat === 0) setFinie(true);
+        if (etat === 0) {
+          setFinie(true);
+          onEndedRef.current?.();
+        }
       } catch {
         // message non JSON d'une autre iframe : ignorer
       }
