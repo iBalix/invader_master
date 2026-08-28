@@ -19,6 +19,57 @@ export type QuizStatus =
 
 export type QuestionType = 'qcm' | 'estimation' | 'free_text';
 
+// ---------------------------------------------------------------------------
+// Jokers
+// ---------------------------------------------------------------------------
+
+export type JokerType = 'all_in' | 'audience' | 'fifty';
+
+/**
+ * Catalogue unique des jokers : joueur, projecteur, regles, console GM et
+ * laboratoire consomment tous CE tableau. Une reformulation se fait ici.
+ */
+export const JOKER_DEFS: Record<
+  JokerType,
+  { label: string; emoji: string; couleur: string; ombre: string; description: string }
+> = {
+  all_in: {
+    label: 'All-In',
+    emoji: '🎰',
+    couleur: '#FF2BD6',
+    ombre: 'rgba(255, 43, 214, 0.45)',
+    description: 'Points x3 si tu as bon... mais tu perds la valeur de la question si tu as faux.',
+  },
+  audience: {
+    label: 'Avis du public',
+    emoji: '📊',
+    couleur: '#33E2FF',
+    ombre: 'rgba(51, 226, 255, 0.45)',
+    description: 'Montre ce que les autres ont déjà répondu. QCM uniquement.',
+  },
+  fifty: {
+    label: '50/50',
+    emoji: '✂️',
+    couleur: '#5ED9A1',
+    ombre: 'rgba(94, 217, 161, 0.45)',
+    description: 'Retire deux mauvaises réponses. QCM uniquement.',
+  },
+};
+
+export const JOKER_TYPES: JokerType[] = ['all_in', 'audience', 'fifty'];
+
+/** jokers en main au maximum (miroir du backend) */
+export const JOKER_HAND_MAX = 2;
+
+/** la serie rapporte +1 a partir de cette longueur (miroir du backend) */
+export const STREAK_BONUS_FROM = 5;
+
+/** ce que J'AI joue sur la question courante, restitue apres refresh */
+export interface JokerPlayYou {
+  type: JokerType;
+  data: { removed?: number[]; counts?: number[]; total?: number } | null;
+}
+
 export interface PublicQuestion {
   index: number;
   total: number;
@@ -38,7 +89,13 @@ export interface PlayerResult {
   answered: boolean;
   correct: boolean;
   points: number;
-  qd: boolean;
+  allIn: boolean;
+  /** serie apres cette question (0 si cassee) */
+  streak: number;
+  /** serie AVANT cette question, pour afficher "serie de N brisee" */
+  streakBefore: number;
+  /** true si la serie a rapporte son +1 */
+  streakBonus: boolean;
   value?: string | number;
   gap?: number;
 }
@@ -52,7 +109,11 @@ export interface RevealData {
   percents?: number[];
   answeredCount: number;
   results: Record<string, PlayerResult>;
+  /** podium des 3 QCM corrects les plus rapides, +1 chacun */
+  fastestTop?: Array<{ pseudo: string; elapsedMs: number }>;
   fastest?: string | null;
+  /** jokers gagnes a cette revelation (tirage + dons GM) */
+  jokerAwards?: Array<{ pseudo: string; type: JokerType }>;
   bestEstimations?: Array<{ pseudo: string; value: number; gap: number; points: number }>;
   special?: string | null;
 }
@@ -146,7 +207,6 @@ export interface PublicState {
   config: {
     announceMs: number;
     questionMs: number;
-    qdPerPlayer: number;
     showScores: boolean;
     wifiSsid: string;
     wifiPassword: string;
@@ -161,7 +221,8 @@ export interface PublicState {
   participantCount?: number;
   players: Array<{ pseudo: string; device: string }>;
   question: PublicQuestion | null;
-  qdFeed: string[];
+  /** jokers joues sur la question courante */
+  jokerFeed: Array<{ pseudo: string; type: JokerType }>;
   special: string | null;
   judging: boolean;
   reveal?: RevealData;
@@ -178,8 +239,8 @@ export interface You {
   pseudo: string;
   score: number;
   status: string;
-  qdLeft: number;
-  qdActive: boolean;
+  jokers: JokerType[];
+  jokerPlays: JokerPlayYou[];
   answered: boolean;
   strike: number;
   battle?: YouBattle;
@@ -248,11 +309,14 @@ export const gameApi = {
       `/public/game/${encodeURIComponent(idOrCode)}/answer`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  bonus: (idOrCode: string, body: { playerToken: string; questionIndex: number }) =>
-    request<{ qdLeft: number }>(`/public/game/${encodeURIComponent(idOrCode)}/bonus`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+  joker: (
+    idOrCode: string,
+    body: { playerToken: string; questionIndex: number; type: JokerType },
+  ) =>
+    request<{ jokers: JokerType[]; data?: { removed?: number[]; counts?: number[]; total?: number } }>(
+      `/public/game/${encodeURIComponent(idOrCode)}/joker`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
 };
 
 // ---------------------------------------------------------------------------
@@ -418,7 +482,20 @@ export function subscribeToGame(
 export const REVEAL_BARRES_MS = 3000;
 /** la bonne reponse se detache sur le projecteur */
 export const REVEAL_REPONSE_MS = 3300;
-/** le plus rapide est annonce */
+/** le podium des 3 plus rapides est annonce */
 export const REVEAL_RAPIDE_MS = 4600;
 /** les joueurs decouvrent le verdict : jamais avant le projecteur */
 export const REVEAL_JOUEUR_MS = 3600;
+
+/**
+ * Sequence personnelle post-reveal cote joueur. Trois temps, en seuils depuis
+ * phaseStartedAt : verdict (des REVEAL_JOUEUR_MS), puis la serie, puis les
+ * jokers (recap de main + roue de tirage si gain). Le backend garantit que la
+ * phase reveal dure au moins REVEAL_MIN_MS : le GM ne peut pas la couper.
+ */
+export const SEQ_SERIE_MS = 6400;
+export const SEQ_JOKERS_MS = 9200;
+/** miroir du backend : duree minimale de la phase reveal */
+export const REVEAL_MIN_MS = 12000;
+/** projecteur : banniere des jokers gagnes */
+export const REVEAL_JOKERS_MS = 6200;

@@ -152,6 +152,7 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
       points,
       allIn: allInPlayerIds.has(player.id),
       streak,
+      streakBefore: strikeAvant,
       streakBonus,
       value,
       gap,

@@ -36,6 +36,8 @@ import {
 } from '../ui/bits';
 import { BattlePlayerScreen } from './BattlePlayer';
 import QuizRules from './QuizRules';
+import { JokerBar, JokerFeed, JokerSlots } from './JokerUi';
+import PostRevealSequence from './PostReveal';
 import '../game.css';
 
 const ERROR_LABELS: Record<string, string> = {
@@ -45,6 +47,9 @@ const ERROR_LABELS: Record<string, string> = {
   error_timeout: 'Trop tard, le temps est écoulé !',
   error_no_bonus_left: 'Plus de bonus disponible',
   error_bonus_window_closed: 'La fenêtre de bonus est fermée',
+  error_no_joker: "Tu n'as pas ce joker en main",
+  error_joker_type: 'Ce joker ne marche que sur les QCM',
+  error_reveal_sequence: 'La séquence de résultats est en cours',
   error_wrong_question: 'La question a changé, resynchronise-toi',
   error_not_active: 'Tu ne peux plus répondre dans cette partie',
 };
@@ -300,9 +305,7 @@ function StatusBar({ state, you }: { state: PublicState; you: You }) {
             {you.score} pts
           </span>
         )}
-        <span className="rounded-full bg-violet-400/15 px-2 py-0.5 text-xs font-bold text-violet-300">
-          🎲 ×{you.qdLeft}
-        </span>
+        <JokerSlots jokers={you.jokers} />
       </div>
     </div>
   );
@@ -326,7 +329,7 @@ export interface ScreenProps {
   refresh: () => Promise<void>;
 }
 
-function PlayerScreen(props: ScreenProps) {
+export function PlayerScreen(props: ScreenProps) {
   const { state, you } = props;
 
   if (!you) {
@@ -358,7 +361,7 @@ function PlayerScreen(props: ScreenProps) {
       case 'locked':
         return <QuestionScreen {...props} you={you} />;
       case 'reveal':
-        return <RevealScreen state={state} you={you} />;
+        return <RevealScreen state={state} you={you} embedded={props.embedded} />;
       case 'leaderboard':
       case 'cinematic':
         return <WatchScreen state={state} you={you} />;
@@ -500,26 +503,10 @@ function LobbyScreen({ state, you, sessionRef, playerToken, onLeft }: ScreenProp
 // Annonce (fenêtre de bonus)
 // ---------------------------------------------------------------------------
 
-function AnnounceScreen({ state, you, sessionRef, playerToken, refresh }: ScreenProps & { you: You }) {
+function AnnounceScreen({ state, you, sessionRef, playerToken, refresh, embedded }: ScreenProps & { you: You }) {
   const remaining = usePhaseCountdown(state.phaseEndsAt);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const q = state.question;
   if (!q) return <Center><Spinner /></Center>;
-
-  const activate = async () => {
-    if (!playerToken || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await gameApi.bonus(sessionRef, { playerToken, questionIndex: q.index });
-      await refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? label(err.message) : 'Erreur réseau');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const special = state.special ? SPECIAL_LABELS[state.special] : null;
   const progress = state.phaseEndsAt && remaining !== null
@@ -547,41 +534,19 @@ function AnnounceScreen({ state, you, sessionRef, playerToken, refresh }: Screen
         )}
 
         <div className="mt-8">
-          {you.qdActive ? (
-            <div className="anim-pop rounded-2xl border-2 border-violet-400 bg-violet-500/20 px-5 py-5">
-              <div className="text-3xl">🎲</div>
-              <p className="mt-1 text-lg font-black text-violet-200">QUITTE OU DOUBLE ACTIVÉ !</p>
-              <p className="text-sm text-violet-200/70">Bonne réponse = {q.points * 2} pts, mauvaise = rien à perdre</p>
-            </div>
-          ) : you.qdLeft > 0 ? (
-            <button
-              type="button"
-              onClick={() => void activate()}
-              disabled={busy}
-              className="anim-glow w-full rounded-2xl border-2 border-violet-400/60 bg-violet-500/15 px-5 py-5 text-left active:scale-95 disabled:opacity-50"
-              style={{ transition: 'transform 0.1s' }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-lg font-black text-violet-200">🎲 QUITTE OU DOUBLE</p>
-                  <p className="text-sm text-violet-200/70">Tente le x2 sur cette question !</p>
-                </div>
-                <span className="rounded-full bg-violet-400/20 px-3 py-1 text-sm font-bold text-violet-200">
-                  ×{you.qdLeft}
-                </span>
-              </div>
-            </button>
-          ) : (
-            <p className="text-sm text-white/40">Plus de quitte ou double disponible</p>
-          )}
-          {error && <p className="anim-shake mt-3 text-sm font-semibold text-rose-400">{error}</p>}
+          <JokerBar
+            state={state}
+            you={you}
+            sessionRef={sessionRef}
+            playerToken={playerToken}
+            refresh={refresh}
+            embedded={embedded}
+          />
         </div>
 
-        {state.qdFeed.length > 0 && (
-          <p className="mt-5 text-sm text-violet-300/80">
-            🎲 {state.qdFeed.join(', ')} {state.qdFeed.length > 1 ? 'tentent' : 'tente'} le quitte ou double !
-          </p>
-        )}
+        <div className="mt-5">
+          <JokerFeed feed={state.jokerFeed} embedded={embedded} />
+        </div>
 
         <div className="mx-auto mt-8 h-1.5 w-full max-w-[240px] overflow-hidden rounded-full bg-white/10">
           <div
@@ -620,6 +585,16 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
   const [sendState, setSendState] = useState<'idle' | 'sending' | 'recorded' | 'failed'>(
     you.answered ? 'recorded' : 'idle',
   );
+  // Effets des jokers d'information. Initialises depuis you.jokerPlays (retour
+  // apres refresh) et mis a jour en direct par le callback de la JokerBar.
+  const [fiftyRemoved, setFiftyRemoved] = useState<number[]>(
+    () => (you.jokerPlays.find((x) => x.type === 'fifty')?.data?.removed ?? []) as number[],
+  );
+  const [audience, setAudience] = useState<{ counts: number[]; total: number } | null>(() => {
+    const d = you.jokerPlays.find((x) => x.type === 'audience')?.data;
+    return d?.counts ? { counts: d.counts, total: d.total ?? 0 } : null;
+  });
+  const allInArme = you.jokerPlays.some((x) => x.type === 'all_in');
 
   // repère l'affichage réel de la question (mesure du temps de réponse)
   useEffect(() => {
@@ -630,6 +605,8 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
       setNumberValue('');
       setTextValue('');
       setSendState(you.answered ? 'recorded' : 'idle');
+      setFiftyRemoved([]);
+      setAudience(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q?.index]);
@@ -638,6 +615,14 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
     if (you.answered && sendState === 'idle') setSendState('recorded');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [you.answered]);
+
+  useEffect(() => {
+    const f = you.jokerPlays.find((x) => x.type === 'fifty')?.data?.removed;
+    if (f && f.length > 0) setFiftyRemoved(f as number[]);
+    const a = you.jokerPlays.find((x) => x.type === 'audience')?.data;
+    if (a?.counts) setAudience({ counts: a.counts, total: a.total ?? 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [you.jokerPlays.length]);
 
   // vibration au début de la question
   useEffect(() => {
@@ -680,7 +665,7 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-widest text-white/40">
             Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''}
-            {you.qdActive ? ' · 🎲 x2' : ''}
+            {allInArme ? ' · 🎰 ALL-IN ×3' : ''}
           </p>
           <h2 className={`text-balance font-bold leading-snug ${embedded ? 'text-3xl' : 'text-lg'}`}>{q.question}</h2>
         </div>
@@ -714,27 +699,47 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
             embedded ? 'grid-cols-2 grid-rows-2 content-stretch gap-5' : 'content-start'
           }`}
         >
-          {(q.answers ?? []).map((a, i) => (
-            <button
-              key={i}
-              type="button"
-              disabled={answered || locked}
-              onClick={() => {
-                setSelected(i);
-                void send({ choice: i });
-              }}
-              className={`rounded-xl border-2 text-left font-semibold leading-snug transition-transform active:scale-[0.98] ${
-                embedded ? 'flex items-center px-8 text-3xl' : 'px-4 py-3.5 text-base'
-              } ${
-                selected === i
-                  ? 'border-white bg-white/20'
-                  : ANSWER_COLORS[i % 4]
-              } ${answered && selected !== i ? 'opacity-40' : ''}`}
-            >
-              <span className="mr-2 font-black text-white/50">{String.fromCharCode(65 + i)}</span>
-              {a}
-            </button>
-          ))}
+          {(q.answers ?? []).map((a, i) => {
+            const retiree = fiftyRemoved.includes(i);
+            const pct = audience && audience.total > 0
+              ? Math.round(((audience.counts[i] ?? 0) / audience.total) * 100)
+              : null;
+            return (
+              <button
+                key={i}
+                type="button"
+                disabled={answered || locked || retiree}
+                onClick={() => {
+                  setSelected(i);
+                  void send({ choice: i });
+                }}
+                className={`relative overflow-hidden rounded-xl border-2 text-left font-semibold leading-snug transition-transform active:scale-[0.98] ${
+                  embedded ? 'flex items-center px-8 text-3xl' : 'px-4 py-3.5 text-base'
+                } ${
+                  selected === i
+                    ? 'border-white bg-white/20'
+                    : ANSWER_COLORS[i % 4]
+                } ${answered && selected !== i ? 'opacity-40' : ''} ${
+                  retiree ? 'opacity-25 grayscale' : ''
+                }`}
+              >
+                {/* avis du public : jauge discrete sous le texte */}
+                {pct !== null && !retiree && (
+                  <span
+                    className="pointer-events-none absolute inset-y-0 left-0 bg-cyan-300/15"
+                    style={{ width: `${pct}%`, transition: 'width 600ms ease-out' }}
+                  />
+                )}
+                <span className="relative mr-2 font-black text-white/50">{String.fromCharCode(65 + i)}</span>
+                <span className={`relative ${retiree ? 'line-through' : ''}`}>{a}</span>
+                {pct !== null && !retiree && (
+                  <span className={`absolute right-2 top-1 font-black tabular-nums text-cyan-200/90 ${embedded ? 'text-xl' : 'text-xs'}`}>
+                    {pct}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       ) : q.type === 'estimation' ? (
         <EstimationInput
@@ -766,6 +771,31 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
           >
             Valider
           </button>
+        </div>
+      )}
+
+      {allInArme && !answered && (
+        <div className="anim-pop mt-3 rounded-xl border-2 border-fuchsia-400/60 bg-fuchsia-500/15 px-4 py-2 text-center font-black text-fuchsia-200">
+          🎰 ALL-IN : ×3 si bon, −{q.points} si faux
+        </div>
+      )}
+
+      {!answered && !locked && (
+        <div className="mt-4">
+          <JokerBar
+            state={state}
+            you={you}
+            sessionRef={sessionRef}
+            playerToken={playerToken}
+            refresh={refresh}
+            embedded={embedded}
+            onPlayed={(type, data) => {
+              if (type === 'fifty' && data?.removed) setFiftyRemoved(data.removed);
+              if (type === 'audience' && data?.counts) {
+                setAudience({ counts: data.counts, total: data.total ?? 0 });
+              }
+            }}
+          />
         </div>
       )}
 
@@ -848,7 +878,7 @@ function EstimationInput({
 // Révélation (feedback personnel)
 // ---------------------------------------------------------------------------
 
-function RevealScreen({ state, you }: { state: PublicState; you: You }) {
+function RevealScreen({ state, you, embedded }: { state: PublicState; you: You; embedded?: boolean }) {
   const reveal = state.reveal;
 
   // ANTI-SPOILER. Le projecteur montre d'abord la repartition, puis la bonne
@@ -889,48 +919,12 @@ function RevealScreen({ state, you }: { state: PublicState; you: You }) {
     );
   }
   const mine = reveal.results[you.pseudo];
-  const isFastest = reveal.fastest === you.pseudo;
 
+  // La sequence personnelle (verdict -> serie -> jokers) prend le relais.
+  // Le fond rouge pulse uniquement pendant le temps du verdict.
   return (
     <div className={`flex flex-1 flex-col ${mine && !mine.correct && mine.answered ? 'anim-bg-pulse-red' : ''}`}>
-      <Center>
-        <div className="anim-pop w-full max-w-sm text-center">
-          {!mine || !mine.answered ? (
-            <BigMessage emoji="😴" title="Pas de réponse" sub="Sois plus rapide la prochaine fois !" />
-          ) : mine.correct ? (
-            <>
-              <div className="mb-3 text-6xl">{isFastest ? '⚡' : '🎉'}</div>
-              <h2 className="text-3xl font-black text-emerald-300">BONNE RÉPONSE !</h2>
-              <p className="mt-2 text-xl font-bold">
-                +{mine.points} point{mine.points > 1 ? 's' : ''}
-                {mine.qd && <span className="text-violet-300"> (🎲 x2 !)</span>}
-              </p>
-              {isFastest && (
-                <p className="mt-2 inline-block rounded-full bg-amber-400/15 px-4 py-1.5 font-bold text-amber-300">
-                  ⚡ Le plus rapide ! +1 pt bonus
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <div className="mb-3 text-6xl">💥</div>
-              <h2 className="text-3xl font-black text-rose-400">RATÉ !</h2>
-              {mine.qd && <p className="mt-1 text-violet-300/80">🎲 Quitte ou double perdu, mais rien de perdu !</p>}
-              {mine.points < 0 && <p className="mt-1 font-bold text-rose-300">{mine.points} points</p>}
-            </>
-          )}
-
-          <div className="mt-6 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-            <p className="text-xs uppercase tracking-widest text-white/40">La bonne réponse</p>
-            <p className="mt-1 text-lg font-bold text-emerald-300">
-              {reveal.correctAnswer ?? reveal.expectedAnswer ?? reveal.expectedNumber}
-            </p>
-            {typeof mine?.gap === 'number' && (
-              <p className="mt-1 text-sm text-white/50">Ton écart : {mine.gap}</p>
-            )}
-          </div>
-        </div>
-      </Center>
+      <PostRevealSequence state={state} you={you} embedded={embedded} />
     </div>
   );
 }

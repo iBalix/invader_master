@@ -247,6 +247,8 @@ export interface PlayerResult {
   allIn: boolean;
   /** serie de bonnes reponses APRES cette question (0 si cassee) */
   streak: number;
+  /** serie AVANT cette question : permet d'afficher "serie de N brisee" */
+  streakBefore: number;
   /** true si la serie a rapporte le +1 (>= STREAK_BONUS_FROM) */
   streakBonus: boolean;
   /** valeur donnée (estimation / texte) pour affichage */

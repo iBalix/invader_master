@@ -1,23 +1,44 @@
 /**
- * Console gamemaster — pilotage d'une session de quiz en direct.
- * Route back-office : /evenements/quiz-live
+ * Console gamemaster — pilotage d'une session de quiz/blindtest en direct.
+ * Route : /evenements/quiz-live (auth + rôles inchangés).
+ *
+ * PENSÉE TÉLÉPHONE D'ABORD. Les GM animent depuis leur téléphone : la page rend
+ * PLEIN ÉCRAN, HORS MainLayout (la sidebar fixe de 256 px laissait ~119 px de
+ * contenu sur un écran de 375 px, la console était inutilisable). Un lien
+ * ramène au back-office.
+ *
+ * Structure : en-tête collant (statut, chrono, progression), contenu en
+ * onglets (Pilotage / Questions / Classement / Réglages), et une barre
+ * d'action collée en bas, sous le pouce — LE bouton du moment y vit, avec un
+ * compte à rebours pendant la séquence post-reveal (le backend refuse de toute
+ * façon les actions avant REVEAL_MIN_MS, le bouton ne ment donc jamais).
+ *
+ * Sur grand écran (lg:), le Pilotage reste affiché à gauche et les onglets
+ * pilotent la colonne de droite.
+ *
+ * Vs l'ancienne console : la liste COMPLÈTE des questions avec type, difficulté
+ * et médias (le manque n°1 par rapport au back-office PHP), le classement
+ * navigable (gm.standings était envoyé par le backend et jeté), le don de
+ * jokers, et le mixer resynchronisé sur l'état serveur (deux GM ne se
+ * désynchronisent plus).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowLeft,
   Check,
   ChevronRight,
   Clapperboard,
   Eye,
+  Film,
   Gift,
   ListOrdered,
-  Film,
   Music2,
   Pause,
   Play,
   Plus,
-  RefreshCw,
   RotateCcw,
   ScrollText,
   Square,
@@ -29,6 +50,7 @@ import {
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import LightsBadge from '../components/Live/LightsBadge';
+import { JOKER_DEFS, REVEAL_MIN_MS, type JokerType } from '../game/lib/gameClient';
 
 // ---------------------------------------------------------------------------
 // Types (vue GM)
@@ -49,13 +71,28 @@ interface GmQuestion {
   helpAnimator: string | null;
 }
 
+interface GmQuestionListItem {
+  index: number;
+  type: 'qcm' | 'estimation' | 'free_text';
+  question: string;
+  difficulty: string;
+  points: number;
+  theme: string | null;
+  hasMusic: boolean;
+  hasVideo: boolean;
+  hasImageQ: boolean;
+  hasImageR: boolean;
+  helpAnimator: string | null;
+  state: 'done' | 'current' | 'todo';
+}
+
 interface GmPlayer {
   id: string;
   pseudo: string;
   device: string;
   score: number;
   status: string;
-  qdLeft: number;
+  jokers: JokerType[];
   stats: { strike?: number; correctCount?: number; answerCount?: number };
 }
 
@@ -66,22 +103,32 @@ interface GmState {
   quizName: string;
   v: number;
   serverNow: number;
+  phaseStartedAt: number | null;
   phaseEndsAt: number | null;
   currentQuestionIndex: number;
   totalQuestions: number;
   playerCount: number;
-  qdFeed: string[];
+  jokerFeed: Array<{ pseudo: string; type: JokerType }>;
   judging: boolean;
-  config: { musicVolume?: number; sfxVolume?: number; mediaVolume?: number; showScores: boolean; wifiSsid: string };
+  config: {
+    musicVolume?: number;
+    sfxVolume?: number;
+    mediaVolume?: number;
+    showScores: boolean;
+    wifiSsid: string;
+  };
   reveal?: { cancelled?: boolean; fastest?: string | null; answeredCount: number };
   rewards?: { revealed: number };
   cinematic?: { step: number };
+  standings?: Array<{ pseudo: string; position: number; positionChange: number; device: string; score?: number }>;
   gm: {
     currentQuestion: GmQuestion | null;
     nextQuestion: GmQuestion | null;
     verdicts: Record<string, { accepted: boolean; source: string }>;
     judgeRunning: boolean;
     players: GmPlayer[];
+    questions: GmQuestionListItem[];
+    standings?: Array<{ pseudo: string; position: number; positionChange: number; device: string; score?: number }>;
     special: string | null;
   };
 }
@@ -112,12 +159,12 @@ const SPECIAL_OPTIONS = [
 ];
 
 const STATUS_LABELS: Record<string, string> = {
-  lobby: 'Salle d\'attente',
+  lobby: "Salle d'attente",
   rules: 'Règles affichées',
-  announce: 'Annonce (fenêtre bonus)',
+  announce: 'Annonce (fenêtre jokers)',
   question: 'Question en cours',
   locked: 'Réponses verrouillées',
-  reveal: 'Révélation',
+  reveal: 'Révélation + séquence',
   leaderboard: 'Classement',
   cinematic: 'Cinématique finale',
   pause: 'Pause',
@@ -125,23 +172,37 @@ const STATUS_LABELS: Record<string, string> = {
   end: 'Fin de partie',
 };
 
+const TYPE_BADGES: Record<string, { label: string; cls: string }> = {
+  qcm: { label: 'QCM', cls: 'bg-sky-500/15 text-sky-300 border-sky-400/30' },
+  estimation: { label: 'ESTIM', cls: 'bg-violet-500/15 text-violet-300 border-violet-400/30' },
+  free_text: { label: 'LIBRE', cls: 'bg-teal-500/15 text-teal-300 border-teal-400/30' },
+};
+
+const DIFF_BADGES: Record<string, string> = {
+  Facile: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30',
+  Moyen: 'bg-amber-500/15 text-amber-300 border-amber-400/30',
+  Difficile: 'bg-rose-500/15 text-rose-300 border-rose-400/30',
+};
+
+type Tab = 'pilotage' | 'questions' | 'classement' | 'reglages';
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function QuizLivePage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [state, setState] = useState<GmState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<Tab>('pilotage');
+  // décalage horloge serveur, réévalué à chaque refresh
+  const clockOffset = useRef(0);
 
-  // découverte de la session active
   useEffect(() => {
     void (async () => {
       try {
         const { data } = await api.get('/api/game');
-        const sessions = (data.items ?? []) as Array<{
-          id: string;
-          mode: string;
-          endedAt: string | null;
-        }>;
-        // filtre par mode : sans lui, une partie d'échecs active serait
-        // adoptée comme session quiz par la console
+        const sessions = (data.items ?? []) as Array<{ id: string; mode: string; endedAt: string | null }>;
         const active = sessions.find((s) => !s.endedAt && s.mode === 'quiz');
         if (active) setSessionId(active.id);
       } catch {
@@ -154,7 +215,9 @@ export default function QuizLivePage() {
     if (!sessionId) return;
     try {
       const { data } = await api.get(`/api/game/${sessionId}/state`);
-      setState(data.data ?? null);
+      const st = (data.data ?? null) as GmState | null;
+      if (st) clockOffset.current = st.serverNow - Date.now();
+      setState(st);
     } catch {
       /* poll suivant */
     }
@@ -164,7 +227,15 @@ export default function QuizLivePage() {
     if (!sessionId) return;
     void refresh();
     const interval = setInterval(() => void refresh(), 3000);
-    return () => clearInterval(interval);
+    // un téléphone sort de veille en plein quiz : refetch immédiat
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [sessionId, refresh]);
 
   const action = useCallback(
@@ -177,7 +248,11 @@ export default function QuizLivePage() {
         setState(data.data ?? null);
       } catch (err) {
         const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-        toast.error(msg ?? 'Action impossible');
+        toast.error(
+          msg === 'error_reveal_sequence'
+            ? 'La séquence des joueurs se termine, encore quelques secondes...'
+            : (msg ?? 'Action impossible'),
+        );
       } finally {
         setBusy(false);
       }
@@ -185,25 +260,73 @@ export default function QuizLivePage() {
     [sessionId, busy],
   );
 
-  if (!sessionId || !state || (state && state.status === 'end' && sessionId === null)) {
-    return <SessionLauncher onLaunched={(id) => setSessionId(id)} />;
+  if (!sessionId || !state) {
+    return (
+      <Coque>
+        <SessionLauncher onLaunched={(id) => setSessionId(id)} />
+      </Coque>
+    );
   }
 
   return (
-    <div className="pb-10">
-      <Header state={state} onRefresh={() => void refresh()} />
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
-          <ControlPanel state={state} busy={busy} action={action} />
-          <QuestionCard state={state} sessionId={sessionId} action={action} />
+    <Coque>
+      <HeaderBar state={state} />
+
+      {/* contenu : onglets sur mobile, pilotage + colonne sur desktop */}
+      {/* Mobile : l'onglet actif occupe tout. Desktop : Pilotage a gauche en
+          permanence, l'onglet pilote la colonne de droite (Questions par defaut). */}
+      <div className="mx-auto w-full max-w-6xl flex-1 px-3 pb-48 pt-3 lg:grid lg:grid-cols-3 lg:items-start lg:gap-4 lg:px-6">
+        <div className={`space-y-3 lg:col-span-2 ${tab === 'pilotage' ? 'block' : 'hidden lg:block'}`}>
+          <PilotagePanel state={state} sessionId={sessionId} action={action} />
         </div>
-        <div className="space-y-6">
-          <PlayersPanel state={state} sessionId={sessionId} action={action} />
-          <LightsBadge />
-          <MixerPanel state={state} action={action} />
-          <DangerPanel state={state} action={action} onClosed={() => { setSessionId(null); setState(null); }} />
+        <div className="lg:col-span-1">
+          <div className={tab === 'questions' ? 'block' : tab === 'pilotage' ? 'hidden lg:block' : 'hidden'}>
+            <QuestionsPanel state={state} />
+          </div>
+          <div className={tab === 'classement' ? 'block' : 'hidden'}>
+            <StandingsPanel state={state} action={action} />
+          </div>
+          <div className={tab === 'reglages' ? 'block' : 'hidden'}>
+            <SettingsPanel
+              state={state}
+              action={action}
+              onClosed={() => {
+                setSessionId(null);
+                setState(null);
+              }}
+            />
+          </div>
         </div>
       </div>
+
+      <BottomBar
+        state={state}
+        busy={busy}
+        action={action}
+        clockOffset={clockOffset}
+        tab={tab}
+        setTab={setTab}
+      />
+    </Coque>
+  );
+}
+
+/** coquille plein écran sombre : la console est une régie, pas une page d'admin */
+function Coque({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-dvh flex-col bg-slate-950 text-slate-100">
+      <div className="flex items-center justify-between border-b border-white/5 px-3 py-2 lg:px-6">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200"
+        >
+          <ArrowLeft size={13} /> Back-office
+        </Link>
+        <span className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">
+          Console quiz
+        </span>
+      </div>
+      {children}
     </div>
   );
 }
@@ -245,33 +368,33 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold">Quiz live</h1>
-      <p className="mt-1 text-gray-500">
+    <div className="mx-auto w-full max-w-3xl px-4 py-6">
+      <h1 className="text-2xl font-black">Quiz live</h1>
+      <p className="mt-1 text-sm text-slate-400">
         Lance une session : le projecteur et les écrans du bar basculent automatiquement.
       </p>
       {loading ? (
-        <p className="mt-8 text-gray-400">Chargement...</p>
+        <p className="mt-8 text-slate-500">Chargement...</p>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {quizzes.map((q) => (
-            <div key={q.id} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h2 className="font-bold text-gray-900">{q.name}</h2>
-              <p className="mt-1 text-sm text-gray-500">
+            <div key={q.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h2 className="font-bold">{q.name}</h2>
+              <p className="mt-1 text-sm text-slate-400">
                 {q.theme} · {q.questionCount} question{q.questionCount > 1 ? 's' : ''}
               </p>
               <button
                 type="button"
                 disabled={launching !== null || q.questionCount === 0}
                 onClick={() => void launch(q.id)}
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40"
+                className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-400 disabled:opacity-40"
               >
                 <Play size={15} /> {launching === q.id ? 'Lancement...' : 'Lancer une session'}
               </button>
             </div>
           ))}
           {quizzes.length === 0 && (
-            <p className="text-gray-400">Aucun quiz : crée-en un dans Contenus &gt; Quiz.</p>
+            <p className="text-slate-500">Aucun quiz : crée-en un dans Contenus &gt; Quiz.</p>
           )}
         </div>
       )}
@@ -280,285 +403,146 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
 }
 
 // ---------------------------------------------------------------------------
-// Header + panneau de contrôle
+// En-tête collant
 // ---------------------------------------------------------------------------
 
-function Header({ state, onRefresh }: { state: GmState; onRefresh: () => void }) {
-  const playURL = `${window.location.origin}/play/${state.joinCode}`;
+function HeaderBar({ state }: { state: GmState }) {
+  const progress =
+    state.totalQuestions > 0
+      ? Math.max(0, Math.min(1, (state.currentQuestionIndex + (state.status === 'reveal' || state.status === 'leaderboard' ? 1 : 0)) / state.totalQuestions))
+      : 0;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold">{state.quizName}</h1>
-          <span className="rounded-full bg-indigo-100 px-3 py-0.5 text-sm font-bold text-indigo-700">
-            {STATUS_LABELS[state.status] ?? state.status}
-          </span>
+    <div className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/95 px-3 py-2.5 backdrop-blur lg:px-6">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-sm font-black lg:text-lg">{state.quizName}</h1>
+            <span className="shrink-0 rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[11px] font-bold text-indigo-300 lg:text-xs">
+              {STATUS_LABELS[state.status] ?? state.status}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[11px] text-slate-400 lg:text-xs">
+            Q{Math.max(1, state.currentQuestionIndex + 1)}/{state.totalQuestions} ·{' '}
+            {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} · code{' '}
+            <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
+          </p>
         </div>
-        <p className="mt-1 text-sm text-gray-500">
-          Question {Math.max(0, state.currentQuestionIndex + 1)}/{state.totalQuestions} ·{' '}
-          {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} · code{' '}
-          <span className="font-mono font-bold text-gray-800">{state.joinCode}</span>
-        </p>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <a
+            href={`${window.location.origin}/play/${state.joinCode}`}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-white/15 px-2 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5 lg:px-3 lg:text-xs"
+          >
+            Joueur ↗
+          </a>
+          <a
+            href={`${window.location.origin}/screen/PROJO`}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg border border-white/15 px-2 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5 lg:px-3 lg:text-xs"
+          >
+            Projo ↗
+          </a>
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <a
-          href={playURL}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-        >
-          Page joueur ↗
-        </a>
-        <a
-          href={`${window.location.origin}/screen/PROJO`}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-        >
-          Projecteur ↗
-        </a>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-50"
-          aria-label="Rafraîchir"
-        >
-          <RefreshCw size={16} />
-        </button>
+      <div className="mx-auto mt-2 h-1 w-full max-w-6xl overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full bg-indigo-400"
+          style={{ width: `${progress * 100}%`, transition: 'width 400ms ease' }}
+        />
       </div>
     </div>
   );
 }
 
-function Btn({
-  onClick,
-  disabled,
-  variant = 'secondary',
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  variant?: 'primary' | 'secondary' | 'warn';
-  children: React.ReactNode;
-}) {
-  const styles = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-700',
-    secondary: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
-    warn: 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100',
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-40 ${styles[variant]}`}
-    >
-      {children}
-    </button>
-  );
-}
+// ---------------------------------------------------------------------------
+// Onglet Pilotage
+// ---------------------------------------------------------------------------
 
-function ControlPanel({
+function PilotagePanel({
   state,
-  busy,
+  sessionId,
   action,
 }: {
   state: GmState;
-  busy: boolean;
+  sessionId: string;
   action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
 }) {
-  const [special, setSpecial] = useState('');
-  const [remaining, setRemaining] = useState<number | null>(null);
-  const isLast = state.currentQuestionIndex >= state.totalQuestions - 1;
-  const s = state.status;
-
-  useEffect(() => {
-    if (!state.phaseEndsAt) {
-      setRemaining(null);
-      return;
-    }
-    const offset = state.serverNow - Date.now();
-    const tick = () => setRemaining(Math.max(0, (state.phaseEndsAt ?? 0) - (Date.now() + offset)));
-    tick();
-    const i = setInterval(tick, 500);
-    return () => clearInterval(i);
-  }, [state.phaseEndsAt, state.serverNow]);
-
-  const specialParams = special ? { special } : {};
-  const nextAndReset = (name: string) => {
-    void action(name, specialParams);
-    setSpecial('');
-  };
-
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-bold text-gray-900">Pilotage</h2>
-        {remaining !== null && (
-          <span className="rounded-full bg-gray-100 px-3 py-1 font-mono text-sm font-bold text-gray-700">
-            ⏱ {Math.ceil(remaining / 1000)}s
-          </span>
-        )}
-      </div>
+    <>
+      <QuestionCard state={state} sessionId={sessionId} action={action} />
+      {(state.status === 'reveal' || state.status === 'leaderboard') && (
+        <GiveJokerCard state={state} action={action} />
+      )}
+    </>
+  );
+}
 
-      {(s === 'reveal' || s === 'leaderboard' || s === 'lobby' || s === 'rules' || s === 'pause' || s === 'cinematic') && !isLastOrEnd(state) && (
-        <div className="mb-4 flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-600" htmlFor="special">Prochaine question :</label>
-          <select
-            id="special"
-            value={special}
-            onChange={(e) => setSpecial(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
-          >
-            {SPECIAL_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+function GiveJokerCard({
+  state,
+  action,
+}: {
+  state: GmState;
+  action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const players = [...state.gm.players]
+    .filter((p) => p.status === 'active')
+    .sort((a, b) => a.score - b.score);
+  return (
+    <div className="rounded-2xl border border-yellow-400/20 bg-yellow-400/5 p-4">
+      <h2 className="flex items-center gap-2 text-sm font-black text-yellow-200">
+        <Gift size={15} /> Donner un joker
+      </h2>
+      <p className="mt-1 text-xs text-slate-400">
+        Tirage aléatoire pour chaque joueur servi. Les mains pleines (2/2) sont sautées.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            void action('give-joker', {}, `Donner un joker à tous les joueurs éligibles ?`)
+          }
+          className="min-h-[44px] rounded-xl border border-yellow-400/40 bg-yellow-400/15 px-4 py-2 text-sm font-bold text-yellow-200 hover:bg-yellow-400/25"
+        >
+          🎁 À tout le monde
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="min-h-[44px] rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-white/5"
+        >
+          À un joueur...
+        </button>
+      </div>
+      {open && (
+        <div className="mt-3 max-h-48 space-y-1 overflow-y-auto">
+          {players.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              disabled={p.jokers.length >= 2}
+              onClick={() => {
+                void action('give-joker', { playerId: p.id });
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-white/5 disabled:opacity-40"
+            >
+              <span className="font-semibold">{p.pseudo}</span>
+              <span className="text-xs text-slate-400">
+                {p.jokers.map((j) => JOKER_DEFS[j].emoji).join(' ') || '∅'} ({p.jokers.length}/2)
+              </span>
+            </button>
+          ))}
         </div>
       )}
-
-      <div className="flex flex-wrap gap-2.5">
-        {(s === 'lobby' || s === 'rules') && (
-          <>
-            <Btn variant="secondary" disabled={busy} onClick={() => void action('rules')}>
-              <ScrollText size={15} /> {s === 'rules' ? 'Masquer les règles' : 'Afficher les règles'}
-            </Btn>
-            <Btn variant="primary" disabled={busy} onClick={() => nextAndReset('start')}>
-              <Play size={15} /> Démarrer le quiz
-            </Btn>
-          </>
-        )}
-
-        {s === 'announce' && (
-          <>
-            <span className="inline-flex items-center gap-2 rounded-lg bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700">
-              🎲 Fenêtre bonus ouverte {state.qdFeed.length > 0 && `· ${state.qdFeed.join(', ')}`}
-            </span>
-            <Btn variant="warn" disabled={busy} onClick={() => void action('cancel-question', {}, 'Annuler cette question ?')}>
-              <X size={15} /> Annuler la question
-            </Btn>
-          </>
-        )}
-
-        {s === 'question' && (
-          <>
-            <Btn variant="primary" disabled={busy} onClick={() => void action('reveal')}>
-              <Eye size={15} /> Révéler maintenant
-            </Btn>
-            <Btn variant="warn" disabled={busy} onClick={() => void action('replay-question', {}, 'Rejouer cette question ? (les réponses seront effacées)')}>
-              <RotateCcw size={15} /> Rejouer
-            </Btn>
-            <Btn variant="warn" disabled={busy} onClick={() => void action('cancel-question', {}, 'Annuler cette question ?')}>
-              <X size={15} /> Annuler
-            </Btn>
-          </>
-        )}
-
-        {s === 'locked' && (
-          <>
-            <Btn variant="primary" disabled={busy || state.gm.judgeRunning} onClick={() => void action('reveal')}>
-              <Eye size={15} /> {state.gm.judgeRunning ? 'Jugement IA en cours...' : 'Révéler les réponses'}
-            </Btn>
-            <Btn variant="warn" disabled={busy} onClick={() => void action('replay-question', {}, 'Rejouer cette question ?')}>
-              <RotateCcw size={15} /> Rejouer
-            </Btn>
-            <Btn variant="warn" disabled={busy} onClick={() => void action('cancel-question', {}, 'Annuler cette question ?')}>
-              <X size={15} /> Annuler
-            </Btn>
-          </>
-        )}
-
-        {s === 'reveal' && (
-          <>
-            {!isLast && (
-              <Btn variant="primary" disabled={busy} onClick={() => nextAndReset('next')}>
-                <ChevronRight size={15} /> Question suivante
-              </Btn>
-            )}
-            <Btn disabled={busy} onClick={() => void action('leaderboard')}>
-              <ListOrdered size={15} /> Classement
-            </Btn>
-            {isLast && (
-              <Btn variant="primary" disabled={busy} onClick={() => void action('cinematic')}>
-                <Clapperboard size={15} /> Cinématique finale
-              </Btn>
-            )}
-            <Btn variant="warn" disabled={busy} onClick={() => void action('replay-question', {}, 'Rejouer cette question ? (les points attribués seront retirés)')}>
-              <RotateCcw size={15} /> Rejouer
-            </Btn>
-            <Btn variant="warn" disabled={busy} onClick={() => void action('cancel-question', {}, 'Annuler cette question ? (les points attribués seront retirés)')}>
-              <X size={15} /> Annuler
-            </Btn>
-            <Btn disabled={busy} onClick={() => void action('pause')}>
-              <Pause size={15} /> Pause
-            </Btn>
-          </>
-        )}
-
-        {s === 'leaderboard' && (
-          <>
-            {!isLast && (
-              <Btn variant="primary" disabled={busy} onClick={() => nextAndReset('next')}>
-                <ChevronRight size={15} /> Question suivante
-              </Btn>
-            )}
-            {isLast && (
-              <Btn variant="primary" disabled={busy} onClick={() => void action('cinematic')}>
-                <Clapperboard size={15} /> Cinématique finale
-              </Btn>
-            )}
-            <Btn disabled={busy} onClick={() => void action('pause')}>
-              <Pause size={15} /> Pause
-            </Btn>
-          </>
-        )}
-
-        {s === 'cinematic' && (
-          <>
-            <span className="inline-flex items-center rounded-lg bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700">
-              🎬 Cinématique en cours (étape {(state.cinematic?.step ?? 0)}/6, automatique)
-            </span>
-            <Btn variant="primary" disabled={busy} onClick={() => void action('rewards')}>
-              <Gift size={15} /> Récompenses
-            </Btn>
-            <Btn disabled={busy} onClick={() => void action('end')}>
-              <Trophy size={15} /> Écran de fin
-            </Btn>
-          </>
-        )}
-
-        {s === 'pause' && (
-          <>
-            <Btn disabled={busy} onClick={() => void action('resume')}>
-              <Play size={15} /> Reprendre
-            </Btn>
-            {!isLast && (
-              <Btn variant="primary" disabled={busy} onClick={() => nextAndReset('resume-next')}>
-                <ChevronRight size={15} /> Reprendre + question suivante
-              </Btn>
-            )}
-          </>
-        )}
-
-        {s === 'rewards' && (
-          <Btn variant="primary" disabled={busy} onClick={() => void action('end')}>
-            <Trophy size={15} /> Écran de fin
-          </Btn>
-        )}
-      </div>
     </div>
   );
 }
 
-function isLastOrEnd(state: GmState): boolean {
-  return (
-    state.currentQuestionIndex >= state.totalQuestions - 1 &&
-    (state.status === 'reveal' || state.status === 'leaderboard' || state.status === 'cinematic')
-  );
-}
-
 // ---------------------------------------------------------------------------
-// Carte question + réponses live + verdicts
+// Carte question (courante) + réponses live + verdicts
 // ---------------------------------------------------------------------------
 
 function QuestionCard({
@@ -572,7 +556,8 @@ function QuestionCard({
 }) {
   const q = state.gm.currentQuestion;
   const [answers, setAnswers] = useState<LiveAnswer[]>([]);
-  const polling = state.status === 'question' || state.status === 'locked' || state.status === 'announce';
+  const polling =
+    state.status === 'question' || state.status === 'locked' || state.status === 'announce';
 
   useEffect(() => {
     if (!polling) {
@@ -595,25 +580,33 @@ function QuestionCard({
   if (!q) {
     const next = state.gm.nextQuestion;
     return next ? (
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-2 font-bold text-gray-900">Première question</h2>
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+        <h2 className="mb-2 text-sm font-black text-slate-300">Première question</h2>
         <QuestionPreview q={next} />
       </div>
     ) : null;
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-bold text-gray-900">
-          Question {state.currentQuestionIndex + 1}/{state.totalQuestions}
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h2 className="text-sm font-black">
+          Q{state.currentQuestionIndex + 1}/{state.totalQuestions}
         </h2>
-        <span className="text-sm text-gray-500">
-          {q.difficulty} · {q.points} pt{q.points > 1 ? 's' : ''} · {q.theme}
-          {state.gm.special && ` · SPÉCIALE ${state.gm.special}`}
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${TYPE_BADGES[q.type].cls}`}>
+          {TYPE_BADGES[q.type].label}
         </span>
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${DIFF_BADGES[q.difficulty] ?? 'border-white/15 text-slate-300'}`}>
+          {q.difficulty} · {q.points} pt{q.points > 1 ? 's' : ''}
+        </span>
+        {q.theme && <span className="text-xs text-slate-400">{q.theme}</span>}
+        {state.gm.special && (
+          <span className="rounded-full border border-amber-400/40 bg-amber-400/15 px-2 py-0.5 text-[10px] font-black text-amber-300">
+            SPÉCIALE {state.gm.special}
+          </span>
+        )}
       </div>
-      <p className="text-lg font-semibold text-gray-900">{q.question}</p>
+      <p className="font-semibold leading-snug">{q.question}</p>
 
       {q.type === 'qcm' && (
         <div className="mt-3 grid grid-cols-1 gap-1.5 md:grid-cols-2">
@@ -622,8 +615,8 @@ function QuestionCard({
               key={i}
               className={`rounded-lg border px-3 py-2 text-sm ${
                 i === q.correctIndex
-                  ? 'border-emerald-300 bg-emerald-50 font-bold text-emerald-800'
-                  : 'border-gray-200 text-gray-600'
+                  ? 'border-emerald-400/50 bg-emerald-400/10 font-bold text-emerald-300'
+                  : 'border-white/10 text-slate-400'
               }`}
             >
               {String.fromCharCode(65 + i)}. {a} {i === q.correctIndex && '✔'}
@@ -632,32 +625,44 @@ function QuestionCard({
         </div>
       )}
       {q.type === 'estimation' && (
-        <p className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+        <p className="mt-3 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-sm font-bold text-emerald-300">
           Réponse : {q.expectedNumber} · paliers :{' '}
           {(q.estimationScoring ?? []).map((t) => `±${t.maxGap} → ${t.points} pts`).join(' · ')}
         </p>
       )}
       {q.type === 'free_text' && (
-        <p className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+        <p className="mt-3 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-sm font-bold text-emerald-300">
           Réponse attendue : {q.expectedAnswer}
         </p>
       )}
 
       {q.helpAnimator && (
-        <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+        <p className="mt-3 rounded-lg border border-indigo-400/20 bg-indigo-400/10 px-3 py-2 text-sm text-indigo-200">
           💡 <span className="font-semibold">Anecdote :</span> {q.helpAnimator}
         </p>
       )}
 
-      {/* Verdicts IA éditables (réponse libre verrouillée) */}
+      {state.status === 'announce' && state.jokerFeed.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {state.jokerFeed.slice(-8).map((f, i) => (
+            <span
+              key={i}
+              className="rounded-full border px-2 py-0.5 text-xs font-semibold"
+              style={{ borderColor: `${JOKER_DEFS[f.type].couleur}55`, color: JOKER_DEFS[f.type].couleur }}
+            >
+              {JOKER_DEFS[f.type].emoji} {f.pseudo}
+            </span>
+          ))}
+        </div>
+      )}
+
       {q.type === 'free_text' && state.status === 'locked' && (
         <VerdictEditor state={state} answers={answers} action={action} />
       )}
 
-      {/* Réponses en direct */}
       {polling && answers.length > 0 && q.type !== 'free_text' && (
         <div className="mt-4">
-          <h3 className="mb-2 text-sm font-semibold text-gray-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
             Réponses reçues ({answers.length})
           </h3>
           <div className="flex flex-wrap gap-1.5">
@@ -666,14 +671,14 @@ function QuestionCard({
                 key={a.playerId}
                 className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                   a.correct === true
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
                     : a.correct === false
-                      ? 'border-rose-200 bg-rose-50 text-rose-600'
-                      : 'border-gray-200 bg-gray-50 text-gray-600'
+                      ? 'border-rose-400/30 bg-rose-400/10 text-rose-300'
+                      : 'border-white/10 bg-white/5 text-slate-300'
                 }`}
               >
                 {a.pseudo}
-                {a.bonus && ' 🎲'}
+                {a.bonus === 'all_in' && ' 🎰'}
                 {typeof a.answer.choice === 'number' && ` · ${String.fromCharCode(65 + a.answer.choice)}`}
                 {typeof a.answer.number === 'number' && ` · ${a.answer.number}`}
                 {a.correct === true && <Check size={11} />}
@@ -685,8 +690,10 @@ function QuestionCard({
       )}
 
       {state.gm.nextQuestion && (state.status === 'reveal' || state.status === 'leaderboard') && (
-        <div className="mt-5 border-t border-gray-100 pt-4">
-          <h3 className="mb-2 text-sm font-semibold text-gray-500">Question suivante</h3>
+        <div className="mt-4 border-t border-white/10 pt-3">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            Question suivante
+          </h3>
           <QuestionPreview q={state.gm.nextQuestion} />
         </div>
       )}
@@ -696,14 +703,25 @@ function QuestionCard({
 
 function QuestionPreview({ q }: { q: GmQuestion }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
-      <p className="text-sm font-semibold text-gray-800">{q.question}</p>
-      <p className="mt-1 text-xs text-gray-500">
-        {q.type.toUpperCase()} · {q.difficulty} · {q.points} pt{q.points > 1 ? 's' : ''} · {q.theme}
-        {q.type === 'qcm' && ` · réponse : ${q.answers[q.correctIndex]}`}
-        {q.type === 'estimation' && ` · réponse : ${q.expectedNumber}`}
-        {q.type === 'free_text' && ` · réponse : ${q.expectedAnswer}`}
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5">
+      <div className="mb-1 flex flex-wrap items-center gap-1.5">
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${TYPE_BADGES[q.type].cls}`}>
+          {TYPE_BADGES[q.type].label}
+        </span>
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${DIFF_BADGES[q.difficulty] ?? 'border-white/15 text-slate-300'}`}>
+          {q.difficulty} · {q.points} pt{q.points > 1 ? 's' : ''}
+        </span>
+        {q.theme && <span className="text-[11px] text-slate-500">{q.theme}</span>}
+      </div>
+      <p className="text-sm font-semibold text-slate-200">{q.question}</p>
+      <p className="mt-1 text-xs text-emerald-300">
+        {q.type === 'qcm' && `Réponse : ${q.answers[q.correctIndex]}`}
+        {q.type === 'estimation' && `Réponse : ${q.expectedNumber}`}
+        {q.type === 'free_text' && `Réponse : ${q.expectedAnswer}`}
       </p>
+      {q.helpAnimator && (
+        <p className="mt-1 text-xs text-indigo-300">💡 {q.helpAnimator}</p>
+      )}
     </div>
   );
 }
@@ -720,7 +738,7 @@ function VerdictEditor({
   const verdicts = state.gm.verdicts;
   if (state.gm.judgeRunning) {
     return (
-      <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+      <p className="mt-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-300">
         🤖 Jugement IA en cours...
       </p>
     );
@@ -732,8 +750,8 @@ function VerdictEditor({
   });
   return (
     <div className="mt-4">
-      <h3 className="mb-2 text-sm font-semibold text-gray-500">
-        Verdicts (clique pour corriger avant de révéler)
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        Verdicts (touche pour corriger avant de révéler)
       </h3>
       <div className="space-y-1.5">
         {sorted.map((a) => {
@@ -744,78 +762,172 @@ function VerdictEditor({
               key={a.playerId}
               type="button"
               onClick={() => void action('verdict', { playerId: a.playerId, accepted: !accepted })}
-              className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${
+              className={`flex min-h-[44px] w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${
                 accepted
-                  ? 'border-emerald-300 bg-emerald-50'
-                  : 'border-rose-200 bg-rose-50'
+                  ? 'border-emerald-400/40 bg-emerald-400/10'
+                  : 'border-rose-400/30 bg-rose-400/10'
               }`}
             >
-              <span>
+              <span className="min-w-0">
                 <span className="font-bold">{a.pseudo}</span>
-                <span className="text-gray-600"> : « {a.answer.text} »</span>
+                <span className="text-slate-400"> : « {a.answer.text} »</span>
               </span>
-              <span className={`font-bold ${accepted ? 'text-emerald-700' : 'text-rose-600'}`}>
-                {accepted ? '✔ acceptée' : '✘ refusée'}
-                <span className="ml-1 text-xs font-normal text-gray-400">({v?.source ?? '?'})</span>
+              <span className={`ml-2 shrink-0 font-bold ${accepted ? 'text-emerald-300' : 'text-rose-300'}`}>
+                {accepted ? '✔' : '✘'}
+                <span className="ml-1 text-xs font-normal text-slate-500">({v?.source ?? '?'})</span>
               </span>
             </button>
           );
         })}
-        {sorted.length === 0 && <p className="text-sm text-gray-400">Aucune réponse reçue.</p>}
+        {sorted.length === 0 && <p className="text-sm text-slate-500">Aucune réponse reçue.</p>}
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Joueurs / mixer / danger
+// Onglet Questions : toute la liste, avec type, difficulté et médias
 // ---------------------------------------------------------------------------
 
-function PlayersPanel({
+function QuestionsPanel({ state }: { state: GmState }) {
+  const [openHelp, setOpenHelp] = useState<number | null>(null);
+  const courante = useRef<HTMLDivElement | null>(null);
+  const questions = state.gm.questions ?? [];
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <h2 className="mb-3 text-sm font-black text-slate-300">
+        Questions ({questions.filter((qq) => qq.state === 'done').length}/{questions.length} jouées)
+      </h2>
+      <div className="max-h-[60vh] space-y-1.5 overflow-y-auto pr-1 lg:max-h-[65vh]">
+        {questions.map((qq) => {
+          const estCourante = qq.state === 'current';
+          const faite = qq.state === 'done';
+          const helpVisible = openHelp === qq.index;
+          return (
+            <div
+              key={qq.index}
+              ref={estCourante ? courante : undefined}
+              className={`rounded-xl border px-3 py-2 ${
+                estCourante
+                  ? 'border-indigo-400/60 bg-indigo-500/10'
+                  : faite
+                    ? 'border-white/5 bg-white/[0.02] opacity-50'
+                    : 'border-white/10 bg-white/[0.04]'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-6 shrink-0 text-right font-mono text-xs font-bold text-slate-500">
+                  {qq.index + 1}
+                </span>
+                <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-black ${TYPE_BADGES[qq.type].cls}`}>
+                  {TYPE_BADGES[qq.type].label}
+                </span>
+                <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold ${DIFF_BADGES[qq.difficulty] ?? 'border-white/15 text-slate-300'}`}>
+                  {qq.points}pt
+                </span>
+                <span className="shrink-0 text-[11px] tracking-wide text-slate-500">
+                  {qq.hasMusic && '🎵'}
+                  {qq.hasVideo && '🎬'}
+                  {(qq.hasImageQ || qq.hasImageR) && '🖼'}
+                </span>
+                {faite && <Check size={12} className="shrink-0 text-emerald-400" />}
+              </div>
+              <button
+                type="button"
+                onClick={() => qq.helpAnimator && setOpenHelp(helpVisible ? null : qq.index)}
+                className="mt-1 w-full text-left"
+              >
+                <p className={`text-xs leading-snug ${estCourante ? 'font-bold text-slate-100' : 'text-slate-300'}`}>
+                  {qq.question}
+                  {qq.helpAnimator && <span className="ml-1 text-indigo-400">💡</span>}
+                </p>
+              </button>
+              {helpVisible && qq.helpAnimator && (
+                <p className="mt-1 rounded-lg bg-indigo-400/10 px-2 py-1.5 text-xs text-indigo-200">
+                  {qq.helpAnimator}
+                </p>
+              )}
+            </div>
+          );
+        })}
+        {questions.length === 0 && <p className="text-sm text-slate-500">Pas de questions.</p>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Onglet Classement
+// ---------------------------------------------------------------------------
+
+function StandingsPanel({
   state,
   action,
 }: {
   state: GmState;
-  sessionId: string;
   action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<GmPlayer | null>(null);
   const [points, setPoints] = useState('1');
   const players = [...state.gm.players].sort((a, b) => b.score - a.score);
+  const changes = new Map(
+    (state.gm.standings ?? state.standings ?? []).map((s) => [s.pseudo, s.positionChange]),
+  );
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 font-bold text-gray-900">Joueurs ({players.length})</h2>
-      <div className="max-h-80 space-y-1 overflow-y-auto">
-        {players.map((p, i) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => setSelected(selected?.id === p.id ? null : p)}
-            className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${
-              selected?.id === p.id ? 'bg-indigo-50' : ''
-            }`}
-          >
-            <span className="min-w-0 truncate">
-              <span className="mr-2 text-xs text-gray-400">{i + 1}.</span>
-              <span className="font-semibold">{p.pseudo}</span>
-              <span className="ml-1.5 text-xs text-gray-400">{p.device !== 'mobile' && `· ${p.device}`}</span>
-            </span>
-            <span className="ml-2 shrink-0 font-mono font-bold text-indigo-600">{p.score}</span>
-          </button>
-        ))}
-        {players.length === 0 && <p className="text-sm text-gray-400">Personne pour l'instant.</p>}
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <h2 className="mb-3 text-sm font-black text-slate-300">Classement ({players.length})</h2>
+      <div className="max-h-[55vh] space-y-1 overflow-y-auto pr-1">
+        {players.map((p, i) => {
+          const delta = changes.get(p.pseudo) ?? 0;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setSelected(selected?.id === p.id ? null : p)}
+              className={`flex min-h-[44px] w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm hover:bg-white/5 ${
+                selected?.id === p.id ? 'bg-indigo-500/15' : ''
+              } ${p.status !== 'active' ? 'opacity-40' : ''}`}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <span className={`w-6 shrink-0 text-right font-mono text-xs font-bold ${i < 3 ? 'text-amber-300' : 'text-slate-500'}`}>
+                  {i + 1}
+                </span>
+                {delta !== 0 && (
+                  <span className={`shrink-0 text-[10px] font-bold ${delta > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {delta > 0 ? `▲${delta}` : `▼${-delta}`}
+                  </span>
+                )}
+                <span className="truncate font-semibold">{p.pseudo}</span>
+                {p.device !== 'mobile' && (
+                  <span className="shrink-0 text-[10px] text-slate-500">{p.device}</span>
+                )}
+                <span className="shrink-0 text-xs">
+                  {p.jokers.map((j) => JOKER_DEFS[j].emoji).join('')}
+                </span>
+              </span>
+              <span className="ml-2 shrink-0 font-mono font-bold tabular-nums text-indigo-300">
+                {p.score}
+              </span>
+            </button>
+          );
+        })}
+        {players.length === 0 && <p className="text-sm text-slate-500">Personne pour l'instant.</p>}
       </div>
 
       {selected && (
-        <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
-          <p className="mb-2 text-sm font-bold">{selected.pseudo} · {selected.score} pts · 🎲 ×{selected.qdLeft}</p>
-          <div className="flex items-center gap-2">
+        <div className="mt-3 rounded-xl border border-indigo-400/30 bg-indigo-500/10 p-3">
+          <p className="mb-2 text-sm font-bold">
+            {selected.pseudo} · {selected.score} pts ·{' '}
+            {selected.jokers.map((j) => JOKER_DEFS[j].emoji).join(' ') || 'aucun joker'}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="number"
               value={points}
               onChange={(e) => setPoints(e.target.value)}
-              className="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              className="w-20 rounded-lg border border-white/15 bg-white/5 px-2 py-2 text-sm"
             />
             <button
               type="button"
@@ -826,23 +938,76 @@ function PlayersPanel({
                   toast.success(`${n > 0 ? '+' : ''}${n} pts pour ${selected.pseudo}`);
                 }
               }}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
+              className="min-h-[44px] rounded-lg bg-indigo-500 px-3 py-2 text-sm font-bold text-white hover:bg-indigo-400"
             >
               <Plus size={13} className="inline" /> Points
             </button>
+            {(state.status === 'reveal' || state.status === 'leaderboard') && (
+              <button
+                type="button"
+                disabled={selected.jokers.length >= 2}
+                onClick={() => void action('give-joker', { playerId: selected.id })}
+                className="min-h-[44px] rounded-lg border border-yellow-400/40 bg-yellow-400/10 px-3 py-2 text-sm font-bold text-yellow-200 hover:bg-yellow-400/20 disabled:opacity-40"
+              >
+                🎁 Joker
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
                 void action('kick', { playerId: selected.id }, `Retirer ${selected.pseudo} de la partie ?`);
                 setSelected(null);
               }}
-              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-100"
+              className="min-h-[44px] rounded-lg border border-rose-400/40 bg-rose-400/10 px-3 py-2 text-sm font-bold text-rose-300 hover:bg-rose-400/20"
             >
               <UserX size={13} className="inline" /> Retirer
             </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Onglet Réglages : mixer + lumières + zone sensible
+// ---------------------------------------------------------------------------
+
+function SettingsPanel({
+  state,
+  action,
+  onClosed,
+}: {
+  state: GmState;
+  action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
+  onClosed: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <MixerPanel state={state} action={action} />
+      <LightsBadge />
+      <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 p-4">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-black text-rose-300">
+          <AlertTriangle size={15} /> Zone sensible
+        </h2>
+        <button
+          type="button"
+          onClick={async () => {
+            if (!confirm('Arrêter la partie ? Les écrans reviennent à leur état normal.')) return;
+            await action('stop');
+            onClosed();
+            toast.success('Session terminée');
+          }}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-rose-400/40 bg-rose-400/10 px-4 py-2 text-sm font-bold text-rose-300 hover:bg-rose-400/20"
+        >
+          <Square size={14} /> Arrêter la partie
+        </button>
+        {state.status === 'end' && (
+          <p className="mt-2 text-xs text-rose-300">
+            La partie est sur l'écran de fin : arrête-la pour libérer les écrans.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -858,78 +1023,70 @@ function MixerPanel({
   const [sfx, setSfx] = useState(Math.round((state.config.sfxVolume ?? 0.8) * 100));
   const [media, setMedia] = useState(Math.round((state.config.mediaVolume ?? 0.9) * 100));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editing = useRef(false);
+
+  // Resynchronise sur l'état serveur quand on n'est PAS en train de glisser :
+  // sans ça, deux GM sur deux téléphones se désynchronisaient en silence.
+  useEffect(() => {
+    if (editing.current) return;
+    setMusic(Math.round((state.config.musicVolume ?? 0.35) * 100));
+    setSfx(Math.round((state.config.sfxVolume ?? 0.8) * 100));
+    setMedia(Math.round((state.config.mediaVolume ?? 0.9) * 100));
+  }, [state.config.musicVolume, state.config.sfxVolume, state.config.mediaVolume]);
 
   const push = (m: number, s: number, md: number) => {
+    editing.current = true;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
+      editing.current = false;
       void action('set-config', {
         config: { musicVolume: m / 100, sfxVolume: s / 100, mediaVolume: md / 100 },
       });
     }, 350);
   };
 
+  const rows: Array<{
+    icon: React.ReactNode;
+    label: string;
+    value: number;
+    set: (v: number) => void;
+    hint?: string;
+  }> = [
+    { icon: <Music2 size={14} />, label: 'Musique de fond', value: music, set: (v) => { setMusic(v); push(v, sfx, media); } },
+    { icon: <Volume2 size={14} />, label: 'Effets sonores', value: sfx, set: (v) => { setSfx(v); push(music, v, media); } },
+    {
+      icon: <Film size={14} />,
+      label: 'Média de la question',
+      value: media,
+      set: (v) => { setMedia(v); push(music, sfx, v); },
+      hint: 'Extrait de blindtest et clip vidéo. Canal distinct de la musique de fond.',
+    },
+  ];
+
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-4 font-bold text-gray-900">Mixer du projecteur</h2>
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+      <h2 className="mb-4 text-sm font-black text-slate-300">Mixer du projecteur</h2>
       <div className="space-y-4">
-        <div>
-          <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 font-medium text-gray-600"><Music2 size={14} /> Musique de fond</span>
-            <span className="font-mono font-bold text-gray-800">{music}%</span>
+        {rows.map((r) => (
+          <div key={r.label}>
+            <div className="mb-1 flex items-center justify-between text-sm">
+              <span className="flex items-center gap-2 font-medium text-slate-400">
+                {r.icon} {r.label}
+              </span>
+              <span className="font-mono font-bold tabular-nums text-slate-200">{r.value}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={r.value}
+              onChange={(e) => r.set(parseInt(e.target.value, 10))}
+              className="h-6 w-full accent-indigo-500"
+            />
+            {r.hint && <p className="mt-1 text-xs text-slate-500">{r.hint}</p>}
           </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={music}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              setMusic(v);
-              push(v, sfx, media);
-            }}
-            className="w-full accent-indigo-600"
-          />
-        </div>
-        <div>
-          <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 font-medium text-gray-600"><Volume2 size={14} /> Effets sonores</span>
-            <span className="font-mono font-bold text-gray-800">{sfx}%</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={sfx}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              setSfx(v);
-              push(music, v, media);
-            }}
-            className="w-full accent-indigo-600"
-          />
-        </div>
-        <div>
-          <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 font-medium text-gray-600"><Film size={14} /> Média de la question</span>
-            <span className="font-mono font-bold text-gray-800">{media}%</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={media}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              setMedia(v);
-              push(music, sfx, v);
-            }}
-            className="w-full accent-indigo-600"
-          />
-          <p className="mt-1 text-xs text-gray-400">
-            Extrait de blindtest et clip vidéo. Canal distinct de la musique de fond.
-          </p>
-        </div>
-        <p className="text-xs text-gray-400">
+        ))}
+        <p className="text-xs text-slate-500">
           La musique baisse automatiquement pendant les extraits et remonte à ce niveau exact.
         </p>
       </div>
@@ -937,37 +1094,256 @@ function MixerPanel({
   );
 }
 
-function DangerPanel({
+// ---------------------------------------------------------------------------
+// Barre d'action collante : onglets + LE bouton du moment
+// ---------------------------------------------------------------------------
+
+function BottomBar({
   state,
+  busy,
   action,
-  onClosed,
+  clockOffset,
+  tab,
+  setTab,
 }: {
   state: GmState;
+  busy: boolean;
   action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
-  onClosed: () => void;
+  clockOffset: React.MutableRefObject<number>;
+  tab: Tab;
+  setTab: (t: Tab) => void;
 }) {
+  const [special, setSpecial] = useState('');
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [sequenceLeft, setSequenceLeft] = useState(0);
+  const s = state.status;
+  const isLast = state.currentQuestionIndex >= state.totalQuestions - 1;
+
+  // chrono de phase + compte a rebours de la sequence post-reveal
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now() + clockOffset.current;
+      setRemaining(state.phaseEndsAt ? Math.max(0, state.phaseEndsAt - now) : null);
+      setSequenceLeft(
+        s === 'reveal' && state.phaseStartedAt
+          ? Math.max(0, state.phaseStartedAt + REVEAL_MIN_MS - now)
+          : 0,
+      );
+    };
+    tick();
+    const i = setInterval(tick, 400);
+    return () => clearInterval(i);
+  }, [state.phaseEndsAt, state.phaseStartedAt, s, clockOffset]);
+
+  const specialParams = special ? { special } : {};
+  const nextAndReset = (name: string) => {
+    void action(name, specialParams);
+    setSpecial('');
+  };
+  const seqSec = Math.ceil(sequenceLeft / 1000);
+  const bloqueParSequence = s === 'reveal' && sequenceLeft > 0;
+
+  // LE bouton principal du moment
+  let principal: { label: React.ReactNode; onClick: () => void; disabled?: boolean } | null = null;
+  if (s === 'lobby' || s === 'rules') {
+    principal = { label: <><Play size={17} /> Démarrer le quiz</>, onClick: () => nextAndReset('start') };
+  } else if (s === 'question') {
+    principal = { label: <><Eye size={17} /> Révéler maintenant</>, onClick: () => void action('reveal') };
+  } else if (s === 'locked') {
+    principal = {
+      label: <><Eye size={17} /> {state.gm.judgeRunning ? 'Jugement IA...' : 'Révéler les réponses'}</>,
+      onClick: () => void action('reveal'),
+      disabled: state.gm.judgeRunning,
+    };
+  } else if (s === 'reveal' || s === 'leaderboard') {
+    principal = isLast
+      ? {
+          label: bloqueParSequence ? (
+            <><Clapperboard size={17} /> Cinématique dans {seqSec}s</>
+          ) : (
+            <><Clapperboard size={17} /> Cinématique finale</>
+          ),
+          onClick: () => void action('cinematic'),
+          disabled: bloqueParSequence,
+        }
+      : {
+          label: bloqueParSequence ? (
+            <><ChevronRight size={17} /> Suivante dans {seqSec}s</>
+          ) : (
+            <><ChevronRight size={17} /> Question suivante</>
+          ),
+          onClick: () => nextAndReset('next'),
+          disabled: bloqueParSequence,
+        };
+  } else if (s === 'cinematic') {
+    principal = { label: <><Gift size={17} /> Récompenses</>, onClick: () => void action('rewards') };
+  } else if (s === 'pause') {
+    principal = { label: <><Play size={17} /> Reprendre</>, onClick: () => void action('resume') };
+  } else if (s === 'rewards') {
+    principal = { label: <><Trophy size={17} /> Écran de fin</>, onClick: () => void action('end') };
+  }
+
+  // actions secondaires du statut
+  const secondaires: Array<{ label: React.ReactNode; onClick: () => void; warn?: boolean }> = [];
+  if (s === 'lobby' || s === 'rules') {
+    secondaires.push({
+      label: <><ScrollText size={13} /> {s === 'rules' ? 'Masquer règles' : 'Règles'}</>,
+      onClick: () => void action('rules'),
+    });
+  }
+  if (s === 'announce') {
+    secondaires.push({
+      label: <><X size={13} /> Annuler la question</>,
+      onClick: () => void action('cancel-question', {}, 'Annuler cette question ?'),
+      warn: true,
+    });
+  }
+  if (s === 'question' || s === 'locked' || s === 'reveal') {
+    secondaires.push({
+      label: <><RotateCcw size={13} /> Rejouer</>,
+      onClick: () => void action('replay-question', {}, 'Rejouer cette question ? (réponses et points effacés)'),
+      warn: true,
+    });
+    secondaires.push({
+      label: <><X size={13} /> Annuler</>,
+      onClick: () => void action('cancel-question', {}, 'Annuler cette question ?'),
+      warn: true,
+    });
+  }
+  if (s === 'reveal' || s === 'leaderboard') {
+    if (s === 'reveal') {
+      secondaires.push({ label: <><ListOrdered size={13} /> Classement</>, onClick: () => void action('leaderboard') });
+    }
+    if (isLast && s === 'reveal') {
+      // cinematic est deja le bouton principal au dernier tour
+    }
+    secondaires.push({ label: <><Pause size={13} /> Pause</>, onClick: () => void action('pause') });
+    if (!isLast) {
+      secondaires.push({
+        label: <><Clapperboard size={13} /> Cinématique</>,
+        onClick: () => void action('cinematic'),
+      });
+    }
+  }
+  if (s === 'cinematic') {
+    secondaires.push({ label: <><Trophy size={13} /> Écran de fin</>, onClick: () => void action('end') });
+  }
+  if (s === 'pause' && !isLast) {
+    secondaires.push({
+      label: <><ChevronRight size={13} /> Reprendre + suivante</>,
+      onClick: () => nextAndReset('resume-next'),
+    });
+  }
+
+  const montrerSpeciale =
+    (s === 'lobby' || s === 'rules' || s === 'reveal' || s === 'leaderboard' || s === 'pause') && !isLast;
+
   return (
-    <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-5">
-      <h2 className="mb-3 flex items-center gap-2 font-bold text-rose-800">
-        <AlertTriangle size={16} /> Zone sensible
-      </h2>
-      <button
-        type="button"
-        onClick={async () => {
-          if (!confirm('Arrêter la partie ? Les écrans reviennent à leur état normal.')) return;
-          await action('stop');
-          onClosed();
-          toast.success('Session terminée');
-        }}
-        className="inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
-      >
-        <Square size={14} /> Arrêter la partie
-      </button>
-      {state.status === 'end' && (
-        <p className="mt-2 text-xs text-rose-700">
-          La partie est sur l'écran de fin : arrête-la pour libérer les écrans.
-        </p>
-      )}
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+      <div className="mx-auto w-full max-w-6xl px-3 pt-2 lg:px-6">
+        {/* rangée contextuelle : chrono, spéciale, secondaires */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 [scrollbar-width:none]">
+          {remaining !== null && (
+            <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 font-mono text-xs font-bold tabular-nums">
+              ⏱ {Math.ceil(remaining / 1000)}s
+            </span>
+          )}
+          {s === 'announce' && (
+            <span className="shrink-0 rounded-full border border-violet-400/30 bg-violet-500/10 px-2.5 py-1 text-xs font-semibold text-violet-300">
+              🃏 Fenêtre jokers ouverte
+            </span>
+          )}
+          {s === 'cinematic' && (
+            <span className="shrink-0 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-2.5 py-1 text-xs font-semibold text-indigo-300">
+              🎬 Étape {state.cinematic?.step ?? 0}/6 (auto)
+            </span>
+          )}
+          {montrerSpeciale && (
+            <select
+              value={special}
+              onChange={(e) => setSpecial(e.target.value)}
+              className="shrink-0 rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-xs text-slate-200"
+            >
+              {SPECIAL_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {secondaires.map((b, i) => (
+            <button
+              key={i}
+              type="button"
+              disabled={busy}
+              onClick={b.onClick}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40 ${
+                b.warn
+                  ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+                  : 'border-white/15 text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+
+        {/* LE bouton du moment, plein pouce */}
+        {principal && (
+          <button
+            type="button"
+            disabled={busy || principal.disabled}
+            onClick={principal.onClick}
+            className="mb-2 flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-indigo-500 text-base font-black text-white transition hover:bg-indigo-400 active:scale-[0.99] disabled:opacity-50"
+          >
+            {principal.label}
+          </button>
+        )}
+
+        {/* onglets */}
+        <div className="flex items-stretch gap-1 pb-2 lg:hidden">
+          {(
+            [
+              ['pilotage', 'Pilotage'],
+              ['questions', 'Questions'],
+              ['classement', 'Classement'],
+              ['reglages', 'Réglages'],
+            ] as Array<[Tab, string]>
+          ).map(([t, lbl]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`min-h-[44px] flex-1 rounded-xl text-xs font-bold ${
+                tab === t ? 'bg-white/15 text-white' : 'text-slate-400 hover:bg-white/5'
+              }`}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+        {/* desktop : la colonne de droite se pilote ici aussi */}
+        <div className="hidden items-stretch gap-1 pb-2 lg:flex">
+          {(
+            [
+              ['questions', 'Questions'],
+              ['classement', 'Classement'],
+              ['reglages', 'Réglages'],
+            ] as Array<[Tab, string]>
+          ).map(([t, lbl]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t === tab ? 'questions' : t)}
+              className={`rounded-xl px-4 py-1.5 text-xs font-bold ${
+                tab === t ? 'bg-white/15 text-white' : 'text-slate-400 hover:bg-white/5'
+              }`}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

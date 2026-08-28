@@ -1,39 +1,65 @@
 /**
- * Presentation des regles du quiz, en chapitres animes.
+ * Écran de règles du quiz/blindtest — séquence animée en 8 chapitres.
  *
- * POURQUOI CE COMPOSANT : l'ecran precedent tenait en quatre puces de texte. Il
- * ne disait ni le deroule d'une question, ni les types de reponse, ni le bareme
- * de difficulte, et il laissait 80 % de la dalle vide. Sur une borne regardee a
- * un bras de distance, pendant que l'animateur presente la soiree, c'est le
- * moment ou on peut vraiment expliquer le jeu.
+ * MÊME MÉCANIQUE QUE LE TUTORIEL BLACKJACK : tout est cadencé sur
+ * `phaseStartedAt` (horloge serveur) et non sur le montage du composant. Une
+ * dalle qui se réveille en plein milieu retombe exactement sur le chapitre et
+ * la sous-étape du moment. La phase règles n'a pas de durée fixe (le GM la
+ * coupe quand il veut), donc la séquence BOUCLE (modulo).
  *
- * CADENCE SUR L'HORLOGE SERVEUR, et c'est le point important, repris du
- * tutoriel blackjack : le chapitre affiche est deduit du temps ecoule depuis
- * `phaseStartedAt`, pas d'un minuteur local demarre au montage. Consequences :
- * toutes les bornes de la salle montrent le MEME chapitre au meme instant, et
- * une dalle qui se reveille ou se recharge en cours de route retombe pile sur
- * l'etat courant au lieu de repartir du debut.
+ * Le sous-échelonnement intra-chapitre se fait par SEUILS comparés à `dansChapitre`
+ * (ms écoulées depuis le début du chapitre courant) : pas de setTimeout en
+ * cascade, pas de requestAnimationFrame (suspendu si le kiosque est occulté).
  *
- * La boucle est volontaire : la phase de regles n'a pas de duree fixe, elle
- * dure le temps que l'animateur parle. On tourne donc en rond jusqu'au
- * demarrage.
+ * Deux mises en page : table (deux colonnes, gros) et téléphone (empilé).
+ * Pas de max-w en rem piégeux : la borne applique un zoom CSS 1.4.
  */
 
-import { useEffect, useState } from 'react';
-import { serverNow } from '../lib/gameClient';
+import React, { useEffect, useState } from 'react';
+import {
+  JOKER_DEFS,
+  JOKER_TYPES,
+  serverNow,
+  STREAK_BONUS_FROM,
+} from '../lib/gameClient';
 
-/** duree d'un chapitre : assez pour lire sans avoir le temps de s'ennuyer */
-const CHAPITRE_MS = 7000;
+const CHAPITRE_MS = 8000;
 
 interface Chapitre {
   cle: string;
   titre: string;
   phrase: string;
-  /** illustration de droite (ou du dessous sur telephone) */
-  visuel: (embedded: boolean) => React.ReactNode;
+  /** visuel du chapitre : reçoit (grand, dansChapitre ms) pour les sous-étapes */
+  visuel: (grand: boolean, dans: number) => React.ReactNode;
 }
 
-/** Etiquette ronde, reprise a l'identique dans plusieurs chapitres. */
+/** apparition par seuil : opacité + translation, rien avant l'instant t */
+function Seuil({
+  dans,
+  a,
+  children,
+  className = '',
+}: {
+  dans: number;
+  a: number;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const visible = dans >= a;
+  return (
+    <div
+      className={className}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0) scale(1)' : 'translateY(14px) scale(0.94)',
+        transition: 'opacity 420ms ease, transform 420ms cubic-bezier(0.3, 1.2, 0.4, 1)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function Pastille({
   children,
   ton,
@@ -45,7 +71,7 @@ function Pastille({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border-2 font-black uppercase tracking-wider ${ton} ${
+      className={`rounded-full border-2 font-black uppercase tracking-wider ${ton} ${
         grand ? 'px-6 py-3 text-2xl' : 'px-3 py-1.5 text-sm'
       }`}
     >
@@ -54,17 +80,26 @@ function Pastille({
   );
 }
 
-/** Une etape du deroule, avec sa fleche. */
-function Etape({ emoji, titre, sous, grand }: { emoji: string; titre: string; sous: string; grand: boolean }) {
+function Etape({
+  emoji,
+  titre,
+  sous,
+  grand,
+}: {
+  emoji: string;
+  titre: string;
+  sous: string;
+  grand: boolean;
+}) {
   return (
     <div
-      className={`flex flex-1 flex-col items-center gap-1 rounded-2xl border border-white/15 bg-white/5 text-center ${
-        grand ? 'px-5 py-6' : 'px-3 py-4'
+      className={`flex flex-col items-center rounded-2xl border border-white/15 bg-white/5 text-center ${
+        grand ? 'gap-3 px-6 py-6' : 'gap-1.5 px-3 py-3'
       }`}
     >
       <span className={grand ? 'text-5xl' : 'text-3xl'}>{emoji}</span>
-      <span className={`font-black uppercase tracking-wider ${grand ? 'text-xl' : 'text-sm'}`}>{titre}</span>
-      <span className={`text-white/60 ${grand ? 'text-base' : 'text-xs'}`}>{sous}</span>
+      <span className={`font-black ${grand ? 'text-2xl' : 'text-sm'}`}>{titre}</span>
+      <span className={`text-white/50 ${grand ? 'text-lg' : 'text-xs'}`}>{sous}</span>
     </div>
   );
 }
@@ -73,72 +108,75 @@ const CHAPITRES: Chapitre[] = [
   {
     cle: 'but',
     titre: 'Le but du jeu',
-    phrase:
-      'Une question s\'affiche sur le grand écran. Tu réponds ici, sur cette table ou sur ton téléphone. Le plus juste ET le plus rapide gagne.',
-    visuel: (grand) => (
-      <div className="flex w-full flex-col gap-3">
-        <div className={`rounded-2xl border border-white/15 bg-white/5 ${grand ? 'px-6 py-5' : 'px-4 py-3'}`}>
-          <p className={`text-white/50 ${grand ? 'text-base' : 'text-xs'}`}>QUESTION 3 / 40</p>
-          <p className={`mt-1 font-bold ${grand ? 'text-2xl' : 'text-base'}`}>
-            Quel groupe chante « Smells Like Teen Spirit » ?
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {['Oasis', 'Nirvana', 'Blur', 'Pixies'].map((r, i) => (
-            <div
-              key={r}
-              className={`rounded-xl border-2 text-center font-bold ${
-                i === 1
-                  ? 'anim-pop border-emerald-400 bg-emerald-400/20 text-emerald-200'
-                  : 'border-white/15 bg-white/5 text-white/70'
-              } ${grand ? 'px-4 py-4 text-xl' : 'px-2 py-2 text-sm'}`}
-            >
-              {r}
-            </div>
+    phrase: 'Réponds juste, réponds vite, grimpe au classement. Ton téléphone est ta manette.',
+    visuel: (grand, dans) => (
+      <div className={`w-full ${grand ? 'max-w-2xl' : ''}`}>
+        <Seuil dans={dans} a={200}>
+          <div className={`rounded-2xl border border-white/15 bg-white/5 text-center font-bold ${grand ? 'px-8 py-5 text-3xl' : 'px-4 py-3 text-base'}`}>
+            🎵 « Quel groupe chante Smells Like Teen Spirit ? »
+          </div>
+        </Seuil>
+        <div className={`mt-3 grid grid-cols-2 ${grand ? 'gap-4' : 'gap-2'}`}>
+          {['Pearl Jam', 'Nirvana', 'Soundgarden', 'Alice in Chains'].map((r, i) => (
+            <Seuil key={r} dans={dans} a={900 + i * 260}>
+              <div
+                className={`rounded-xl border-2 text-center font-bold ${grand ? 'px-4 py-4 text-2xl' : 'px-2 py-2.5 text-sm'} ${
+                  i === 1 && dans >= 3200
+                    ? 'anim-pop border-emerald-400 bg-emerald-400/20 text-emerald-200'
+                    : 'border-white/15 bg-white/5 text-white/70'
+                }`}
+              >
+                {r}
+              </div>
+            </Seuil>
           ))}
         </div>
+        <Seuil dans={dans} a={3600}>
+          <p className={`mt-3 text-center font-black text-emerald-300 ${grand ? 'text-2xl' : 'text-base'}`}>
+            ✓ Bonne réponse, les points tombent !
+          </p>
+        </Seuil>
       </div>
     ),
   },
   {
     cle: 'deroule',
-    titre: 'Le déroulé d\'une question',
-    phrase:
-      'Trois temps, toujours les mêmes. Pendant l\'annonce tu peux activer ton joker. Pendant la question tu réponds. Puis l\'écran révèle la bonne réponse.',
-    visuel: (grand) => (
-      <div className="flex w-full items-stretch gap-3">
-        <Etape emoji="📣" titre="Annonce" sous="Active ton joker" grand={grand} />
-        <Etape emoji="⏱️" titre="Question" sous="Réponds vite" grand={grand} />
-        <Etape emoji="✅" titre="Révélation" sous="Le verdict tombe" grand={grand} />
+    titre: "Le déroulé d'une question",
+    phrase: "Trois temps, toujours les mêmes. Les jokers se jouent pendant l'annonce ou la question.",
+    visuel: (grand, dans) => (
+      <div className={`grid w-full grid-cols-3 ${grand ? 'max-w-3xl gap-5' : 'gap-2'}`}>
+        {[
+          { emoji: '📣', titre: 'Annonce', sous: 'Le thème arrive, joue tes jokers' },
+          { emoji: '⏱️', titre: 'Question', sous: 'Réponds avant la fin du chrono' },
+          { emoji: '✨', titre: 'Révélation', sous: 'Verdict, série et jokers gagnés' },
+        ].map((e, i) => (
+          <Seuil key={e.titre} dans={dans} a={300 + i * 650}>
+            <Etape {...e} grand={grand} />
+          </Seuil>
+        ))}
       </div>
     ),
   },
   {
     cle: 'types',
     titre: 'Trois façons de répondre',
-    phrase:
-      'La plupart des questions sont des QCM. Certaines demandent un nombre, et tu marques selon ton écart. D\'autres attendent une réponse libre, jugée automatiquement.',
-    visuel: (grand) => (
-      <div className="flex w-full flex-col gap-3">
+    phrase: 'QCM, estimation au plus proche, ou réponse libre jugée par une IA (et rattrapable par l\'animateur).',
+    visuel: (grand, dans) => (
+      <div className={`flex w-full flex-col ${grand ? 'max-w-2xl gap-4' : 'gap-2'}`}>
         {[
-          { emoji: '🔤', nom: 'QCM', detail: '4 réponses, une seule bonne' },
-          { emoji: '🔢', nom: 'Estimation', detail: 'un nombre, des points selon l\'écart' },
-          { emoji: '✍️', nom: 'Réponse libre', detail: 'tu écris, l\'IA juge' },
-        ].map((x) => (
-          <div
-            key={x.nom}
-            className={`flex items-center gap-4 rounded-2xl border border-white/15 bg-white/5 ${
-              grand ? 'px-6 py-5' : 'px-4 py-3'
-            }`}
-          >
-            <span className={grand ? 'text-4xl' : 'text-2xl'}>{x.emoji}</span>
-            <span className="min-w-0">
-              <span className={`block font-black uppercase tracking-wider ${grand ? 'text-xl' : 'text-sm'}`}>
-                {x.nom}
+          { emoji: '🔤', titre: 'QCM', sous: '4 choix, un seul est bon' },
+          { emoji: '🔢', titre: 'Estimation', sous: 'Un nombre : plus tu es proche, plus tu marques' },
+          { emoji: '✍️', titre: 'Réponse libre', sous: 'Écris ta réponse, l\'orthographe approximative passe' },
+        ].map((t, i) => (
+          <Seuil key={t.titre} dans={dans} a={300 + i * 700}>
+            <div className={`flex items-center rounded-2xl border border-white/15 bg-white/5 ${grand ? 'gap-5 px-6 py-4' : 'gap-3 px-3 py-2.5'}`}>
+              <span className={grand ? 'text-4xl' : 'text-2xl'}>{t.emoji}</span>
+              <span className="text-left">
+                <span className={`block font-black ${grand ? 'text-2xl' : 'text-sm'}`}>{t.titre}</span>
+                <span className={`block text-white/50 ${grand ? 'text-lg' : 'text-xs'}`}>{t.sous}</span>
               </span>
-              <span className={`block text-white/60 ${grand ? 'text-lg' : 'text-xs'}`}>{x.detail}</span>
-            </span>
-          </div>
+            </div>
+          </Seuil>
         ))}
       </div>
     ),
@@ -146,82 +184,168 @@ const CHAPITRES: Chapitre[] = [
   {
     cle: 'points',
     titre: 'Difficulté et points',
-    phrase:
-      'Chaque question annonce sa difficulté et ce qu\'elle rapporte. Plus c\'est dur, plus ça paye. Le barème est affiché avant que tu répondes.',
-    visuel: (grand) => (
-      <div className="flex w-full flex-col gap-4">
+    phrase: 'La couleur annonce la mise. Les estimations paient selon ta précision.',
+    visuel: (grand, dans) => (
+      <div className={`flex flex-wrap items-center justify-center ${grand ? 'gap-6' : 'gap-3'}`}>
         {[
-          { d: 'Facile', pts: '1 point', ton: 'border-emerald-400/60 bg-emerald-400/15 text-emerald-200' },
-          { d: 'Moyen', pts: '2 points', ton: 'border-amber-400/60 bg-amber-400/15 text-amber-200' },
-          { d: 'Difficile', pts: '3 points', ton: 'border-rose-400/60 bg-rose-400/15 text-rose-200' },
-        ].map((x) => (
-          <div key={x.d} className="flex items-center justify-between gap-4">
+          { l: 'Facile · 1 pt', ton: 'border-emerald-400/70 bg-emerald-400/15 text-emerald-200' },
+          { l: 'Moyen · 2 pts', ton: 'border-amber-400/70 bg-amber-400/15 text-amber-200' },
+          { l: 'Difficile · 3 pts', ton: 'border-rose-400/70 bg-rose-400/15 text-rose-200' },
+        ].map((x, i) => (
+          <Seuil key={x.l} dans={dans} a={400 + i * 550}>
             <Pastille ton={x.ton} grand={grand}>
-              {x.d}
+              {x.l}
             </Pastille>
-            <span className={`font-black tabular-nums text-white ${grand ? 'text-3xl' : 'text-lg'}`}>{x.pts}</span>
-          </div>
+          </Seuil>
         ))}
       </div>
     ),
   },
   {
     cle: 'rapidite',
-    titre: 'Le bonus de rapidité',
-    phrase:
-      'Parmi tous ceux qui ont juste, le plus rapide empoche 1 point de plus. À égalité de connaissances, c\'est la main qui départage.',
-    visuel: (grand) => (
-      <div className="flex w-full flex-col items-center gap-4">
-        <span className={grand ? 'text-8xl' : 'text-5xl'}>⚡</span>
-        <div
-          className={`rounded-3xl border-2 border-amber-400/60 bg-amber-400/15 text-center ${
-            grand ? 'px-10 py-6' : 'px-6 py-4'
-          }`}
-        >
-          <p className={`font-black text-amber-300 ${grand ? 'text-4xl' : 'text-2xl'}`}>+1 point</p>
-          <p className={`mt-1 font-bold uppercase tracking-[0.2em] text-amber-200/80 ${grand ? 'text-lg' : 'text-xs'}`}>
-            au plus rapide
-          </p>
-        </div>
+    titre: 'Le podium de rapidité',
+    phrase: 'Sur les QCM, les 3 bons répondeurs les plus rapides gagnent chacun +1 point.',
+    visuel: (grand, dans) => (
+      <div className={`flex items-end justify-center ${grand ? 'gap-8' : 'gap-4'}`}>
+        {[
+          { m: '🥈', h: grand ? 'h-24' : 'h-14', a: 900 },
+          { m: '🥇', h: grand ? 'h-32' : 'h-20', a: 400 },
+          { m: '🥉', h: grand ? 'h-20' : 'h-11', a: 1400 },
+        ].map((p, i) => (
+          <Seuil key={i} dans={dans} a={p.a}>
+            <div className="flex flex-col items-center">
+              <span className={grand ? 'text-5xl' : 'text-3xl'}>{p.m}</span>
+              <div
+                className={`mt-2 w-16 rounded-t-xl border-2 border-b-0 border-amber-400/60 bg-amber-400/15 ${p.h} ${grand ? 'w-24' : ''}`}
+              />
+              <span className={`mt-1 font-black text-amber-300 ${grand ? 'text-2xl' : 'text-sm'}`}>+1</span>
+            </div>
+          </Seuil>
+        ))}
       </div>
     ),
   },
   {
-    cle: 'joker',
-    titre: 'Le joker quitte ou double',
-    phrase:
-      'Deux jokers par partie. Active-le PENDANT L\'ANNONCE, avant de voir la question. Bonne réponse, tes points sont doublés. Mauvaise, tu ne perds rien.',
-    visuel: (grand) => (
-      <div className="flex w-full flex-col gap-4">
-        <div
-          className={`flex items-center gap-4 rounded-2xl border-2 border-violet-400/60 bg-violet-500/20 ${
-            grand ? 'px-6 py-6' : 'px-4 py-4'
-          }`}
-        >
-          <span className={`anim-pop ${grand ? 'text-6xl' : 'text-4xl'}`}>🎲</span>
-          <span>
-            <span className={`block font-black text-violet-100 ${grand ? 'text-3xl' : 'text-lg'}`}>×2</span>
-            <span className={`block text-violet-200/80 ${grand ? 'text-lg' : 'text-xs'}`}>2 jokers par partie</span>
-          </span>
+    cle: 'serie',
+    titre: 'La série',
+    phrase: `${STREAK_BONUS_FROM} bonnes réponses d'affilée, et chaque bonne réponse paie +1. Une erreur, et tout repart de zéro.`,
+    visuel: (grand, dans) => (
+      <div className="flex flex-col items-center">
+        <div className={`flex items-center ${grand ? 'gap-3' : 'gap-1.5'}`}>
+          {Array.from({ length: STREAK_BONUS_FROM }, (_, i) => (
+            <Seuil key={i} dans={dans} a={300 + i * 420}>
+              <span
+                className={`flex items-center justify-center rounded-full border-2 font-black tabular-nums ${
+                  grand ? 'h-16 w-16 text-2xl' : 'h-9 w-9 text-sm'
+                } ${
+                  i + 1 >= STREAK_BONUS_FROM
+                    ? 'border-amber-300 bg-amber-400/25 text-amber-200'
+                    : 'border-orange-400/60 bg-orange-400/15 text-orange-200'
+                }`}
+              >
+                {i + 1}
+              </span>
+            </Seuil>
+          ))}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div
-            className={`rounded-2xl border border-emerald-400/50 bg-emerald-400/10 text-center ${
-              grand ? 'px-4 py-5' : 'px-3 py-3'
-            }`}
-          >
-            <p className={`font-black text-emerald-300 ${grand ? 'text-2xl' : 'text-base'}`}>Bonne</p>
-            <p className={`text-emerald-200/70 ${grand ? 'text-lg' : 'text-xs'}`}>points doublés</p>
-          </div>
-          <div
-            className={`rounded-2xl border border-white/20 bg-white/5 text-center ${
-              grand ? 'px-4 py-5' : 'px-3 py-3'
-            }`}
-          >
-            <p className={`font-black text-white/80 ${grand ? 'text-2xl' : 'text-base'}`}>Mauvaise</p>
-            <p className={`text-white/50 ${grand ? 'text-lg' : 'text-xs'}`}>rien à perdre</p>
-          </div>
+        <Seuil dans={dans} a={300 + STREAK_BONUS_FROM * 420 + 300}>
+          <p className={`mt-4 font-black text-amber-200 ${grand ? 'text-3xl' : 'text-lg'}`}>
+            🔥 En feu : +1 pt par bonne réponse !
+          </p>
+        </Seuil>
+      </div>
+    ),
+  },
+  {
+    cle: 'jokers',
+    titre: 'Les jokers',
+    phrase: 'Trois pouvoirs, deux en main au maximum. Joue-les au bon moment.',
+    visuel: (grand, dans) => (
+      <div className={`grid w-full grid-cols-3 ${grand ? 'max-w-3xl gap-5' : 'gap-2'}`}>
+        {JOKER_TYPES.map((t, i) => {
+          const def = JOKER_DEFS[t];
+          return (
+            <Seuil key={t} dans={dans} a={300 + i * 700}>
+              <div
+                className={`flex h-full flex-col items-center rounded-2xl border-2 text-center ${
+                  grand ? 'gap-2 px-4 py-5' : 'gap-1 px-2 py-3'
+                }`}
+                style={{
+                  borderColor: `${def.couleur}88`,
+                  background: `${def.couleur}12`,
+                  boxShadow: dans >= 300 + i * 700 + 400 ? `0 0 22px ${def.ombre}` : undefined,
+                  transition: 'box-shadow 500ms ease',
+                }}
+              >
+                <span className={grand ? 'text-5xl' : 'text-2xl'}>{def.emoji}</span>
+                <span className={`font-black uppercase ${grand ? 'text-xl' : 'text-xs'}`} style={{ color: def.couleur }}>
+                  {def.label}
+                </span>
+                <span className={`text-white/60 ${grand ? 'text-base' : 'text-[10px]'}`}>{def.description}</span>
+              </div>
+            </Seuil>
+          );
+        })}
+      </div>
+    ),
+  },
+  {
+    cle: 'gagner',
+    titre: 'Comment on les gagne',
+    phrase: 'Chaque bonne réponse peut déclencher un tirage. Plus tu es bas au classement, plus tu as de chances !',
+    visuel: (grand, dans) => (
+      <div className="flex flex-col items-center">
+        {/* mini-roue décorative : trois cartes, celle du centre en avant */}
+        <div className={`flex items-center ${grand ? 'gap-4' : 'gap-2'}`}>
+          {JOKER_TYPES.map((t, i) => {
+            const def = JOKER_DEFS[t];
+            const centre = i === 1;
+            return (
+              <Seuil key={t} dans={dans} a={300 + i * 300}>
+                <div
+                  className={`flex flex-col items-center justify-center rounded-2xl border-2 ${
+                    grand
+                      ? centre ? 'h-36 w-28' : 'h-28 w-22'
+                      : centre ? 'h-24 w-20' : 'h-18 w-14'
+                  }`}
+                  style={{
+                    borderColor: centre ? def.couleur : `${def.couleur}44`,
+                    background: `${def.couleur}${centre ? '20' : '0c'}`,
+                    transform: centre && dans >= 1600 ? 'scale(1.12)' : 'scale(1)',
+                    boxShadow: centre && dans >= 1600 ? `0 0 30px ${def.ombre}` : undefined,
+                    transition: 'transform 400ms cubic-bezier(0.3, 1.2, 0.4, 1), box-shadow 400ms ease',
+                  }}
+                >
+                  <span className={grand ? 'text-4xl' : 'text-2xl'}>{def.emoji}</span>
+                </div>
+              </Seuil>
+            );
+          })}
         </div>
+        <Seuil dans={dans} a={2200}>
+          <p className={`mt-4 text-center text-white/60 ${grand ? 'text-2xl' : 'text-sm'}`}>
+            🎁 L'animateur peut aussi en distribuer... reste attentif !
+          </p>
+        </Seuil>
+      </div>
+    ),
+  },
+  {
+    cle: 'pret',
+    titre: 'Prêt ?',
+    phrase: "Garde ton téléphone en main, l'animateur lance la première question.",
+    visuel: (grand, dans) => (
+      <div className="flex flex-col items-center">
+        <Seuil dans={dans} a={300}>
+          <div className={`anim-glow flex items-center justify-center rounded-full border-4 border-cyan-300/70 bg-cyan-400/10 ${grand ? 'h-40 w-40' : 'h-24 w-24'}`}>
+            <span className={grand ? 'text-7xl' : 'text-4xl'}>🚀</span>
+          </div>
+        </Seuil>
+        <Seuil dans={dans} a={900}>
+          <p className={`mt-5 font-black uppercase tracking-widest text-cyan-200 ${grand ? 'text-3xl' : 'text-lg'}`}>
+            Que le meilleur gagne !
+          </p>
+        </Seuil>
       </div>
     ),
   },
@@ -234,61 +358,74 @@ export default function QuizRules({
   phaseStartedAt: number | null;
   embedded?: boolean;
 }) {
-  const indexDe = () => {
-    if (phaseStartedAt === null) return 0;
-    const ecoule = Math.max(0, serverNow() - phaseStartedAt);
-    return Math.floor(ecoule / CHAPITRE_MS) % CHAPITRES.length;
-  };
-  const [index, setIndex] = useState(indexDe);
-
-  useEffect(() => {
-    const tick = () => setIndex(indexDe());
-    tick();
-    // 250 ms : on ne cherche pas la fluidite, juste a ne pas rater la bascule
-    const timer = setInterval(tick, 250);
-    return () => clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phaseStartedAt]);
-
-  const c = CHAPITRES[index];
   const grand = Boolean(embedded);
+
+  // tick a 200 ms : assez pour les seuils intra-chapitre sans surcout notable
+  const [, force] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => force((v) => v + 1), 200);
+    return () => clearInterval(t);
+  }, []);
+
+  const ecoule = phaseStartedAt === null ? 0 : Math.max(0, serverNow() - phaseStartedAt);
+  const index = Math.floor(ecoule / CHAPITRE_MS) % CHAPITRES.length;
+  const dansChapitre = ecoule % CHAPITRE_MS;
+  const c = CHAPITRES[index];
 
   return (
     <div className={`flex h-full w-full flex-col ${grand ? 'px-12 py-8' : 'px-5 py-6'}`}>
       <p
-        className={`shrink-0 font-black uppercase tracking-[0.3em] text-cyan-300 ${
+        className={`shrink-0 text-center font-black uppercase tracking-[0.3em] text-cyan-300 ${
           grand ? 'text-xl' : 'text-xs'
         }`}
       >
         Comment on joue
       </p>
 
-      {/* key sur la cle du chapitre : le contenu se rejoue a chaque bascule */}
+      {/* key = re-jeu de l'animation d'entree a chaque bascule de chapitre */}
       <div
         key={c.cle}
-        className={`anim-fade-up flex min-h-0 flex-1 items-center ${
-          grand ? 'mt-6 gap-12' : 'mt-4 flex-col justify-center gap-5'
+        className={`anim-fade-up flex min-h-0 flex-1 ${
+          grand ? 'mt-6 flex-row items-center gap-12' : 'mt-4 flex-col items-center justify-center gap-5'
         }`}
       >
-        <div className={grand ? 'w-[42%] shrink-0' : 'w-full'}>
-          <h2 className={`font-black leading-tight ${grand ? 'text-5xl' : 'text-2xl'}`}>{c.titre}</h2>
-          <p className={`mt-4 text-balance text-white/70 ${grand ? 'text-2xl leading-snug' : 'text-base'}`}>
+        <div className={grand ? 'w-[42%] shrink-0' : 'w-full text-center'}>
+          <h2 className={`text-balance font-black ${grand ? 'text-5xl' : 'text-2xl'}`}>{c.titre}</h2>
+          <p className={`mt-3 text-balance text-white/60 ${grand ? 'text-2xl leading-snug' : 'text-base'}`}>
             {c.phrase}
           </p>
         </div>
-        <div className="flex min-w-0 flex-1 items-center justify-center">{c.visuel(grand)}</div>
+        <div className={`flex min-h-0 items-center justify-center ${grand ? 'flex-1' : 'w-full'}`}>
+          {c.visuel(grand, dansChapitre)}
+        </div>
       </div>
 
-      {/* progression : on voit qu'il reste des chapitres, et lesquels */}
-      <div className={`flex shrink-0 justify-center gap-2 ${grand ? 'mt-8' : 'mt-5'}`}>
-        {CHAPITRES.map((ch, i) => (
-          <span
-            key={ch.cle}
-            className={`rounded-full transition-all duration-300 ${
-              i === index ? 'bg-cyan-300' : 'bg-white/20'
-            } ${grand ? (i === index ? 'h-2.5 w-12' : 'h-2.5 w-5') : i === index ? 'h-1.5 w-7' : 'h-1.5 w-3'}`}
+      {/* barre de progression du chapitre + pastilles, comme le blackjack */}
+      <div className="shrink-0">
+        <div className={`mx-auto overflow-hidden rounded-full bg-white/10 ${grand ? 'h-1.5 w-72' : 'h-1 w-40'}`}>
+          <div
+            className="h-full rounded-full bg-cyan-300/70"
+            style={{ width: `${(dansChapitre / CHAPITRE_MS) * 100}%` }}
           />
-        ))}
+        </div>
+        <div className={`flex items-center justify-center gap-2 ${grand ? 'mt-3' : 'mt-2'}`}>
+          {CHAPITRES.map((ch, i) => (
+            <span
+              key={ch.cle}
+              className={`rounded-full transition-all duration-300 ${
+                i === index ? 'bg-cyan-300' : i < index ? 'bg-cyan-300/40' : 'bg-white/20'
+              } ${
+                grand
+                  ? i === index
+                    ? 'h-2.5 w-12'
+                    : 'h-2.5 w-5'
+                  : i === index
+                    ? 'h-1.5 w-7'
+                    : 'h-1.5 w-3'
+              }`}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

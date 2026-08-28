@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   gameApi,
+  JOKER_DEFS,
+  type JokerType,
   type PublicState,
   type StandingEntry,
 } from '../lib/gameClient';
@@ -25,7 +27,7 @@ import {
 } from '../ui/bits';
 import { gameAudio } from './audio';
 import { useSansZoom } from '../../hooks/useSansZoom';
-import { REVEAL_BARRES_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS } from '../lib/gameClient';
+import { REVEAL_BARRES_MS, REVEAL_JOKERS_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS } from '../lib/gameClient';
 import { BattleProjectorBody } from './BattleScreens';
 import '../game.css';
 
@@ -65,11 +67,17 @@ export default function ScreenApp() {
     };
   }, []);
 
-  const [toasts, setToasts] = useState<Array<{ id: number; text: string; kind: string }>>([]);
+  const [toasts, setToasts] = useState<
+    Array<{ id: number; text: string; kind: string; jokerType?: JokerType; award?: boolean }>
+  >([]);
   const toastId = useRef(0);
-  const pushToast = (text: string, kind = 'join') => {
+  const pushToast = (
+    text: string,
+    kind = 'join',
+    extra?: { jokerType?: JokerType; award?: boolean },
+  ) => {
     const id = ++toastId.current;
-    setToasts((prev) => [...prev.slice(-4), { id, text, kind }]);
+    setToasts((prev) => [...prev.slice(-4), { id, text, kind, ...extra }]);
     setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3500);
   };
 
@@ -79,11 +87,25 @@ export default function ScreenApp() {
     onEvent: (e) => {
       if (!isProjector) return;
       if (e.event === 'player-joined') pushToast(`${e.payload.pseudo} rejoint la partie !`, 'join');
-      if (e.event === 'bonus') {
+      if (e.event === 'joker') {
         // Pas de son : sur une annonce, dix joueurs activent leur joker en
         // quelques secondes et le blip devenait un crepitement. Le retour visuel
         // suffit, et il laisse la musique respirer.
-        pushToast(e.payload.pseudo as string, 'bonus');
+        if (e.payload.kind === 'play') {
+          pushToast(e.payload.pseudo as string, 'joker', {
+            jokerType: e.payload.type as JokerType,
+          });
+        } else if (e.payload.kind === 'award') {
+          const awards = (e.payload.awards ?? []) as Array<{ pseudo: string; type: JokerType }>;
+          // don GM groupe : un seul toast agrege, pas dix qui s'empilent
+          if (awards.length > 3) {
+            pushToast(`${awards.length} joueurs gagnent un joker !`, 'joker', { award: true });
+          } else {
+            for (const a of awards) {
+              pushToast(a.pseudo, 'joker', { jokerType: a.type, award: true });
+            }
+          }
+        }
       }
       if (e.event === 'answered') setAnsweredCount((e.payload.count as number) ?? 0);
     },
@@ -182,7 +204,7 @@ function ProjectorScreen({
   answeredCount,
 }: {
   state: PublicState;
-  toasts: Array<{ id: number; text: string; kind: string }>;
+  toasts: Array<{ id: number; text: string; kind: string; jokerType?: JokerType; award?: boolean }>;
   answeredCount: number;
 }) {
   const [soundOn, setSoundOn] = useState(gameAudio.enabled);
@@ -315,19 +337,31 @@ function ProjectorScreen({
       {/* toasts (arrivées + bonus) */}
       <div className="pointer-events-none absolute right-6 top-6 z-40 flex w-96 flex-col gap-2">
         {toasts.map((t) =>
-          t.kind === 'bonus' ? (
+          t.kind === 'joker' ? (
             // Joker : le pseudo porte l'information, le libelle est fixe et mis
-            // en retrait. L'ancienne version noyait le nom dans une phrase en
-            // gras uniforme, illisible de loin quand trois toasts s'empilent.
+            // en retrait. Or pour un gain, violet pour une activation.
             <div
               key={t.id}
-              className="anim-slide-in flex items-center gap-4 rounded-2xl border-2 border-violet-400/60 bg-violet-500/25 px-5 py-4 backdrop-blur"
+              className="anim-slide-in flex items-center gap-4 rounded-2xl border-2 px-5 py-4 backdrop-blur"
+              style={{
+                borderColor: t.award ? 'rgba(255, 233, 85, 0.6)' : 'rgba(166, 100, 255, 0.6)',
+                background: t.award ? 'rgba(255, 233, 85, 0.14)' : 'rgba(123, 43, 255, 0.22)',
+              }}
             >
-              <span className="anim-pop text-4xl leading-none">🎲</span>
+              <span className="anim-pop text-4xl leading-none">
+                {t.award && !t.jokerType ? '🎁' : t.jokerType ? JOKER_DEFS[t.jokerType].emoji : '🎁'}
+              </span>
               <span className="min-w-0">
                 <span className="block truncate text-2xl font-black text-white">{t.text}</span>
-                <span className="block text-sm font-bold uppercase tracking-[0.2em] text-violet-200/80">
-                  quitte ou double
+                <span
+                  className="block text-sm font-bold uppercase tracking-[0.2em]"
+                  style={{ color: t.award ? 'rgba(255, 233, 85, 0.85)' : 'rgba(216, 190, 255, 0.85)' }}
+                >
+                  {t.award
+                    ? t.jokerType
+                      ? `gagne ${JOKER_DEFS[t.jokerType].label}`
+                      : 'jokers distribués'
+                    : `joue ${t.jokerType ? JOKER_DEFS[t.jokerType].label : 'un joker'}`}
                 </span>
               </span>
             </div>
@@ -347,7 +381,7 @@ function ProjectorScreen({
   );
 }
 
-function ProjectorBody({
+export function ProjectorBody({
   state,
   remaining,
   answeredCount,
@@ -450,9 +484,10 @@ export function LobbyProjo({ state }: { state: PublicState }) {
 function RulesProjo() {
   const rules = [
     { emoji: '📱', text: 'Réponds sur ton téléphone avant la fin du temps' },
-    { emoji: '⭐', text: 'Chaque question annonce ses points : Facile 1, Moyen 2, Difficile 3 (jusqu\'à 5 !)' },
-    { emoji: '⚡', text: 'Le plus rapide des bons répondeurs gagne +1 point' },
-    { emoji: '🎲', text: '2 QUITTE OU DOUBLE par équipe : active-le avant la question, bonne réponse = x2, mauvaise = rien à perdre' },
+    { emoji: '⭐', text: 'Chaque question annonce ses points : Facile 1, Moyen 2, Difficile 3' },
+    { emoji: '⚡', text: 'Les 3 plus rapides des bons répondeurs gagnent +1 point (QCM)' },
+    { emoji: '🔥', text: 'Série : à partir de 5 bonnes réponses d\'affilée, chaque bonne réponse rapporte +1' },
+    { emoji: '🃏', text: 'Des JOKERS à gagner en jouant : All-In (×3 ou perte), Avis du public, 50/50' },
     { emoji: '🏆', text: 'Classement final en cinématique... et des récompenses à gagner !' },
   ];
   return (
@@ -497,14 +532,23 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
           {special.emoji} QUESTION SPÉCIALE : {special.label}
         </div>
       )}
-      {state.qdFeed.length > 0 && (
-        <div className="anim-pop mt-8 rounded-2xl border border-violet-400/40 bg-violet-500/15 px-8 py-4 text-center">
-          <p className="text-2xl font-bold text-violet-200">
-            🎲 {state.qdFeed.length} audacieux : {state.qdFeed.slice(-8).join(', ')}
-          </p>
+      {state.jokerFeed.length > 0 && (
+        <div className="anim-pop mt-8 flex max-w-4xl flex-wrap items-center justify-center gap-3 rounded-2xl border border-violet-400/40 bg-violet-500/15 px-8 py-4">
+          {state.jokerFeed.slice(-8).map((f, i) => (
+            <span
+              key={`${f.pseudo}-${i}`}
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xl font-bold"
+              style={{ borderColor: `${JOKER_DEFS[f.type].couleur}66`, color: JOKER_DEFS[f.type].couleur }}
+            >
+              {JOKER_DEFS[f.type].emoji} {f.pseudo}
+            </span>
+          ))}
+          {state.jokerFeed.length > 8 && (
+            <span className="text-xl text-white/50">+{state.jokerFeed.length - 8}</span>
+          )}
         </div>
       )}
-      <p className="mt-12 text-2xl uppercase tracking-[0.3em] text-white/50">Activez vos bonus maintenant !</p>
+      <p className="mt-12 text-2xl uppercase tracking-[0.3em] text-white/50">Jouez vos jokers maintenant !</p>
       <div className="mt-4 h-2 w-[420px] overflow-hidden rounded-full bg-white/10">
         <div className="h-full rounded-full bg-cyan-400" style={{ width: `${progress * 100}%`, transition: 'width 0.25s linear' }} />
       </div>
@@ -713,7 +757,7 @@ function RevealProjo({ state }: { state: PublicState }) {
   const reveal = state.reveal;
   // Trois temps : les barres montent, puis la bonne reponse se detache, puis le
   // plus rapide arrive. Chaque etape a son son (cf. sequencement audio).
-  const [phase, setPhase] = useState<'grow' | 'answer' | 'fastest'>('grow');
+  const [phase, setPhase] = useState<'grow' | 'answer' | 'fastest' | 'awards'>('grow');
   const [ouvert, setOuvert] = useState(false);
   useEffect(() => {
     setPhase('grow');
@@ -727,15 +771,18 @@ function RevealProjo({ state }: { state: PublicState }) {
     const t0 = setTimeout(() => setOuvert(true), 60);
     const t1 = setTimeout(() => setPhase('answer'), REVEAL_REPONSE_MS);
     const t2 = setTimeout(() => setPhase('fastest'), REVEAL_RAPIDE_MS);
+    const t3 = setTimeout(() => setPhase('awards'), REVEAL_JOKERS_MS);
     return () => {
       clearTimeout(t0);
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
     };
   }, [state.currentQuestionIndex]);
 
   const devoilee = phase !== 'grow';
-  const rapideDevoile = phase === 'fastest';
+  const rapideDevoile = phase === 'fastest' || phase === 'awards';
+  const gainsDevoiles = phase === 'awards';
 
   if (!q || !reveal) return null;
   if (reveal.cancelled) {
@@ -750,8 +797,9 @@ function RevealProjo({ state }: { state: PublicState }) {
     );
   }
 
-  const qdWinners = Object.entries(reveal.results).filter(([, r]) => r.qd && r.correct);
-  const qdLosers = Object.entries(reveal.results).filter(([, r]) => r.qd && !r.correct);
+  const allInWinners = Object.entries(reveal.results).filter(([, r]) => r.allIn && r.correct);
+  const allInLosers = Object.entries(reveal.results).filter(([, r]) => r.allIn && !r.correct && r.answered);
+  const streakWinners = Object.entries(reveal.results).filter(([, r]) => r.streakBonus);
 
   return (
     <div className="flex flex-1 flex-col px-12 py-10">
@@ -808,24 +856,72 @@ function RevealProjo({ state }: { state: PublicState }) {
       )}
 
       <div className="mt-6 flex min-h-[120px] flex-wrap items-center justify-center gap-4">
-        {rapideDevoile && reveal.fastest && (
-          <div className="anim-pop flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-amber-400/60 bg-amber-400/15 px-12 py-7">
+        {rapideDevoile && (reveal.fastestTop?.length ?? 0) > 0 && (
+          <div className="anim-pop flex w-full flex-col items-center gap-3 rounded-3xl border-2 border-amber-400/60 bg-amber-400/15 px-12 py-6">
             <span className="text-xl font-bold uppercase tracking-[0.35em] text-amber-200/80">
-              ⚡ Le plus rapide
+              ⚡ Les plus rapides · +1 pt chacun
             </span>
-            <span className="text-6xl font-black text-amber-300">{reveal.fastest}</span>
-            <span className="text-2xl font-bold text-amber-200/70">+1 point bonus</span>
+            <div className="flex items-end justify-center gap-10">
+              {(reveal.fastestTop ?? []).map((f, i) => (
+                <div
+                  key={f.pseudo}
+                  className="anim-pop flex flex-col items-center"
+                  style={{ animationDelay: `${i * 0.18}s` }}
+                >
+                  <span className={i === 0 ? 'text-4xl' : 'text-3xl'}>{['🥇', '🥈', '🥉'][i]}</span>
+                  <span
+                    className={`font-black text-amber-300 ${i === 0 ? 'text-5xl' : 'text-3xl'}`}
+                  >
+                    {f.pseudo}
+                  </span>
+                  <span className="text-lg tabular-nums text-amber-200/60">
+                    {(f.elapsedMs / 1000).toFixed(2)} s
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        {rapideDevoile && qdWinners.length > 0 && (
-          <span className="anim-pop rounded-full border border-violet-400/50 bg-violet-500/15 px-6 py-2.5 text-2xl font-bold text-violet-200">
-            🎲 x2 gagné : {qdWinners.map(([pseudo]) => pseudo).join(', ')}
+        {rapideDevoile && allInWinners.length > 0 && (
+          <span className="anim-pop rounded-full border border-fuchsia-400/50 bg-fuchsia-500/15 px-6 py-2.5 text-2xl font-bold text-fuchsia-200">
+            🎰 All-In ×3 : {allInWinners.map(([pseudo]) => pseudo).join(', ')}
           </span>
         )}
-        {rapideDevoile && qdLosers.length > 0 && (
+        {rapideDevoile && allInLosers.length > 0 && (
           <span className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5 text-2xl text-white/50">
-            🎲 raté : {qdLosers.map(([pseudo]) => pseudo).join(', ')}
+            🎰 All-In perdu : {allInLosers.map(([pseudo]) => pseudo).join(', ')}
           </span>
+        )}
+        {gainsDevoiles && streakWinners.length > 0 && (
+          <span className="anim-pop rounded-full border border-orange-400/50 bg-orange-500/15 px-6 py-2.5 text-2xl font-bold text-orange-200">
+            🔥 Série en feu (+1) : {streakWinners.slice(0, 6).map(([pseudo]) => pseudo).join(', ')}
+            {streakWinners.length > 6 ? ` +${streakWinners.length - 6}` : ''}
+          </span>
+        )}
+        {gainsDevoiles && (reveal.jokerAwards?.length ?? 0) > 0 && (
+          <div className="anim-pop flex w-full flex-col items-center gap-2 rounded-3xl border-2 border-yellow-300/50 bg-yellow-400/10 px-10 py-5">
+            <span className="text-xl font-bold uppercase tracking-[0.35em] text-yellow-200/80">
+              🎁 {reveal.jokerAwards!.length > 1 ? `${reveal.jokerAwards!.length} jokers gagnés` : 'Un joker gagné'}
+            </span>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {reveal.jokerAwards!.slice(0, 6).map((a, i) => (
+                <span
+                  key={`${a.pseudo}-${i}`}
+                  className="anim-pop inline-flex items-center gap-2 rounded-full border px-5 py-2 text-2xl font-bold"
+                  style={{
+                    animationDelay: `${i * 0.12}s`,
+                    borderColor: `${JOKER_DEFS[a.type].couleur}66`,
+                    color: JOKER_DEFS[a.type].couleur,
+                  }}
+                >
+                  {JOKER_DEFS[a.type].emoji} {a.pseudo}
+                </span>
+              ))}
+              {reveal.jokerAwards!.length > 6 && (
+                <span className="text-2xl text-white/50">+{reveal.jokerAwards!.length - 6}</span>
+              )}
+            </div>
+          </div>
         )}
         {rapideDevoile && (reveal.special === 'shot' || reveal.special === 'goodies') && reveal.fastest && (
           <span className="anim-pop rounded-full border border-amber-400/60 bg-amber-400/20 px-6 py-2.5 text-2xl font-black text-amber-200">

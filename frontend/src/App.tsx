@@ -35,6 +35,7 @@ import CashManagementPage from './pages/CashManagementPage';
 import TablesApp from './tables/TablesApp';
 import PlayerApp from './game/player/PlayerApp';
 import ScreenApp from './game/screen/ScreenApp';
+import GameLabPage from './game/lab/GameLabPage';
 import QuizLivePage from './pages/QuizLivePage';
 import BattleLivePage from './pages/BattleLivePage';
 
@@ -56,6 +57,8 @@ export default function App() {
         <Route path="/play" element={<PlayerApp />} />
         <Route path="/play/:code" element={<PlayerApp />} />
         <Route path="/screen/:hostname" element={<ScreenApp />} />
+        {/* laboratoire des ecrans du quiz : donnees factices, aucun effet */}
+        <Route path="/game-lab" element={<GameLabPage />} />
 
         {/* Back-office : authentification + permissions requises */}
         <Route
@@ -100,13 +103,24 @@ export default function App() {
                     <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
                     <Route path="utilitaires/comptabilite" element={<CashManagementPage />} />
                     <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />
-                    <Route path="evenements/quiz-live" element={<QuizLivePage />} />
                     <Route path="evenements/battle-live" element={<BattleLivePage />} />
                     <Route path="tables-tactiles/coupons" element={<CouponsPage />} />
                     <Route path="tables-tactiles/orders" element={<OrdersPage />} />
                     <Route path="users" element={<UserManagementPage />} />
                     <Route path="bientot" element={<ComingSoon />} />
                   </Route>
+
+                  {/* Console GM plein ecran, HORS MainLayout : la sidebar fixe
+                      de 256 px rendait la console inutilisable sur telephone,
+                      or les gamemasters animent depuis leur telephone. */}
+                  <Route
+                    path="evenements/quiz-live"
+                    element={
+                      <ProtectedRoute>
+                        <QuizLivePage />
+                      </ProtectedRoute>
+                    }
+                  />
 
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
