@@ -100,7 +100,7 @@ function Etape({
     >
       <span className={grand ? 'text-6xl' : 'text-3xl'}>{emoji}</span>
       <span className={`font-black ${grand ? 'text-3xl' : 'text-sm'}`}>{titre}</span>
-      <span className={`text-white/50 ${grand ? 'text-xl' : 'text-xs'}`}>{sous}</span>
+      <span className={`text-white/50 ${grand ? 'text-2xl' : 'text-xs'}`}>{sous}</span>
     </div>
   );
 }
@@ -209,7 +209,7 @@ const CHAPITRES: Chapitre[] = [
               <span className={grand ? 'text-5xl' : 'text-xl'}>{t.emoji}</span>
               <span className="text-left">
                 <span className={`block font-black ${grand ? 'text-3xl' : 'text-[13px]'}`}>{t.titre}</span>
-                <span className={`block leading-snug text-white/50 ${grand ? 'text-xl' : 'text-[11px]'}`}>{t.sous}</span>
+                <span className={`block leading-snug text-white/50 ${grand ? 'text-2xl' : 'text-[11px]'}`}>{t.sous}</span>
               </span>
             </div>
           </Seuil>
@@ -317,7 +317,7 @@ const CHAPITRES: Chapitre[] = [
                 }}
               >
                 <span className={grand ? 'text-6xl' : 'text-2xl'}>{def.emoji}</span>
-                <span className={`font-black uppercase ${grand ? 'text-xl' : 'text-xs'}`} style={{ color: def.couleur }}>
+                <span className={`font-black uppercase ${grand ? 'text-2xl' : 'text-xs'}`} style={{ color: def.couleur }}>
                   {def.label}
                 </span>
                 <span className={`text-white/60 ${grand ? 'text-lg' : 'text-[10px]'}`}>{def.description}</span>
@@ -446,7 +446,7 @@ export default function QuizRules({
       {c.cle !== 'titre' && (
         <p
           className={`shrink-0 text-center font-black uppercase tracking-[0.3em] text-cyan-300 ${
-            grand ? 'text-xl' : 'text-[11px]'
+            grand ? 'text-3xl' : 'text-[11px]'
           }`}
         >
           Comment on joue
@@ -491,7 +491,7 @@ export default function QuizRules({
         {dernier && (
           <p
             className={`mb-2 text-center font-bold uppercase tracking-[0.25em] text-cyan-300/70 ${
-              grand ? 'text-xl' : 'text-[11px]'
+              grand ? 'text-2xl' : 'text-[11px]'
             }`}
           >
             En attente de l'animateur
