@@ -81,6 +81,12 @@ export interface LightStatus {
   queueDepth: number;
   workerAlive: boolean;
   dryRun: boolean;
+  /**
+   * Relances du worker Hue depuis le demarrage de l'agent. Un compteur qui
+   * grimpe pendant une soiree signale un bridge qui rame : c'est le symptome
+   * qui precede la saturation, autant le voir.
+   */
+  restarts: number;
 }
 
 type PendingResolve = (result: AgentResult) => void;
@@ -239,6 +245,7 @@ export function initAgentBridge(server: Server): void {
             queueDepth: Number(msg.queueDepth) || 0,
             workerAlive: Boolean(msg.workerAlive),
             dryRun: Boolean(msg.dryRun),
+            restarts: Number(msg.restarts) || 0,
           };
           return;
         }

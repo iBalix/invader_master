@@ -79,18 +79,48 @@ function Start-HueWorker {
 
 # Un crash de runspace est SILENCIEUX par nature (erreurs avalees dans
 # $ps.Streams.Error) : on surveille le heartbeat et on relance.
+#
+# REGLE ABSOLUE : jamais deux workers vivants en meme temps. Chaque worker a
+# son PROPRE budget de debit (8 req/s) : deux workers, c'est 16 req/s vers un
+# bridge Hue qui sature vers 10. Or Stop() ne peut pas interrompre un PUT natif
+# en cours, donc l'ancien worker pouvait survivre a sa mise a mort. On
+# demarrait quand meme son remplacant, le bridge ralentissait encore, ce qui
+# retardait d'autant les heartbeats et declenchait la relance suivante : a
+# chaque tour un worker de plus tapait le bridge. C'est cet emballement qui
+# faisait "bouger les curseurs de partout" dans l'appli Hue pendant que le bar,
+# lui, ne repondait plus. Mieux vaut zero worker pendant quelques secondes que
+# deux qui se marchent dessus.
+$script:HueRestarts = 0
+
 function Test-HueWorkerHealth {
     if (-not $script:HueEnabled -or -not $script:HueWorker) { return }
     $dead = $script:HueWorker.handle.IsCompleted
     $stale = ((([DateTime]::UtcNow) - $script:HueState.heartbeat).TotalSeconds -gt 15)
-    if ($dead -or $stale) {
-        Write-Host "[hue] Worker inactif (termine=$dead, heartbeat en retard=$stale), relance" -ForegroundColor Yellow
-        foreach ($e in $script:HueWorker.ps.Streams.Error) { Write-Host "[hue] $e" -ForegroundColor Red }
-        try { $script:HueWorker.ps.Stop(); $script:HueWorker.ps.Dispose(); $script:HueWorker.rs.Dispose() } catch {}
-        $script:HueWorker = $null
-        $script:HueState.heartbeat = [DateTime]::UtcNow
-        Start-HueWorker
+    if (-not ($dead -or $stale)) { return }
+
+    Write-Host "[hue] Worker inactif (termine=$dead, heartbeat en retard=$stale), arret" -ForegroundColor Yellow
+    foreach ($e in $script:HueWorker.ps.Streams.Error) { Write-Host "[hue] $e" -ForegroundColor Red }
+    try { $script:HueWorker.ps.Stop() } catch {}
+
+    # On attend la mort EFFECTIVE avant de penser au remplacant.
+    $deadline = ([DateTime]::UtcNow).AddSeconds(5)
+    while (-not $script:HueWorker.handle.IsCompleted -and [DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Milliseconds 100
     }
+    if (-not $script:HueWorker.handle.IsCompleted) {
+        # Toujours vivant : on ne relance PAS. On se redonne un cycle complet,
+        # le prochain controle le trouvera termine et relancera proprement.
+        Write-Host "[hue] L'ancien worker ne s'est pas arrete, relance reportee (aucun doublon lance)" -ForegroundColor Red
+        $script:HueState.heartbeat = [DateTime]::UtcNow
+        return
+    }
+
+    try { $script:HueWorker.ps.Dispose(); $script:HueWorker.rs.Dispose() } catch {}
+    $script:HueWorker = $null
+    $script:HueState.heartbeat = [DateTime]::UtcNow
+    $script:HueRestarts++
+    Write-Host "[hue] Worker arrete proprement, relance (total relances: $script:HueRestarts)" -ForegroundColor Yellow
+    Start-HueWorker
 }
 
 # Write-Host depuis un runspace ne remonte pas a la console : on draine la file.
@@ -117,6 +147,7 @@ function Get-HueStatusPayload {
         dropped60s = [int]$script:HueState.dropped60s
         queueDepth = [int]$script:HueState.queueDepth
         workerAlive = ($null -ne $script:HueWorker -and -not $script:HueWorker.handle.IsCompleted)
+        restarts = [int]$script:HueRestarts
         dryRun = ($env:HUE_DRY_RUN -eq 'true')
     }
 }

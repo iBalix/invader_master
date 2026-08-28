@@ -157,11 +157,23 @@ $GROUP_RATE           = 1.0
 $GROUP_BURST          = 3
 $STALE_MS             = 1500
 $TICK_MS              = 20
+# Duree MAX d'une passe d'emission. Sans elle, une passe pouvait enchainer 8
+# PUT a 2 s de timeout, soit 16 s bloquee dans un seul tour de boucle : le
+# heartbeat ne bougeait plus, l'agent croyait le worker mort et en demarrait
+# un second. Le reste de la file attend simplement le tick suivant (20 ms).
+$PASS_BUDGET_MS       = 400
+# Au-dela, un PUT est considere comme un signe de bridge malade, meme s'il
+# finit par repondre 200. Un bridge sature repond lentement AVANT de repondre
+# faux : sans ce seuil, ces reussites lentes remettaient le compteur d'echecs
+# a zero et on continuait a le marteler.
+$SLOW_PUT_MS          = 1200
 
 # --- Client HTTP unique (Invoke-RestMethod renegocie a chaque appel) ---------
 Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
 $script:Http = New-Object System.Net.Http.HttpClient
-$script:Http.Timeout = [TimeSpan]::FromSeconds(2)
+# 1.5 s et non 2 s : au-dela, la commande est de toute facon perimee
+# (STALE_MS), donc attendre plus longtemps ne sert qu'a bloquer la boucle.
+$script:Http.Timeout = [TimeSpan]::FromMilliseconds($STALE_MS)
 
 function Send-HueState {
     param([string]$Kind, [int]$Id, [hashtable]$State)
@@ -174,13 +186,33 @@ function Send-HueState {
         return $true
     }
     try {
+        $sw = [System.Diagnostics.Stopwatch]::StartNew()
         $content = New-Object System.Net.Http.StringContent($json, [System.Text.Encoding]::UTF8, 'application/json')
         $resp = $script:Http.PutAsync($url, $content).GetAwaiter().GetResult()
         $body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        $sw.Stop()
+        # Le heartbeat vit AUSSI ici, pas seulement en tete de boucle : un envoi
+        # lent faisait passer un worker bien vivant pour mort.
+        $HueState.heartbeat = [DateTime]::UtcNow
         # Hue repond 200 meme en cas d'erreur applicative : le legacy avalait ca
         if ($body -match '"error"') {
             Write-HueLog "Le bridge signale une erreur sur $path : $body" 'WARN'
             $script:Errors.Add([DateTime]::UtcNow) | Out-Null
+            return $false
+        }
+        if ($sw.ElapsedMilliseconds -ge $SLOW_PUT_MS) {
+            $script:BridgeFails++
+            Write-HueLog "Bridge lent : $path a mis $($sw.ElapsedMilliseconds) ms" 'WARN'
+            if ($script:BridgeFails -ge 3) {
+                $HueState.bridgeHealthy = $false
+                # On DIFFERE la sonde de retablissement. Un GET /config est
+                # leger : il repond meme quand le bridge est a genoux, donc
+                # sonder tout de suite faisait reprendre l'emission aussitot,
+                # re-saturer, suspendre... en boucle toutes les 5 s. Un vrai
+                # silence de 10 s laisse le bridge vider sa file Zigbee.
+                $script:NextProbeAt = ([DateTime]::UtcNow).AddSeconds(10)
+                Write-HueLog 'Bridge declare sature (3 reponses lentes), emission suspendue 10 s' 'WARN'
+            }
             return $false
         }
         $script:BridgeFails = 0
@@ -366,8 +398,11 @@ function Step-Emitter {
     # FIFO sur l'anciennete : aucune cible ne peut etre affamee
     $candidates = $candidates | Sort-Object { $_.entry.enqueuedAt }
 
+    $passSw = [System.Diagnostics.Stopwatch]::StartNew()
     foreach ($c in $candidates) {
         if (-not (Test-GlobalBudget)) { break }
+        # cf. PASS_BUDGET_MS : on rend la main plutot que de bloquer la boucle
+        if ($passSw.ElapsedMilliseconds -ge $PASS_BUDGET_MS) { break }
         $isGroup = ($c.entry.kind -eq 'groups')
         if ($isGroup) {
             if (-not $script:TokensGroup.ContainsKey($c.key)) { $script:TokensGroup[$c.key] = [double]$GROUP_BURST }
@@ -450,6 +485,7 @@ while ($true) {
         Step-ScenePlayer
         Test-BridgeRecovery
         Step-Emitter
+        $HueState.heartbeat = [DateTime]::UtcNow
         Trim-Counters
 
         # rechargement a chaud de scenes.json (toutes les 2 s)
