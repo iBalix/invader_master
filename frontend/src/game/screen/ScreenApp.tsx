@@ -151,6 +151,17 @@ export default function ScreenApp() {
 
   const active = state && !state.ended;
 
+  // Fin de partie, arret GM compris : la musique de fond doit se taire.
+  // gameAudio est un singleton HORS React : demonter ProjectorScreen ne
+  // l'arrete pas, et la musique continuait a tourner sur l'ecran d'attente.
+  // Fondu d'1,5 s plutot que coupure seche ; une nouvelle partie relance la
+  // piste au volume nominal via setMusic / setVolumes (prevu dans gameAudio).
+  const etaitActive = useRef(false);
+  useEffect(() => {
+    if (etaitActive.current && !active) gameAudio.fadeOutAll(1500);
+    etaitActive.current = Boolean(active);
+  }, [active]);
+
   if (!active) {
     return <IdleScreen hostname={hostname} />;
   }
