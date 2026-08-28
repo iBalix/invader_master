@@ -499,6 +499,3 @@ export const DIFFICULTY_POINTS: Record<string, number> = {
 
 /** tolérance réseau sur la deadline de réponse (ms) */
 export const ANSWER_GRACE_MS = 2500;
-/** délai additionnel par média (ms), hérité du legacy */
-export const AUDIO_EXTRA_MS = 10000;
-export const IMAGE_EXTRA_MS = 2000;

@@ -25,10 +25,8 @@ import { broadcast } from './realtime.js';
 import { computeReveal } from './scoring.js';
 import {
   ANSWER_GRACE_MS,
-  AUDIO_EXTRA_MS,
   DEFAULT_CONFIG,
   DIFFICULTY_POINTS,
-  IMAGE_EXTRA_MS,
   JOKER_DRAW_BASE,
   JOKER_DRAW_SLOPE,
   JOKER_HAND_MAX,
@@ -58,15 +56,15 @@ import {
  */
 const NON_QCM_EXTRA_MS = 5000;
 
+/**
+ * Fenetres STRICTES par type, sans rallonge media. Les +10 s audio et +2 s
+ * image herites du legacy gonflaient le chrono en douce : une question libre
+ * avec extrait partait a 35 s au lieu des 25 annoncees. L'extrait audio se
+ * joue PENDANT la fenetre (on repond en ecoutant), l'image s'affiche
+ * instantanement, et la video a sa propre phase plein ecran avant la question.
+ */
 export function questionWindowMs(q: QuestionSnapshot, config: SessionConfig): number {
-  let ms = config.questionMs;
-  if (q.type !== 'qcm') ms += NON_QCM_EXTRA_MS;
-  if (q.musicUrl) ms += AUDIO_EXTRA_MS;
-  if (q.imageQuestionUrl) ms += IMAGE_EXTRA_MS;
-  // La video ne rallonge PLUS cette fenetre : elle se joue desormais plein
-  // ecran dans sa propre phase 'media', AVANT la question. Le chrono de
-  // reponse ne demarre qu'une fois l'extrait termine.
-  return ms;
+  return config.questionMs + (q.type !== 'qcm' ? NON_QCM_EXTRA_MS : 0);
 }
 
 /**
