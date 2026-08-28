@@ -78,6 +78,15 @@ export async function judgeFreeText(
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
+        // DELAI MAXIMUM OBLIGATOIRE : cet appel est fait DANS withSession, donc
+        // il tient le verrou de la session pendant toute sa duree. Sans borne,
+        // le defaut d'undici est de 300 s : un OpenAI qui pend figeait la
+        // console de l'animateur (reveler, question suivante, pause, arret) le
+        // temps qu'il rende la main, et le proxy finissait par renvoyer un 502
+        // sans qu'on sache si l'action avait ete appliquee. Au-dela des 8 s, le
+        // catch ci-dessous refuse les reponses ambigues et l'animateur tranche
+        // a la main : une soiree continue toujours, meme sans l'IA.
+        signal: AbortSignal.timeout(8000),
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
