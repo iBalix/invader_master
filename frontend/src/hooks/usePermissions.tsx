@@ -19,6 +19,13 @@ export const ALL_PAGES: PageDef[] = [
   { key: 'site-web/parametres', label: 'Site web - Paramètres' },
   { key: 'contenus/quiz', label: 'Quiz' },
   { key: 'evenements/battle-questions', label: 'Battle Royal' },
+  // Consoles d'animation. Elles DOIVENT figurer ici meme si elles n'ont pas
+  // d'ecran de reglages : ProtectedRoute passe par pathToPageKey, qui ne
+  // resout que les cles de cette liste. Absentes, elles etaient accordees en
+  // base au role salarie et affichees dans la sidebar, mais le garde de route
+  // renvoyait false et redirigeait aussitot -> le clic "ne faisait rien".
+  { key: 'evenements/quiz-live', label: 'Quiz live (console GM)' },
+  { key: 'evenements/battle-live', label: 'Battle live (console GM)' },
   { key: 'utilitaires/import-finances', label: 'Import finances' },
   { key: 'utilitaires/comptabilite', label: 'Comptabilite' },
   { key: 'tables-tactiles/coupons', label: 'Tables tactiles - Codes promo' },
