@@ -260,9 +260,18 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/**
+ * `timeoutMs` : delai maximum au-dela duquel la requete est abandonnee.
+ *
+ * A n'utiliser que sur les appels dont l'appelant sait REESSAYER. L'abandon
+ * leve une AbortError, pas une ApiError : les appelants qui distinguent les
+ * deux (cf. l'envoi de reponse dans PlayerApp) la traitent donc comme un
+ * incident reseau et relancent, au lieu de la prendre pour une erreur metier.
+ */
+async function request<T>(path: string, init?: RequestInit, timeoutMs?: number): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
+    ...(timeoutMs ? { signal: AbortSignal.timeout(timeoutMs) } : {}),
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
   const body = (await res.json().catch(() => ({}))) as {
@@ -276,6 +285,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return (body.data ?? body.items) as T;
 }
+
+/** delai maximum d'un envoi de reponse (le joueur reessaie ensuite) */
+const ANSWER_TIMEOUT_MS = 5000;
 
 export const gameApi = {
   current: () =>
@@ -310,6 +322,14 @@ export const gameApi = {
     request<{ recorded: boolean; already: boolean }>(
       `/public/game/${encodeURIComponent(idOrCode)}/answer`,
       { method: 'POST', body: JSON.stringify(body) },
+      // Sans borne, une requete qui pend laissait le joueur bloque sur « envoi »
+      // pour le reste de la question : l'interface refuse un nouvel envoi tant
+      // que celui-ci n'a pas rendu la main, et le retry ne se declenchait pas
+      // (il ne reagit qu'aux erreurs 500 / 0, pas a une requete sans fin).
+      // 5 s : tres au-dessus d'un envoi normal (~100 a 500 ms), meme dans la
+      // ruee de fin de question, et assez court pour laisser une seconde
+      // tentative aboutir dans la grace serveur.
+      ANSWER_TIMEOUT_MS,
     ),
   joker: (
     idOrCode: string,
