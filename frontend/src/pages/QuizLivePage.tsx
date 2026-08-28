@@ -24,6 +24,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -532,13 +533,19 @@ function HeaderBar({ state, onStop }: { state: GmState; onStop: () => void }) {
         />
       </div>
 
-      {qrOuvert && (
+      {/* PORTAIL obligatoire : le header est sticky avec backdrop-blur, et un
+          backdrop-filter fait de son element le referent des descendants en
+          position fixed. Rendue ici, la modale se centrait dans le header
+          (70 px de haut) et sortait de l'ecran par le haut. */}
+      {qrOuvert && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6"
           onClick={() => setQrOuvert(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-900 p-6 text-center"
+            // text-slate-100 explicite : via le portail, la modale vit sous
+            // document.body et n'herite plus du texte clair de la coque sombre
+            className="w-full max-w-sm rounded-2xl border border-white/15 bg-slate-900 p-6 text-center text-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="font-black">Reprendre la console</p>
@@ -558,7 +565,8 @@ function HeaderBar({ state, onStop }: { state: GmState; onStop: () => void }) {
               Fermer
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
