@@ -1111,7 +1111,7 @@ export async function battleGmAction(
             device: 'bot',
             player_token: generatePlayerToken(),
             status,
-            bonuses: { qdLeft: 0 },
+            bonuses: { jokers: [] },
             stats: { strike: 0, bestStrike: 0, correctCount: 0, answerCount: 0, totalTimeMs: 0 },
           });
         }
@@ -1199,7 +1199,7 @@ export async function joinBattleSession(
       device: device || 'mobile',
       player_token: generatePlayerToken(),
       status,
-      bonuses: { qdLeft: 0 },
+      bonuses: { jokers: [] },
       stats: { strike: 0, bestStrike: 0, correctCount: 0, answerCount: 0, totalTimeMs: 0 },
     })
     .select('*')

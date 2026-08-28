@@ -13,12 +13,14 @@ import type {
   SessionConfig,
   SpecialQuestion,
 } from './types.js';
+import { STREAK_BONUS_FROM } from './types.js';
 
 interface ComputeInput {
   question: QuestionSnapshot;
   answers: AnswerRow[]; // réponses de la question courante
   players: PlayerRow[]; // joueurs actifs
-  qdPlayerIds: Set<string>;
+  /** joueurs ayant arme le joker all-in sur cette question */
+  allInPlayerIds: Set<string>;
   special: SpecialQuestion | null;
   config: SessionConfig;
   questionWindowMs: number; // fenêtre réelle de la question (plausibilité vitesse)
@@ -41,7 +43,7 @@ function isPlausibleElapsed(elapsed: number | null, windowMs: number): boolean {
 }
 
 export function computeReveal(input: ComputeInput): ComputedReveal {
-  const { question: q, answers, players, qdPlayerIds, special, config, verdicts } = input;
+  const { question: q, answers, players, allInPlayerIds, special, config, verdicts } = input;
   const byPlayer = new Map(answers.map((a) => [a.player_id, a]));
   const results: Record<string, PlayerResult> = {};
   const perAnswer: ComputedReveal['perAnswer'] = {};
@@ -64,8 +66,10 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
     .slice()
     .sort((a, b) => a.maxGap - b.maxGap);
 
-  // Bonus vitesse : le plus rapide des bons répondeurs QCM (temps client plausible)
-  let fastest: { playerId: string; pseudo: string; elapsed: number } | null = null;
+  // Bonus vitesse : les 3 QCM corrects les plus rapides (temps client plausible)
+  // prennent chacun +1. Avant : un seul gagnant ; a 40 joueurs, un seul +1 etait
+  // invisible et decourageant, le podium fait vivre trois personnes par question.
+  const rapides: Array<{ playerId: string; pseudo: string; elapsed: number }> = [];
 
   const estimationEntries: Array<{ pseudo: string; value: number; gap: number; points: number }> =
     [];
@@ -106,8 +110,12 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
       if (special === 'double') points *= 2;
       if (special === 'quitte_double' && q.type === 'qcm' && !correct) points = -2;
 
-      // Quitte ou double joueur : x2 si correct, rien sinon
-      if (qdPlayerIds.has(player.id) && correct) points *= 2;
+      // Joker all-in : x3 si correct, -points de la question si faux.
+      // Applique seulement si le joueur a REPONDU : une deconnexion n'est pas
+      // une erreur, on ne punit pas l'absence.
+      if (allInPlayerIds.has(player.id)) {
+        points = correct ? points * 3 : -q.points;
+      }
 
       // Top estimations : points APRÈS multiplicateurs, pour rester cohérent
       // avec les points réellement crédités (reveal.results)
@@ -122,19 +130,29 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
         correct &&
         isPlausibleElapsed(a.elapsed_ms, input.questionWindowMs)
       ) {
-        if (!fastest || (a.elapsed_ms as number) < fastest.elapsed) {
-          fastest = { playerId: player.id, pseudo: player.pseudo, elapsed: a.elapsed_ms as number };
-        }
+        rapides.push({ playerId: player.id, pseudo: player.pseudo, elapsed: a.elapsed_ms as number });
       }
-
-      perAnswer[player.id] = { isCorrect: correct, points };
     }
+
+    // Serie de bonnes reponses : +1 a partir de la STREAK_BONUS_FROM-ieme
+    // consecutive. Le strike d'AVANT la question vit dans player.stats.strike ;
+    // applyReveal persiste ensuite exactement la meme regle (strike remis a 0
+    // si pas correct, y compris sans reponse : s'abstenir ne protege pas la
+    // serie, sinon on esquiverait les questions dures pour la garder).
+    const strikeAvant = player.stats.strike ?? 0;
+    const streak = correct ? strikeAvant + 1 : 0;
+    const streakBonus = correct && streak >= STREAK_BONUS_FROM;
+    if (streakBonus) points += 1;
+
+    if (a) perAnswer[player.id] = { isCorrect: correct, points };
 
     results[player.pseudo] = {
       answered,
       correct,
       points,
-      qd: qdPlayerIds.has(player.id),
+      allIn: allInPlayerIds.has(player.id),
+      streak,
+      streakBonus,
       value,
       gap,
     };
@@ -146,11 +164,14 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
     };
   }
 
-  // Applique le +1 vitesse
-  if (fastest) {
-    results[fastest.pseudo].points += 1;
-    perPlayer[fastest.playerId].delta += 1;
-    perAnswer[fastest.playerId].points += 1;
+  // Applique le +1 vitesse aux 3 plus rapides. Egalite parfaite de temps :
+  // l'ordre d'inscription tranche, comme avant pour le gagnant unique.
+  rapides.sort((x, y) => x.elapsed - y.elapsed);
+  const fastestTop = rapides.slice(0, 3);
+  for (const r of fastestTop) {
+    results[r.pseudo].points += 1;
+    perPlayer[r.playerId].delta += 1;
+    if (perAnswer[r.playerId]) perAnswer[r.playerId].points += 1;
   }
 
   estimationEntries.sort((a, b) => a.gap - b.gap);
@@ -159,7 +180,8 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
     answeredCount: answers.length,
     results,
     percents,
-    fastest: fastest?.pseudo ?? null,
+    fastestTop: fastestTop.map((r) => ({ pseudo: r.pseudo, elapsedMs: r.elapsed })),
+    fastest: fastestTop[0]?.pseudo ?? null,
     special,
     ...(q.type === 'qcm'
       ? { correctIndex: q.correctIndex, correctAnswer: q.answers[q.correctIndex] }

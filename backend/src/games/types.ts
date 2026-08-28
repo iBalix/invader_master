@@ -78,8 +78,8 @@ export interface QuestionSnapshot {
 export interface SessionConfig {
   announceMs: number;
   questionMs: number;
-  /** nombre de quitte-ou-double par joueur pour la partie */
-  qdPerPlayer: number;
+  /** HERITE, plus utilise : l'ancien stock de quitte-ou-double. Conserve pour les sessions en base. */
+  qdPerPlayer?: number;
   speedBonus: boolean;
   /**
    * Afficher les scores pendant la partie, et pas seulement les positions.
@@ -144,7 +144,6 @@ export interface SessionConfig {
 export const DEFAULT_CONFIG: SessionConfig = {
   announceMs: 8000,
   questionMs: 23000,
-  qdPerPlayer: 2,
   speedBonus: true,
   showScores: true,
   // valeurs de depart du mixer projo : celles que l'ecran appliquait en dur
@@ -163,7 +162,6 @@ export const DEFAULT_BATTLE_CONFIG: SessionConfig = {
   ...DEFAULT_CONFIG,
   announceMs: 6000,
   questionMs: 15000,
-  qdPerPlayer: 0,
   speedBonus: false,
   quizName: 'Battle Royale',
   graceMs: 4000,
@@ -176,9 +174,64 @@ export const DEFAULT_BATTLE_CONFIG: SessionConfig = {
 
 export type SpecialQuestion = 'double' | 'quitte_double' | 'shot' | 'goodies';
 
-export interface QdActivation {
+// ---------------------------------------------------------------------------
+// Jokers
+//
+// Trois jokers, gagnes en jouant (tirage a la revelation, pondere par la
+// position au classement : les derniers gagnent plus souvent) ou donnes par le
+// GM. Remplacent l'ancien "quitte ou double" unique, qui ne faisait rien perdre
+// sur une mauvaise reponse et n'etait donc pas une decision.
+//
+// Les constantes ci-dessous sont LES reglages d'equilibrage, valides par
+// simulation Monte-Carlo (40 joueurs, 30 questions, ~115 jokers par partie avec
+// le profil retenu). A ajuster ici apres les premieres soirees, rien d'autre a
+// toucher.
+// ---------------------------------------------------------------------------
+
+export type JokerType = 'all_in' | 'audience' | 'fifty';
+
+export const JOKER_TYPES: JokerType[] = ['all_in', 'audience', 'fifty'];
+
+/** jokers en main au maximum ; au-dela, plus de tirage */
+export const JOKER_HAND_MAX = 2;
+/** chance de tirage par bonne reponse = BASE + SLOPE x percentile (0 = leader, 1 = dernier) */
+export const JOKER_DRAW_BASE = 0.05;
+export const JOKER_DRAW_SLOPE = 0.25;
+/** ponderation des types au tirage : le plus doux est le plus frequent */
+export const JOKER_WEIGHTS: Record<JokerType, number> = { fifty: 40, audience: 30, all_in: 30 };
+
+/**
+ * Serie de bonnes reponses : a partir de la STREAK_BONUS_FROM-ieme consecutive,
+ * chaque bonne reponse rapporte +1. Pas un joker : toujours actif.
+ */
+export const STREAK_BONUS_FROM = 5;
+
+/**
+ * Duree minimale de la phase reveal. Cote joueur, une sequence personnelle
+ * (verdict -> serie -> jokers) se joue apres la revelation ; le GM ne peut pas
+ * lancer la suite avant la fin, sinon la question suivante court-circuite la
+ * sequence. La console affiche un compte a rebours sur le bouton.
+ */
+export const REVEAL_MIN_MS = 12_000;
+
+/** un joker joue sur une question */
+export interface JokerPlay {
   playerId: string;
   pseudo: string;
+  type: JokerType;
+  /**
+   * donnees propres au joker, restituees au joueur apres un refresh :
+   * fifty -> { removed: number[] } ; audience -> { counts: number[]; total: number }
+   */
+  data?: Record<string, unknown>;
+}
+
+/** un joker gagne (tirage a la revelation, ou don du GM) */
+export interface JokerAward {
+  playerId: string;
+  pseudo: string;
+  type: JokerType;
+  source: 'draw' | 'gm';
 }
 
 export interface FreeTextVerdict {
@@ -190,7 +243,12 @@ export interface PlayerResult {
   answered: boolean;
   correct: boolean;
   points: number;
-  qd: boolean;
+  /** joker all-in arme sur cette question */
+  allIn: boolean;
+  /** serie de bonnes reponses APRES cette question (0 si cassee) */
+  streak: number;
+  /** true si la serie a rapporte le +1 (>= STREAK_BONUS_FROM) */
+  streakBonus: boolean;
   /** valeur donnée (estimation / texte) pour affichage */
   value?: string | number;
   gap?: number;
@@ -206,7 +264,14 @@ export interface RevealData {
   percents?: number[];
   answeredCount: number;
   results: Record<string, PlayerResult>; // clé = pseudo
+  /**
+   * Podium de rapidite : les 3 QCM corrects les plus rapides, +1 chacun.
+   * `fastest` reste servi (= fastestTop[0]) pour les consommateurs annexes.
+   */
+  fastestTop?: Array<{ pseudo: string; elapsedMs: number }>;
   fastest?: string | null;
+  /** jokers gagnes a cette revelation (tirages + dons GM), pour le projecteur */
+  jokerAwards?: Array<{ pseudo: string; type: JokerType }>;
   /** top estimations [{pseudo, value, gap, points}] */
   bestEstimations?: Array<{ pseudo: string; value: number; gap: number; points: number }>;
   special?: SpecialQuestion | null;
@@ -330,8 +395,10 @@ export interface BattleRuntime {
 
 /** runtime jsonb de game_sessions */
 export interface SessionRuntime {
-  /** activations quitte-ou-double par index de question */
-  qd?: Record<string, QdActivation[]>;
+  /** jokers joues, par index de question */
+  jokerPlays?: Record<string, JokerPlay[]>;
+  /** jokers gagnes, par index de question (tirage du reveal + dons GM) */
+  jokerAwards?: Record<string, JokerAward[]>;
   /** question spéciale GM pour la question en cours */
   special?: SpecialQuestion | null;
   reveal?: RevealData;
@@ -389,7 +456,8 @@ export interface PlayerRow {
   score: number;
   /** spectator : battle uniquement, non qualifié pour la finale (définitif) */
   status: 'active' | 'eliminated' | 'waiting' | 'removed' | 'spectator';
-  bonuses: { qdLeft: number };
+  /** main de jokers (JOKER_HAND_MAX au plus). Les vieux jsonb {qdLeft} sont ignores. */
+  bonuses: { jokers?: JokerType[] };
   stats: PlayerStats;
   joined_at: string;
   last_seen_at: string;

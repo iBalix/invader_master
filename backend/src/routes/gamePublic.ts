@@ -13,7 +13,7 @@ import {
   markDirty,
   withSession,
 } from '../games/engine.js';
-import { activateBonus, joinSession, submitAnswer } from '../games/quizFlow.js';
+import { playJoker, joinSession, submitAnswer } from '../games/quizFlow.js';
 // import à effet de bord indispensable : enregistre l'advancer 'battle'
 import { joinBattleSession, submitBattleAnswer } from '../games/battleFlow.js';
 import { buildPublicState, buildYou } from '../games/views.js';
@@ -223,8 +223,8 @@ gamePublicRoutes.post('/:idOrCode/answer', async (req, res) => {
   }
 });
 
-/** Activation d'un bonus joueur (quitte ou double) pendant l'annonce */
-gamePublicRoutes.post('/:idOrCode/bonus', async (req, res) => {
+/** Jouer un joker (all_in / audience / fifty) pendant l'annonce ou la question */
+gamePublicRoutes.post('/:idOrCode/joker', async (req, res) => {
   try {
     const session = await loadSession(req.params.idOrCode);
     if (!session || session.ended_at) {
@@ -232,20 +232,26 @@ gamePublicRoutes.post('/:idOrCode/bonus', async (req, res) => {
       return;
     }
     ensureQuizBattle(session);
-    const { playerToken, questionIndex } = req.body as {
+    const { playerToken, questionIndex, type } = req.body as {
       playerToken?: string;
       questionIndex?: number;
+      type?: string;
     };
     const player = await findPlayerByToken(session.id, playerToken);
     if (!player) {
       res.status(401).json({ status: 'error', message: 'error_unknown_player' });
       return;
     }
+    // jokers quiz uniquement : la battle a son propre rythme d'elimination
     if (session.mode !== 'quiz') {
       res.status(409).json({ status: 'error', message: 'error_bonus_window_closed' });
       return;
     }
-    const result = await activateBonus(session.id, player, questionIndex ?? -1);
+    if (type !== 'all_in' && type !== 'audience' && type !== 'fifty') {
+      res.status(400).json({ status: 'error', message: 'error_joker_type' });
+      return;
+    }
+    const result = await playJoker(session.id, player, questionIndex ?? -1, type);
     res.json({ status: 'success', data: result });
   } catch (err) {
     httpError(res, err);

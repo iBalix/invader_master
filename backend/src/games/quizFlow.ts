@@ -29,8 +29,17 @@ import {
   DEFAULT_CONFIG,
   DIFFICULTY_POINTS,
   IMAGE_EXTRA_MS,
+  JOKER_DRAW_BASE,
+  JOKER_DRAW_SLOPE,
+  JOKER_HAND_MAX,
+  JOKER_TYPES,
+  JOKER_WEIGHTS,
+  REVEAL_MIN_MS,
   VIDEO_EXTRA_BASE_MS,
   type AnswerRow,
+  type JokerAward,
+  type JokerPlay,
+  type JokerType,
   type PlayerRow,
   type QuestionSnapshot,
   type RewardsData,
@@ -294,6 +303,64 @@ async function loadAnswers(sessionId: string, questionIndex: number): Promise<An
   return (data as AnswerRow[]) ?? [];
 }
 
+// ---------------------------------------------------------------------------
+// Jokers
+// ---------------------------------------------------------------------------
+
+/** main courante d'un joueur, defensif sur les vieux jsonb {qdLeft} */
+function handOf(p: PlayerRow): JokerType[] {
+  const jokers = p.bonuses?.jokers;
+  return Array.isArray(jokers) ? jokers.filter((j): j is JokerType => JOKER_TYPES.includes(j)) : [];
+}
+
+/** tirage pondere d'un type de joker */
+function drawJokerType(): JokerType {
+  const total = JOKER_TYPES.reduce((acc, t) => acc + JOKER_WEIGHTS[t], 0);
+  let r = Math.random() * total;
+  for (const t of JOKER_TYPES) {
+    r -= JOKER_WEIGHTS[t];
+    if (r < 0) return t;
+  }
+  return JOKER_TYPES[JOKER_TYPES.length - 1];
+}
+
+/**
+ * Tirages de jokers a la revelation.
+ *
+ * Chaque joueur correct avec de la place en main tente sa chance, ponderee par
+ * sa position AVANT la question (percentile 0 = leader, 1 = dernier) : les
+ * derniers gagnent jusqu'a 6x plus souvent, c'est l'anti-decrochage. Le tirage
+ * est fait ICI, cote serveur : la roue affichee chez le joueur n'est que du
+ * theatre qui s'arrete sur le resultat deja connu.
+ *
+ * Renvoie les awards ; les mains sont mutees sur les objets `players` passes,
+ * a charge de l'appelant de les persister (applyReveal les ecrit dans le meme
+ * batch que les scores).
+ */
+function drawRevealJokers(
+  players: PlayerRow[],
+  correctIds: Set<string>,
+): JokerAward[] {
+  const awards: JokerAward[] = [];
+  // classement AVANT la question : les scores charges n'incluent pas encore
+  // les points de la question en cours de revelation
+  const ordre = [...players].sort((a, b) => b.score - a.score);
+  const pct = new Map<string, number>();
+  ordre.forEach((p, i) => pct.set(p.id, ordre.length > 1 ? i / (ordre.length - 1) : 0));
+
+  for (const p of players) {
+    if (!correctIds.has(p.id)) continue;
+    const main = handOf(p);
+    if (main.length >= JOKER_HAND_MAX) continue;
+    const chance = JOKER_DRAW_BASE + JOKER_DRAW_SLOPE * (pct.get(p.id) ?? 0);
+    if (Math.random() >= chance) continue;
+    const type = drawJokerType();
+    p.bonuses = { ...p.bonuses, jokers: [...main, type] };
+    awards.push({ playerId: p.id, pseudo: p.pseudo, type, source: 'draw' });
+  }
+  return awards;
+}
+
 async function applyReveal(session: SessionRow): Promise<void> {
   const q = currentQuestion(session);
   if (!q) throw Object.assign(new Error('Pas de question courante'), { httpStatus: 409 });
@@ -303,18 +370,31 @@ async function applyReveal(session: SessionRow): Promise<void> {
     loadPlayers(session.id),
   ]);
   const active = players.filter((p) => p.status === 'active');
-  const qdIds = new Set((session.runtime.qd?.[String(qi)] ?? []).map((x) => x.playerId));
+  const allInIds = new Set(
+    (session.runtime.jokerPlays?.[String(qi)] ?? [])
+      .filter((x) => x.type === 'all_in')
+      .map((x) => x.playerId),
+  );
 
   const computed = computeReveal({
     question: q,
     answers,
     players: active,
-    qdPlayerIds: qdIds,
+    allInPlayerIds: allInIds,
     special: session.runtime.special ?? null,
     config: session.config,
     questionWindowMs: questionWindowMs(q, session.config),
     verdicts: session.runtime.judge?.verdicts ?? {},
   });
+
+  // Tirage des jokers gagnes : ponderation par le classement AVANT la question
+  // (les scores charges sont pre-reveal). Mute p.bonuses, persiste plus bas
+  // dans le meme batch que les scores. Les dons GM s'ajouteront pendant le
+  // reveal via l'action give-joker.
+  const correctIds = new Set(
+    active.filter((p) => computed.perPlayer[p.id]?.correct).map((p) => p.id),
+  );
+  const awards = drawRevealJokers(active, correctIds);
 
   // Idempotence : si une tentative précédente a été interrompue entre les
   // écritures et le saveSession, les réponses déjà jugées (points_awarded posé)
@@ -341,10 +421,20 @@ async function applyReveal(session: SessionRow): Promise<void> {
   // Met à jour scores + stats joueurs (strike compris). Les joueurs déjà
   // crédités (alreadyJudged) sont sautés ; ceux qui n'ont pas répondu ont un
   // delta 0 et des stats idempotentes (strike remis à 0).
+  const awardedIds = new Set(awards.map((a) => a.playerId));
   const playerWrites = active
-    .filter((p) => computed.perPlayer[p.id] && !alreadyJudged.has(p.id))
+    .filter(
+      (p) =>
+        (computed.perPlayer[p.id] && !alreadyJudged.has(p.id)) ||
+        // un joueur deja credite par une tentative interrompue peut quand meme
+        // avoir gagne un joker a CE passage : sa main doit etre persistee
+        awardedIds.has(p.id),
+    )
     .map((p) => {
       const r = computed.perPlayer[p.id];
+      if (alreadyJudged.has(p.id) || !r) {
+        return supabaseAdmin.from('game_players').update({ bonuses: p.bonuses }).eq('id', p.id);
+      }
       const stats = {
         strike: r.correct ? (p.stats.strike ?? 0) + 1 : 0,
         bestStrike: Math.max(p.stats.bestStrike ?? 0, r.correct ? (p.stats.strike ?? 0) + 1 : 0),
@@ -354,7 +444,7 @@ async function applyReveal(session: SessionRow): Promise<void> {
       };
       return supabaseAdmin
         .from('game_players')
-        .update({ score: p.score + r.delta, stats })
+        .update({ score: p.score + r.delta, stats, bonuses: p.bonuses })
         .eq('id', p.id);
     });
 
@@ -362,6 +452,11 @@ async function applyReveal(session: SessionRow): Promise<void> {
   const failed = results.find((r) => r.error);
   if (failed?.error) throw failed.error;
 
+  if (awards.length > 0) {
+    session.runtime.jokerAwards = session.runtime.jokerAwards ?? {};
+    session.runtime.jokerAwards[String(qi)] = awards;
+    computed.reveal.jokerAwards = awards.map((a) => ({ pseudo: a.pseudo, type: a.type }));
+  }
   session.runtime.reveal = computed.reveal;
   session.runtime.judge = undefined;
   setPhase(session, 'reveal', null);
@@ -375,23 +470,49 @@ async function rollbackQuestion(session: SessionRow): Promise<void> {
   const qi = session.current_question_index;
   const wasRevealed = session.status === 'reveal' && !session.runtime.reveal?.cancelled;
 
-  // Rembourse les quitte-ou-double de la question (en parallèle)
-  const activations = session.runtime.qd?.[String(qi)] ?? [];
+  // Rembourse les jokers joues sur la question (re-ajout plafonne) et revoque
+  // ceux gagnes a sa revelation (retrait d'une instance si encore en main).
+  // Best effort, comme l'ancien remboursement : un joker gagne PUIS joue sur
+  // une autre question n'est pas retrace.
+  const plays = session.runtime.jokerPlays?.[String(qi)] ?? [];
+  const awards = session.runtime.jokerAwards?.[String(qi)] ?? [];
+  const parJoueur = new Map<string, { rendre: JokerType[]; retirer: JokerType[] }>();
+  for (const pl of plays) {
+    const e = parJoueur.get(pl.playerId) ?? { rendre: [], retirer: [] };
+    e.rendre.push(pl.type);
+    parJoueur.set(pl.playerId, e);
+  }
+  for (const aw of awards) {
+    const e = parJoueur.get(aw.playerId) ?? { rendre: [], retirer: [] };
+    e.retirer.push(aw.type);
+    parJoueur.set(aw.playerId, e);
+  }
   await Promise.all(
-    activations.map(async (act) => {
+    [...parJoueur.entries()].map(async ([playerId, e]) => {
       const { data: p } = await supabaseAdmin
         .from('game_players')
         .select('bonuses')
-        .eq('id', act.playerId)
+        .eq('id', playerId)
         .maybeSingle();
-      if (p) {
-        const bonuses = { ...(p.bonuses as { qdLeft?: number }) };
-        bonuses.qdLeft = (bonuses.qdLeft ?? 0) + 1;
-        await supabaseAdmin.from('game_players').update({ bonuses }).eq('id', act.playerId);
+      if (!p) return;
+      let main: JokerType[] = Array.isArray((p.bonuses as { jokers?: JokerType[] })?.jokers)
+        ? [...((p.bonuses as { jokers: JokerType[] }).jokers)]
+        : [];
+      for (const t of e.retirer) {
+        const i = main.indexOf(t);
+        if (i >= 0) main.splice(i, 1);
       }
+      for (const t of e.rendre) {
+        if (main.length < JOKER_HAND_MAX) main.push(t);
+      }
+      await supabaseAdmin
+        .from('game_players')
+        .update({ bonuses: { jokers: main } })
+        .eq('id', playerId);
     }),
   );
-  if (session.runtime.qd) delete session.runtime.qd[String(qi)];
+  if (session.runtime.jokerPlays) delete session.runtime.jokerPlays[String(qi)];
+  if (session.runtime.jokerAwards) delete session.runtime.jokerAwards[String(qi)];
 
   // Supprime les réponses de la question
   await supabaseAdmin
@@ -547,6 +668,20 @@ export interface ActionParams {
   config?: Partial<SessionConfig>;
 }
 
+/**
+ * La revelation dure au moins REVEAL_MIN_MS : chaque joueur y vit une sequence
+ * personnelle (verdict -> serie -> jokers). Passer a la suite avant la fin la
+ * court-circuiterait sur 40 telephones d'un coup. La console GM affiche un
+ * compte a rebours sur le bouton, ce 409 est le filet cote serveur.
+ */
+function assertRevealDone(session: SessionRow): void {
+  if (session.status !== 'reveal' || !session.phase_started_at) return;
+  const debut = new Date(session.phase_started_at).getTime();
+  if (Date.now() < debut + REVEAL_MIN_MS) {
+    throw Object.assign(new Error('error_reveal_sequence'), { httpStatus: 409 });
+  }
+}
+
 function assertStatus(session: SessionRow, allowed: SessionRow['status'][], action: string): void {
   if (!allowed.includes(session.status)) {
     throw Object.assign(
@@ -590,6 +725,7 @@ export async function gmAction(
       }
       case 'next': {
         assertStatus(session, ['reveal', 'leaderboard', 'cinematic'], action);
+        assertRevealDone(session);
         goAnnounce(session, session.current_question_index + 1, params.special ?? null);
         break;
       }
@@ -622,6 +758,7 @@ export async function gmAction(
       }
       case 'leaderboard': {
         assertStatus(session, ['reveal', 'cinematic', 'rewards'], action);
+        assertRevealDone(session);
         const players = await loadPlayers(session.id);
         const standings = buildStandings(session, players);
         session.runtime.standings = standings;
@@ -633,6 +770,7 @@ export async function gmAction(
       }
       case 'cinematic': {
         assertStatus(session, ['reveal', 'leaderboard'], action);
+        assertRevealDone(session);
         const players = await loadPlayers(session.id);
         const standings = buildStandings(session, players);
         session.runtime.standings = standings;
@@ -718,6 +856,54 @@ export async function gmAction(
         markDirty(session);
         break;
       }
+      case 'give-joker': {
+        // Don manuel : a tout le monde, ou a un joueur precis. Fenetre = fin de
+        // question (reveal / leaderboard), juste avant de lancer la suivante.
+        assertStatus(session, ['reveal', 'leaderboard'], action);
+        const players = await loadPlayers(session.id);
+        const actifs = players.filter((p) => p.status === 'active');
+        const cibles = params.playerId
+          ? actifs.filter((p) => p.id === params.playerId)
+          : actifs;
+        if (params.playerId && cibles.length === 0) {
+          throw Object.assign(new Error('Joueur introuvable'), { httpStatus: 404 });
+        }
+        const qi = String(session.current_question_index);
+        const dons: JokerAward[] = [];
+        await Promise.all(
+          cibles.map(async (p) => {
+            const main = handOf(p);
+            if (main.length >= JOKER_HAND_MAX) return; // main pleine : saute
+            const type = drawJokerType();
+            const { error } = await supabaseAdmin
+              .from('game_players')
+              .update({ bonuses: { jokers: [...main, type] } })
+              .eq('id', p.id);
+            if (!error) dons.push({ playerId: p.id, pseudo: p.pseudo, type, source: 'gm' });
+          }),
+        );
+        if (dons.length > 0) {
+          session.runtime.jokerAwards = session.runtime.jokerAwards ?? {};
+          session.runtime.jokerAwards[qi] = [
+            ...(session.runtime.jokerAwards[qi] ?? []),
+            ...dons,
+          ];
+          // le projecteur lit reveal.jokerAwards : on y ajoute les dons pour
+          // qu'ils apparaissent dans la banniere de la revelation en cours
+          if (session.runtime.reveal) {
+            session.runtime.reveal.jokerAwards = [
+              ...(session.runtime.reveal.jokerAwards ?? []),
+              ...dons.map((d) => ({ pseudo: d.pseudo, type: d.type })),
+            ];
+          }
+          markDirty(session);
+          void broadcast(session.id, 'joker', {
+            kind: 'award',
+            awards: dons.map((d) => ({ pseudo: d.pseudo, type: d.type, playerId: d.playerId })),
+          });
+        }
+        break;
+      }
       case 'kick': {
         if (!params.playerId) throw Object.assign(new Error('playerId requis'), { httpStatus: 400 });
         await supabaseAdmin
@@ -774,7 +960,7 @@ export async function joinSession(
       pseudo_norm: trimmed.toLowerCase(),
       device: device || 'mobile',
       player_token: generatePlayerToken(),
-      bonuses: { qdLeft: session.config.qdPerPlayer },
+      bonuses: { jokers: [] },
       stats: { strike: 0, bestStrike: 0, correctCount: 0, answerCount: 0, totalTimeMs: 0 },
     })
     .select('*')
@@ -793,36 +979,97 @@ export async function joinSession(
   return data as PlayerRow;
 }
 
-export async function activateBonus(
+/**
+ * Jouer un joker.
+ *
+ * Fenetre : annonce OU question (l'ancien quitte-ou-double n'acceptait que
+ * l'annonce ; le 50/50 et l'avis du public n'ont de sens qu'une fois les
+ * reponses affichees). Idempotent par type : rejouer le meme type sur la meme
+ * question renvoie les donnees deja produites, sans reconsommer.
+ *
+ * Ordre des ecritures : runtime d'abord (sous mutex, sauve par withSession),
+ * update du stock ensuite. Les deux ne sont pas transactionnels : dans ce sens,
+ * un echec entre les deux laisse au pire un joker gratuit — jamais un joker
+ * consomme sans effet, ce que faisait l'ancien ordre.
+ */
+export async function playJoker(
   sessionId: string,
   player: PlayerRow,
   questionIndex: number,
-): Promise<{ qdLeft: number }> {
-  let qdLeft = 0;
+  type: JokerType,
+): Promise<{ jokers: JokerType[]; data?: Record<string, unknown> }> {
+  let mainApres: JokerType[] = handOf(player);
+  let dataOut: Record<string, unknown> | undefined;
+  let dejaJoue = false;
+
   await withSession(sessionId, async (session) => {
-    if (session.status !== 'announce' || session.current_question_index !== questionIndex) {
+    if (
+      (session.status !== 'announce' && session.status !== 'question') ||
+      session.current_question_index !== questionIndex
+    ) {
       throw Object.assign(new Error('error_bonus_window_closed'), { httpStatus: 409 });
     }
+    const q = currentQuestion(session);
+    if ((type === 'fifty' || type === 'audience') && q?.type !== 'qcm') {
+      throw Object.assign(new Error('error_joker_type'), { httpStatus: 409 });
+    }
+
     const key = String(questionIndex);
-    const list = session.runtime.qd?.[key] ?? [];
-    if (list.some((x) => x.playerId === player.id)) {
-      qdLeft = player.bonuses.qdLeft ?? 0;
-      return; // déjà activé : idempotent
+    const list = session.runtime.jokerPlays?.[key] ?? [];
+    const existante = list.find((x) => x.playerId === player.id && x.type === type);
+    if (existante) {
+      // deja joue : idempotent, on restitue les memes donnees
+      dejaJoue = true;
+      dataOut = existante.data;
+      return;
     }
-    if ((player.bonuses.qdLeft ?? 0) <= 0) {
-      throw Object.assign(new Error('error_no_bonus_left'), { httpStatus: 409 });
+
+    const main = handOf(player);
+    const idx = main.indexOf(type);
+    if (idx < 0) {
+      throw Object.assign(new Error('error_no_joker'), { httpStatus: 409 });
     }
-    qdLeft = (player.bonuses.qdLeft ?? 0) - 1;
-    await supabaseAdmin
-      .from('game_players')
-      .update({ bonuses: { ...player.bonuses, qdLeft } })
-      .eq('id', player.id);
-    session.runtime.qd = session.runtime.qd ?? {};
-    session.runtime.qd[key] = [...list, { playerId: player.id, pseudo: player.pseudo }];
+
+    // donnees propres au joker, produites cote serveur
+    let data: Record<string, unknown> | undefined;
+    if (type === 'fifty' && q) {
+      const faux = q.answers.map((_, i) => i).filter((i) => i !== q.correctIndex);
+      // 2 mauvaises reponses au hasard parmi les fausses
+      for (let i = faux.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [faux[i], faux[j]] = [faux[j], faux[i]];
+      }
+      data = { removed: faux.slice(0, 2).sort((a, b) => a - b) };
+    } else if (type === 'audience' && q) {
+      // snapshot de la repartition au moment T : c'est l'avis du public a
+      // l'instant ou on le demande, il ne se met pas a jour ensuite
+      const reponses = await loadAnswers(session.id, questionIndex);
+      const counts = new Array(q.answers.length).fill(0) as number[];
+      for (const a of reponses) {
+        const c = a.answer.choice;
+        if (typeof c === 'number' && c >= 0 && c < counts.length) counts[c] += 1;
+      }
+      data = { counts, total: reponses.length };
+    }
+
+    const play: JokerPlay = { playerId: player.id, pseudo: player.pseudo, type, data };
+    session.runtime.jokerPlays = session.runtime.jokerPlays ?? {};
+    session.runtime.jokerPlays[key] = [...list, play];
     markDirty(session);
+
+    mainApres = [...main.slice(0, idx), ...main.slice(idx + 1)];
+    const { error } = await supabaseAdmin
+      .from('game_players')
+      .update({ bonuses: { jokers: mainApres } })
+      .eq('id', player.id);
+    if (error) throw error;
+    dataOut = data;
   });
-  await broadcast(sessionId, 'bonus', { pseudo: player.pseudo, type: 'quitte_double' });
-  return { qdLeft };
+
+  if (!dejaJoue) {
+    await broadcast(sessionId, 'joker', { kind: 'play', pseudo: player.pseudo, type });
+  }
+  return { jokers: mainApres, data: dataOut };
 }
 
 export async function submitAnswer(
@@ -858,7 +1105,9 @@ export async function submitAnswer(
   }
 
   const qi = session.current_question_index;
-  const qd = (session.runtime.qd?.[String(qi)] ?? []).some((x) => x.playerId === player.id);
+  const allIn = (session.runtime.jokerPlays?.[String(qi)] ?? []).some(
+    (x) => x.playerId === player.id && x.type === 'all_in',
+  );
 
   const { error } = await supabaseAdmin.from('game_answers').insert({
     session_id: sessionId,
@@ -866,7 +1115,7 @@ export async function submitAnswer(
     question_index: qi,
     answer,
     elapsed_ms: elapsedMs,
-    bonus: qd ? 'quitte_double' : null,
+    bonus: allIn ? 'all_in' : null,
   });
   if (error) {
     if (error.code === '23505') return { recorded: true, already: true };

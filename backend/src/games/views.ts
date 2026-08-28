@@ -7,7 +7,7 @@
 
 import { nextDifficultyFor } from './battleFlow.js';
 import { registerSyncPayload } from './engine.js';
-import type { PlayerRow, QuestionSnapshot, SessionRow } from './types.js';
+import type { JokerType, PlayerRow, QuestionSnapshot, SessionRow } from './types.js';
 
 function ms(iso: string | null): number | null {
   return iso ? new Date(iso).getTime() : null;
@@ -122,7 +122,6 @@ export function buildPublicState(
     config: {
       announceMs: cfg.announceMs,
       questionMs: cfg.questionMs,
-      qdPerPlayer: cfg.qdPerPlayer,
       showScores: cfg.showScores,
       wifiSsid: cfg.wifiSsid,
       wifiPassword: cfg.wifiPassword,
@@ -144,7 +143,11 @@ export function buildPublicState(
     participantCount: players.filter((p) => p.status !== 'removed').length,
     players: active.map((p) => ({ pseudo: p.pseudo, device: p.device })),
     question: publicQuestion(session),
-    qdFeed: (session.runtime.qd?.[String(qi)] ?? []).map((x) => x.pseudo),
+    // qui a joue quoi sur la question courante (chips cote joueur et projo)
+    jokerFeed: (session.runtime.jokerPlays?.[String(qi)] ?? []).map((x) => ({
+      pseudo: x.pseudo,
+      type: x.type,
+    })),
     special: session.runtime.special ?? null,
     judging: session.runtime.judge?.running ?? false,
     reveal: session.status === 'reveal' ? session.runtime.reveal : undefined,
@@ -167,10 +170,13 @@ export function buildYou(
     pseudo: player.pseudo,
     score: player.score,
     status: player.status,
-    qdLeft: player.bonuses.qdLeft ?? 0,
-    qdActive: (session.runtime.qd?.[String(session.current_question_index)] ?? []).some(
-      (x) => x.playerId === player.id,
-    ),
+    // main de jokers + ce que J'AI joue sur la question courante, avec les
+    // donnees produites (indices retires du 50/50, snapshot de l'avis) : c'est
+    // ce qui permet a un rechargement de page de retomber sur le meme etat
+    jokers: (player.bonuses.jokers ?? []) as JokerType[],
+    jokerPlays: (session.runtime.jokerPlays?.[String(session.current_question_index)] ?? [])
+      .filter((x) => x.playerId === player.id)
+      .map((x) => ({ type: x.type, data: x.data ?? null })),
     answered,
     strike: player.stats.strike ?? 0,
   };
@@ -236,9 +242,35 @@ export function buildGmState(
         device: p.device,
         score: p.score,
         status: p.status,
-        qdLeft: p.bonuses.qdLeft ?? 0,
+        jokers: p.bonuses.jokers ?? [],
         stats: p.stats,
         joinedAt: p.joined_at,
+      })),
+      /**
+       * Toute la liste des questions, allegee (jamais dans la vue publique).
+       * C'est le manque n°1 de la console par rapport a l'ancien back-office
+       * PHP : l'animateur doit voir ce qui arrive, le type et les medias.
+       */
+      questions: session.question_order.map((qq, i) => ({
+        index: i,
+        type: qq.type,
+        question: qq.question,
+        difficulty: qq.difficulty,
+        points: qq.points,
+        theme: qq.theme,
+        hasMusic: Boolean(qq.musicUrl),
+        hasVideo: Boolean(qq.videoYoutube),
+        hasImageQ: Boolean(qq.imageQuestionUrl),
+        hasImageR: Boolean(qq.imageAnswerUrl),
+        helpAnimator: qq.helpAnimator,
+        state:
+          i < session.current_question_index
+            ? 'done'
+            : i === session.current_question_index &&
+                session.status !== 'lobby' &&
+                session.status !== 'rules'
+              ? 'current'
+              : 'todo',
       })),
       // classement GM : toujours avec les scores
       standings: session.runtime.standings,
