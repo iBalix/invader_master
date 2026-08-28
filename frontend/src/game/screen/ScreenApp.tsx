@@ -555,9 +555,6 @@ export function LobbyProjo({ state }: { state: PublicState }) {
             <p className="mt-2 text-2xl text-white/70">
               Choisis ton pseudo d'équipe et c'est parti !
             </p>
-            <p className="mt-2 text-xl text-white/40">
-              ou {playUrl(state.joinCode).replace(/^https?:\/\//, '')}
-            </p>
           </div>
           <div className="shrink-0">
             <QrCanvas value={playUrl(state.joinCode)} size={230} />
