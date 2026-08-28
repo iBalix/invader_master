@@ -60,7 +60,25 @@
   100% { opacity: 1; transform: translateX(0) skewX(-8deg) scale(1); }
 }
 
+/* Pause : les pseudos et les emojis derivent lentement vers le haut.
+   Animation 100 % CSS, aucun requestAnimationFrame : elle continue meme si la
+   page cesse de composer, et ne coute rien au processeur d'une borne (elle
+   n'est de toute facon jouee que sur le projecteur). */
+@keyframes game-drift-up {
+  0% { transform: translate3d(0, 12vh, 0) rotate(var(--tilt, 0deg)); opacity: 0; }
+  8% { opacity: 1; }
+  92% { opacity: 1; }
+  100% { transform: translate3d(var(--drift, 0px), -105vh, 0) rotate(var(--tilt, 0deg)); opacity: 0; }
+}
+/* respiration lente du titre de pause */
+@keyframes game-breathe {
+  0%, 100% { transform: scale(1); text-shadow: 0 0 30px rgba(76, 201, 240, 0.35); }
+  50% { transform: scale(1.03); text-shadow: 0 0 60px rgba(76, 201, 240, 0.6); }
+}
+
 .anim-fade-up { animation: game-fade-up 0.45s ease-out both; }
+.anim-drift-up { animation: game-drift-up linear infinite; }
+.anim-breathe { animation: game-breathe 4s ease-in-out infinite; }
 .anim-pop { animation: game-pop 0.4s cubic-bezier(0.22, 1.4, 0.36, 1) both; }
 .anim-slide-in { animation: game-slide-in 0.35s ease-out both; }
 .anim-glow { animation: game-glow 2.2s ease-in-out infinite; }
@@ -81,7 +99,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .anim-fade-up, .anim-pop, .anim-slide-in, .anim-glow, .anim-shake,
-  .anim-bg-pulse-red, .anim-title-glow,
+  .anim-bg-pulse-red, .anim-title-glow, .anim-drift-up, .anim-breathe,
   .anim-stomp, .anim-suspense, .anim-fade-to-black, .anim-banner-in {
     animation: none;
   }

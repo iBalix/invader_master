@@ -375,7 +375,20 @@ export function PlayerScreen(props: ScreenProps) {
       case 'pause':
         return (
           <Center>
-            <BigMessage emoji="🍹" title="C'est la pause !" sub={state.config.pauseText} />
+            <div className="text-center">
+              <BigMessage
+                emoji="🍹"
+                title="C'est la pause !"
+                sub="C'est le moment d'aller reprendre des forces au bar !"
+              />
+              {/* le texte configure (promo du soir) vient EN PLUS, il ne
+                  remplace plus l'invitation : les deux ont leur role */}
+              {state.config.pauseText && (
+                <p className="anim-pop mt-5 inline-block rounded-full border border-cyan-400/40 bg-cyan-400/10 px-5 py-2 font-bold text-cyan-300">
+                  {state.config.pauseText}
+                </p>
+              )}
+            </div>
           </Center>
         );
       case 'rewards':

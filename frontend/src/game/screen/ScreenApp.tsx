@@ -411,15 +411,7 @@ export function ProjectorBody({
     case 'cinematic':
       return <CinematicProjo state={state} />;
     case 'pause':
-      return (
-        <FullCenter>
-          <div className="anim-pop text-center">
-            <div className="mb-6 text-7xl">🍹</div>
-            <h1 className="text-6xl font-black uppercase tracking-wider">C'est la pause !</h1>
-            <p className="mt-6 text-3xl text-cyan-300">{state.config.pauseText}</p>
-          </div>
-        </FullCenter>
-      );
+      return <PauseProjo state={state} />;
     case 'rewards':
       return <RewardsProjo state={state} />;
     case 'end':
@@ -495,6 +487,92 @@ export function LobbyProjo({ state }: { state: PublicState }) {
         </p>
       )}
     </FullCenter>
+  );
+}
+
+/**
+ * Ecran de pause du projecteur.
+ *
+ * Une pause dure dix bonnes minutes : un titre fixe sur fond noir donne
+ * l'impression que la soiree s'est arretee. Les pseudos des joueurs derivent
+ * donc lentement vers le haut, melanges a quelques emojis de bar. Chacun se
+ * cherche des yeux dans le flux, et l'ecran reste vivant sans rien demander a
+ * personne.
+ *
+ * Tout est en CSS : positions, durees et delais sont derives du PSEUDO (hachage
+ * stable), jamais tires au hasard. Deux consequences : le rendu ne saute pas a
+ * chaque rafraichissement d'etat, et un joueur retrouve toujours sa bulle au
+ * meme endroit du cycle. Les delais negatifs font demarrer l'ecran deja peuple
+ * au lieu d'attendre vingt secondes que la premiere bulle monte.
+ */
+function PauseProjo({ state }: { state: PublicState }) {
+  const EMOJIS = ['🍹', '🍺', '🥤', '🍕', '🎮', '🕹️', '🍿', '🥨'];
+
+  // hachage stable : meme pseudo, meme trajectoire, d'un rendu a l'autre
+  const graine = (texte: string): number => {
+    let h = 0;
+    for (let i = 0; i < texte.length; i++) h = (h * 31 + texte.charCodeAt(i)) | 0;
+    return Math.abs(h);
+  };
+
+  const bulles = state.players.slice(0, 18).map((p, i) => {
+    const g = graine(p.pseudo + i);
+    return {
+      cle: `${p.pseudo}-${i}`,
+      texte: p.pseudo,
+      emoji: EMOJIS[g % EMOJIS.length],
+      gauche: 3 + ((g >> 3) % 92),          // % de largeur
+      duree: 26 + ((g >> 7) % 16),          // 26 a 41 s : lent, jamais agite
+      retard: -((g >> 11) % 40),            // demarrage deja en cours
+      derive: ((g >> 5) % 120) - 60,        // deviation laterale, en px
+      inclinaison: (((g >> 9) % 9) - 4) / 2, // -2 a +2 degres
+      taille: 1 + ((g >> 13) % 3) * 0.18,
+    };
+  });
+
+  return (
+    <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden">
+      {/* le flux de pseudos, derriere le message */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {bulles.map((b) => (
+          <span
+            key={b.cle}
+            className="anim-drift-up absolute bottom-0 inline-flex items-center gap-3 whitespace-nowrap rounded-full border border-white/15 bg-white/[0.07] px-6 py-3 text-3xl font-bold text-white/70 backdrop-blur"
+            style={{
+              left: `${b.gauche}%`,
+              animationDuration: `${b.duree}s`,
+              animationDelay: `${b.retard}s`,
+              fontSize: `${b.taille * 1.6}rem`,
+              // variables lues par les keyframes
+              ['--drift' as string]: `${b.derive}px`,
+              ['--tilt' as string]: `${b.inclinaison}deg`,
+            }}
+          >
+            <span>{b.emoji}</span>
+            {b.texte}
+          </span>
+        ))}
+      </div>
+
+      {/* le message, bien lisible par-dessus */}
+      <div className="anim-pop relative z-10 flex flex-col items-center rounded-[2.5rem] border border-white/10 bg-black/45 px-20 py-14 text-center backdrop-blur-sm">
+        <div className="mb-4 text-8xl">🍹</div>
+        <h1 className="anim-breathe text-7xl font-black uppercase tracking-[0.2em] text-cyan-200">
+          Pause
+        </h1>
+        <p className="mt-6 text-4xl font-bold text-white">
+          C'est le moment d'aller reprendre des forces au bar !
+        </p>
+        {state.config.pauseText && (
+          <p className="mt-5 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-8 py-3 text-3xl font-bold text-cyan-300">
+            {state.config.pauseText}
+          </p>
+        )}
+        <p className="mt-8 text-2xl uppercase tracking-[0.3em] text-white/40">
+          La suite arrive très vite
+        </p>
+      </div>
+    </div>
   );
 }
 

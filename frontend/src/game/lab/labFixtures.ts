@@ -295,6 +295,26 @@ export const SCENARIOS: LabScenario[] = [
     you: () => baseYou({}),
   },
   {
+    cle: 'pause-joueur',
+    groupe: 'Joueur',
+    label: 'Pause (joueur)',
+    description: 'Invitation au bar + promo du soir.',
+    state: () =>
+      baseState({
+        status: 'pause',
+        config: {
+          announceMs: 8000,
+          questionMs: 23000,
+          showScores: true,
+          wifiSsid: 'INVADER BAR',
+          wifiPassword: '',
+          pauseText: 'Le Top 3 a -10% sur une boisson !',
+          musicUrl: null,
+        },
+      }),
+    you: () => baseYou({}),
+  },
+  {
     cle: 'classement-joueur',
     groupe: 'Joueur',
     label: 'Classement (joueur)',
@@ -319,6 +339,25 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Règles (projo)',
     description: 'La même séquence que les joueurs, en grand.',
     state: () => baseState({ status: 'rules' }),
+  },
+  {
+    cle: 'projo-pause',
+    groupe: 'Projecteur',
+    label: 'Pause (projo)',
+    description: 'Les pseudos dérivent, le message reste lisible.',
+    state: () =>
+      baseState({
+        status: 'pause',
+        config: {
+          announceMs: 8000,
+          questionMs: 23000,
+          showScores: true,
+          wifiSsid: 'INVADER BAR',
+          wifiPassword: '',
+          pauseText: 'Le Top 3 a -10% sur une boisson !',
+          musicUrl: null,
+        },
+      }),
   },
   {
     cle: 'projo-lobby',
