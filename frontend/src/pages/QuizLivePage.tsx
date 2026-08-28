@@ -173,6 +173,7 @@ const STATUS_LABELS: Record<string, string> = {
   leaderboard: 'Classement',
   cinematic: 'Cinématique finale',
   pause: 'Pause',
+  resuming: 'Reprise annoncée',
   rewards: 'Récompenses',
   end: 'Fin de partie',
 };
@@ -1251,7 +1252,11 @@ function BottomBar({
   } else if (s === 'cinematic') {
     principal = { label: <><Gift size={17} /> Récompenses</>, onClick: () => void action('rewards') };
   } else if (s === 'pause') {
-    principal = { label: <><Play size={17} /> Reprendre</>, onClick: () => void action('resume') };
+    // 'resume' annonce la reprise (décompte 5 s) puis enchaîne sur la question
+    // suivante. On passe par nextAndReset pour emporter la question spéciale.
+    principal = { label: <><Play size={17} /> Reprendre</>, onClick: () => nextAndReset('resume') };
+  } else if (s === 'resuming') {
+    principal = { label: <><Pause size={17} /> Annuler la reprise</>, onClick: () => void action('pause') };
   } else if (s === 'rewards') {
     principal = { label: <><Trophy size={17} /> Écran de fin</>, onClick: () => void action('end') };
   }
@@ -1301,10 +1306,10 @@ function BottomBar({
   if (s === 'cinematic') {
     secondaires.push({ label: <><Trophy size={13} /> Écran de fin</>, onClick: () => void action('end') });
   }
-  if (s === 'pause' && !isLast) {
+  if (s === 'pause') {
     secondaires.push({
-      label: <><ChevronRight size={13} /> Reprendre + suivante</>,
-      onClick: () => nextAndReset('resume-next'),
+      label: <><RotateCcw size={13} /> Revenir à l'écran précédent</>,
+      onClick: () => void action('resume-back'),
     });
   }
 

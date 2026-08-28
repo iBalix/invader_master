@@ -16,6 +16,10 @@ export class GameAudio {
   private sfxVolume = 0.8;
   private ducked = false;
   private drumrollTimer: ReturnType<typeof setInterval> | null = null;
+  /** oscillateurs du battement de reponse, programmes a l'avance (cf. startAnswerTimer) */
+  private timerNodes: OscillatorNode[] = [];
+  /** question deja programmee : evite de reprogrammer a chaque rafraichissement d'etat */
+  private timerKey: string | null = null;
   enabled = false;
 
   /** À appeler depuis un geste utilisateur (overlay "Activer le son") */
@@ -147,9 +151,121 @@ export class GameAudio {
     this.tone(880, 0.3, { type: 'square', delay: 0.12, gain: 0.18 });
   }
 
-  /** tic du compte à rebours (dernières secondes) */
-  tick(urgent: boolean): void {
-    this.tone(urgent ? 1320 : 880, 0.07, { type: 'square', gain: urgent ? 0.3 : 0.16 });
+  /**
+   * Un battement du compte à rebours, façon plateau de jeu télévisé.
+   *
+   * Grave et sourd, jamais un bip. L'ancien tic tapait à 880 Hz puis 1320 Hz
+   * en onde carrée : dans un bar, ça s'entend comme une alarme de réveil et ça
+   * couvre la musique au lieu de la soutenir. Ici, un coup mat autour de 60 à
+   * 120 Hz, sur le registre où l'on ressent la tension plutôt que de la subir.
+   *
+   * `octave` : une harmonique discrète une octave au-dessus. Le fondamental
+   * seul est inaudible sur les petites enceintes, qui ne descendent pas si bas ;
+   * l'harmonique restitue la hauteur perçue sans rendre le son criard.
+   */
+  private thud(when: number, freq: number, gain: number): void {
+    if (!this.ctx || !this.sfxGain) return;
+    const mk = (f: number, g: number, type: OscillatorType) => {
+      const osc = this.ctx!.createOscillator();
+      const env = this.ctx!.createGain();
+      osc.type = type;
+      // léger plongeon de hauteur : c'est ce qui fait « coup » et non « note »
+      osc.frequency.setValueAtTime(f * 1.6, when);
+      osc.frequency.exponentialRampToValueAtTime(f, when + 0.06);
+      env.gain.setValueAtTime(0.0001, when);
+      env.gain.exponentialRampToValueAtTime(g, when + 0.012);
+      env.gain.exponentialRampToValueAtTime(0.0001, when + 0.34);
+      osc.connect(env).connect(this.sfxGain!);
+      osc.start(when);
+      osc.stop(when + 0.38);
+      this.timerNodes.push(osc);
+    };
+    mk(freq, gain, 'sine');
+    mk(freq * 2, gain * 0.3, 'triangle');
+  }
+
+  /**
+   * Programme TOUT le compte à rebours de la fenêtre de réponse d'un coup.
+   *
+   * Pourquoi d'un coup : les battements sont posés sur l'horloge de
+   * l'AudioContext, précise à l'échantillon. Piloter le son depuis React le
+   * calait sur un `setInterval` à 250 ms, donc chaque battement tombait avec
+   * jusqu'à un quart de seconde de dérive sur le chiffre affiché. Là, le coup
+   * sonne exactement quand le chrono change de seconde.
+   *
+   * La montée : au fil de la question le battement gagne en volume. À 5 s
+   * l'anneau du chrono passe au rouge, le battement se dédouble en pouls. À
+   * 3 s les lumières du bar virent au rouge, le pouls descend d'un cran et
+   * frappe plus fort. Les seuils sont ceux de l'image et des lumières, pour
+   * que l'oreille et l'oeil disent la même chose au même instant.
+   */
+  startAnswerTimer(remainingMs: number, totalMs: number, key: string): void {
+    if (!this.ctx || !this.sfxGain || !this.enabled) return;
+    if (this.timerKey === key) return;
+    this.stopAnswerTimer();
+    this.timerKey = key;
+
+    const total = Math.max(1000, totalMs);
+    const beats = Math.floor(remainingMs / 1000);
+    // décalage jusqu'au prochain changement de seconde affichée
+    const first = (remainingMs % 1000) / 1000;
+    const t0 = this.ctx.currentTime;
+
+    for (let i = 0; i < beats; i++) {
+      const left = beats - i;            // secondes encore affichées après ce coup
+      const when = t0 + first + i;
+      if (left <= 3) {
+        // lumières du bar au rouge : le pouls s'emballe et s'alourdit
+        this.thud(when, 66, 0.42);
+        this.thud(when + 0.17, 52, 0.34);
+      } else if (left <= 5) {
+        // anneau du chrono au rouge : le pouls s'installe
+        this.thud(when, 84, 0.30);
+        this.thud(when + 0.2, 66, 0.2);
+      } else {
+        // croisière : un seul coup mat, de plus en plus présent
+        const progress = Math.max(0, Math.min(1, 1 - (left * 1000) / total));
+        this.thud(when, 110, 0.1 + progress * 0.13);
+      }
+    }
+  }
+
+  /**
+   * Décompte de reprise après la pause : « 5, 4, 3, 2, 1 » puis la question.
+   *
+   * Volontairement à l'opposé du battement de réponse : celui-ci MONTE en
+   * hauteur à mesure qu'on approche de zéro. On ne met pas la salle sous
+   * tension, on la rassemble - c'est une reprise, pas un chrono. Le « boum »
+   * final est laissé à l'arpège d'annonce de la question, qui enchaîne juste
+   * après : en ajouter un ici ferait doublon.
+   */
+  startResumeCountdown(remainingMs: number, key: string): void {
+    if (!this.ctx || !this.sfxGain || !this.enabled) return;
+    if (this.timerKey === key) return;
+    this.stopAnswerTimer();
+    this.timerKey = key;
+    const beats = Math.floor(remainingMs / 1000);
+    const first = (remainingMs % 1000) / 1000;
+    const t0 = this.ctx.currentTime;
+    for (let i = 0; i < beats; i++) {
+      const left = beats - i;
+      // 5 -> 1 : la hauteur monte, le volume aussi, mais on reste grave
+      const freq = 132 + (5 - Math.min(5, left)) * 26;
+      this.thud(t0 + first + i, freq, 0.2 + (5 - Math.min(5, left)) * 0.035);
+    }
+  }
+
+  /** coupe le compte à rebours (question verrouillée, annulée, phase changée) */
+  stopAnswerTimer(): void {
+    for (const osc of this.timerNodes) {
+      try {
+        osc.stop();
+      } catch {
+        // déjà terminé : rien à faire
+      }
+    }
+    this.timerNodes = [];
+    this.timerKey = null;
   }
 
   /** fin de la fenêtre de réponse */

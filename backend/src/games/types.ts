@@ -14,6 +14,7 @@ export type QuizStatus =
   | 'leaderboard'
   | 'cinematic'
   | 'pause'
+  | 'resuming'
   | 'rewards'
   | 'end';
 

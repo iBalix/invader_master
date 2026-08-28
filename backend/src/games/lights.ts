@@ -161,6 +161,12 @@ export function computeCue(session: SessionRow): ComputedCue | null {
     case 'pause':
       return base('pause');
 
+    // Décompte de reprise : l'écran reste celui de la pause, les lumières
+    // aussi. Renvoyer null (et non un cue 'pause' de plus) évite un message
+    // pour rien : la scène en cours est déjà la bonne.
+    case 'resuming':
+      return null;
+
     case 'round_intro':
       return base(
         'round_intro',

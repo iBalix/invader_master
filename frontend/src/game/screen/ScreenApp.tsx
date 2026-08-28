@@ -217,7 +217,6 @@ function ProjectorScreen({
   const prevStatus = useRef<string>('');
   const prevCineStep = useRef(-1);
   const remaining = usePhaseCountdown(state.phaseEndsAt);
-  const lastTickSecond = useRef(-1);
 
   // musique de fond + volumes
   useEffect(() => {
@@ -309,15 +308,29 @@ function ProjectorScreen({
     if (step >= 6) gameAudio.drumrollStop(true);
   }, [state.status, state.cinematic?.step]);
 
-  // tics des 5 dernières secondes de question
+  // Compte à rebours de la fenêtre de réponse. Programmé d'un bloc à l'entrée
+  // en phase, sur l'horloge audio : piloté depuis React il suivait un timer à
+  // 250 ms, donc chaque battement pouvait tomber un quart de seconde à côté du
+  // chiffre affiché. La clé est la deadline de la phase, unique par question,
+  // ce qui évite de reprogrammer à chaque rafraîchissement d'état.
   useEffect(() => {
-    if (state.status !== 'question' || remaining === null) return;
-    const s = Math.ceil(remaining / 1000);
-    if (s <= 5 && s >= 1 && s !== lastTickSecond.current) {
-      lastTickSecond.current = s;
-      gameAudio.tick(s <= 3);
+    if (state.status !== 'question' || state.phaseEndsAt === null) {
+      gameAudio.stopAnswerTimer();
+      return;
     }
-  }, [remaining, state.status]);
+    const totalMs = state.phaseStartedAt
+      ? state.phaseEndsAt - state.phaseStartedAt
+      : state.config.questionMs;
+    gameAudio.startAnswerTimer(state.phaseEndsAt - serverNow(), totalMs, String(state.phaseEndsAt));
+    return () => gameAudio.stopAnswerTimer();
+  }, [state.status, state.phaseEndsAt, state.phaseStartedAt, state.config.questionMs, soundOn]);
+
+  // décompte de reprise après la pause, même mécanique de programmation
+  useEffect(() => {
+    if (state.status !== 'resuming' || state.phaseEndsAt === null) return;
+    gameAudio.startResumeCountdown(state.phaseEndsAt - serverNow(), `resume-${state.phaseEndsAt}`);
+    return () => gameAudio.stopAnswerTimer();
+  }, [state.status, state.phaseEndsAt, soundOn]);
 
   return (
     <div className="game-bg relative flex h-dvh flex-col overflow-hidden text-white">
@@ -411,7 +424,9 @@ export function ProjectorBody({
     case 'cinematic':
       return <CinematicProjo state={state} />;
     case 'pause':
-      return <PauseProjo state={state} />;
+      return <PauseProjo state={state} remaining={null} />;
+    case 'resuming':
+      return <PauseProjo state={state} remaining={remaining} />;
     case 'rewards':
       return <RewardsProjo state={state} />;
     case 'end':
@@ -505,7 +520,7 @@ export function LobbyProjo({ state }: { state: PublicState }) {
  * meme endroit du cycle. Les delais negatifs font demarrer l'ecran deja peuple
  * au lieu d'attendre vingt secondes que la premiere bulle monte.
  */
-function PauseProjo({ state }: { state: PublicState }) {
+function PauseProjo({ state, remaining }: { state: PublicState; remaining: number | null }) {
   const EMOJIS = ['🍹', '🍺', '🥤', '🍕', '🎮', '🕹️', '🍿', '🥨'];
 
   // hachage stable : meme pseudo, meme trajectoire, d'un rendu a l'autre
@@ -529,6 +544,9 @@ function PauseProjo({ state }: { state: PublicState }) {
       taille: 1 + ((g >> 13) % 3) * 0.18,
     };
   });
+
+  const resuming = state.status === 'resuming';
+  const secondes = Math.max(1, Math.ceil((remaining ?? 0) / 1000));
 
   return (
     <div className="relative flex h-full w-full flex-col items-center justify-center overflow-hidden">
@@ -554,23 +572,52 @@ function PauseProjo({ state }: { state: PublicState }) {
         ))}
       </div>
 
-      {/* le message, bien lisible par-dessus */}
-      <div className="anim-pop relative z-10 flex flex-col items-center rounded-[2.5rem] border border-white/10 bg-black/45 px-20 py-14 text-center backdrop-blur-sm">
-        <div className="mb-4 text-8xl">🍹</div>
-        <h1 className="anim-breathe text-7xl font-black uppercase tracking-[0.2em] text-cyan-200">
-          Pause
-        </h1>
-        <p className="mt-6 text-4xl font-bold text-white">
-          C'est le moment d'aller reprendre des forces au bar !
-        </p>
-        {state.config.pauseText && (
-          <p className="mt-5 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-8 py-3 text-3xl font-bold text-cyan-300">
-            {state.config.pauseText}
-          </p>
+      {/* le message, bien lisible par-dessus. On NE CHANGE PAS de décor pour
+          la reprise : le flux de pseudos continue derrière, seul le bloc
+          central bascule en décompte. La salle voit la suite arriver au lieu
+          de se reprendre l'écran de la question précédente. */}
+      <div
+        className={`anim-pop relative z-10 flex flex-col items-center rounded-[2.5rem] border border-white/10 px-20 py-14 text-center backdrop-blur-sm ${
+          // pendant la pause le fond reste transparent, les pseudos qui
+          // derivent font partie du spectacle ; pendant le decompte le chiffre
+          // prime, on densifie le fond pour qu'aucune bulle ne vienne le lire
+          // par-dessus
+          resuming ? 'bg-black/80' : 'bg-black/45'
+        }`}
+      >
+        {resuming ? (
+          <>
+            <p className="text-3xl font-bold uppercase tracking-[0.35em] text-cyan-300">
+              Reprise dans
+            </p>
+            <div
+              key={secondes}
+              className="anim-pop my-4 font-black leading-none text-cyan-200"
+              style={{ fontSize: '14rem', textShadow: '0 0 60px rgba(76,201,240,0.55)' }}
+            >
+              {secondes}
+            </div>
+            <p className="text-4xl font-bold text-white">Préparez-vous, ça repart !</p>
+          </>
+        ) : (
+          <>
+            <div className="mb-4 text-8xl">🍹</div>
+            <h1 className="anim-breathe text-7xl font-black uppercase tracking-[0.2em] text-cyan-200">
+              Pause
+            </h1>
+            <p className="mt-6 text-4xl font-bold text-white">
+              C'est le moment d'aller reprendre des forces au bar !
+            </p>
+            {state.config.pauseText && (
+              <p className="mt-5 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-8 py-3 text-3xl font-bold text-cyan-300">
+                {state.config.pauseText}
+              </p>
+            )}
+            <p className="mt-8 text-2xl uppercase tracking-[0.3em] text-white/40">
+              La suite arrive très vite
+            </p>
+          </>
         )}
-        <p className="mt-8 text-2xl uppercase tracking-[0.3em] text-white/40">
-          La suite arrive très vite
-        </p>
       </div>
     </div>
   );

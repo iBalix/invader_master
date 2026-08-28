@@ -72,6 +72,15 @@ function currentQuestion(session: SessionRow): QuestionSnapshot | null {
 // Transitions automatiques (synchrone, enregistrées dans l'engine)
 // ---------------------------------------------------------------------------
 
+/**
+ * Décompte de reprise après une pause. Reprendre renvoyait sur l'écran d'avant :
+ * quand la pause avait été prise depuis un `reveal`, la salle se reprenait
+ * l'animation de fin de la question déjà jouée, sans comprendre pourquoi. On
+ * reste donc sur l'écran de pause et on annonce la reprise, puis on enchaîne
+ * directement sur la question suivante.
+ */
+const RESUME_COUNTDOWN_MS = 5000;
+
 const CINEMATIC_INTRO_MS = 3800; // roulement de tambour
 const CINEMATIC_STEP_MS = 4500; // une place dévoilée
 const REWARD_STEP_MS = 6000;
@@ -95,6 +104,11 @@ function quizAdvance(session: SessionRow): boolean {
         session.runtime.judge = { running: true, verdicts: {} };
         queueJudging(session.id, session.current_question_index);
       }
+      return true;
+    }
+    case 'resuming': {
+      // le décompte est écoulé : on enchaîne sur la question suivante
+      goAnnounce(session, session.current_question_index + 1, session.runtime.special ?? null);
       return true;
     }
     case 'cinematic': {
@@ -782,14 +796,35 @@ export async function gmAction(
         break;
       }
       case 'pause': {
-        assertStatus(session, ['lobby', 'rules', 'reveal', 'leaderboard'], action);
-        session.previous_status = session.status;
+        assertStatus(session, ['lobby', 'rules', 'reveal', 'leaderboard', 'resuming'], action);
+        // Depuis 'resuming', la pause sert à ANNULER le décompte : l'écran de
+        // retour doit rester celui d'avant la pause, pas le décompte lui-même.
+        if (session.status !== 'resuming') session.previous_status = session.status;
         setPhase(session, 'pause', null);
         break;
       }
       case 'resume': {
         assertStatus(session, ['pause'], action);
-        // fallback sûr : un 'reveal' sans runtime.reveal serait incohérent
+        session.previous_status = null;
+        // Reste-t-il une question à jouer ? Si oui, on annonce la reprise et
+        // l'advancer enchaînera tout seul (cf. RESUME_COUNTDOWN_MS).
+        if (session.current_question_index + 1 < session.question_order.length) {
+          // La question spéciale choisie pendant la pause doit survivre au
+          // décompte : on la range là où goAnnounce ira la relire.
+          session.runtime.special = params.special ?? null;
+          setPhase(session, 'resuming', RESUME_COUNTDOWN_MS);
+          break;
+        }
+        // Plus rien à jouer (pause prise après la dernière question) : il n'y a
+        // pas de suite à décompter, on rend simplement l'écran précédent.
+        setPhase(session, session.runtime.standings ? 'leaderboard' : 'lobby', null);
+        break;
+      }
+      case 'resume-back': {
+        // Retour à l'écran d'avant sans rien lancer : l'échappatoire de
+        // l'animateur qui a mis en pause pour montrer le classement ou les
+        // règles et veut juste y revenir.
+        assertStatus(session, ['pause'], action);
         const target =
           (session.previous_status as SessionRow['status'] | null) ??
           (session.runtime.standings ? 'leaderboard' : 'lobby');

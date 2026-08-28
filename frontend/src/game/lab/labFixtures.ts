@@ -315,6 +315,19 @@ export const SCENARIOS: LabScenario[] = [
     you: () => baseYou({}),
   },
   {
+    cle: 'reprise-joueur',
+    groupe: 'Joueur',
+    label: 'Reprise après pause (joueur)',
+    description: 'Le décompte qui fait relever la tête avant la question.',
+    state: () =>
+      baseState({
+        status: 'resuming',
+        phaseStartedAt: serverNow(),
+        phaseEndsAt: serverNow() + 5000,
+      }),
+    you: () => baseYou({}),
+  },
+  {
     cle: 'classement-joueur',
     groupe: 'Joueur',
     label: 'Classement (joueur)',
@@ -339,6 +352,27 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Règles (projo)',
     description: 'La même séquence que les joueurs, en grand.',
     state: () => baseState({ status: 'rules' }),
+  },
+  {
+    cle: 'projo-reprise',
+    groupe: 'Projecteur',
+    label: 'Reprise après pause (projo)',
+    description: 'On garde le décor de la pause, seul le bloc central décompte.',
+    state: () =>
+      baseState({
+        status: 'resuming',
+        phaseStartedAt: serverNow(),
+        phaseEndsAt: serverNow() + 5000,
+        config: {
+          announceMs: 8000,
+          questionMs: 23000,
+          showScores: true,
+          wifiSsid: 'INVADER BAR',
+          wifiPassword: '',
+          pauseText: 'Le Top 3 a -10% sur une boisson !',
+          musicUrl: null,
+        },
+      }),
   },
   {
     cle: 'projo-pause',

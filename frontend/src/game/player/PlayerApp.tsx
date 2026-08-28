@@ -198,23 +198,24 @@ function Shell({ children, onResync, embedded, onExit, exitWarning }: ShellProps
     // bloc conteneur initial, donc au coin de l'ECRAN et non de la surface de
     // jeu. Sur une dalle, il se retrouvait orphelin a 550 px de la colonne.
     <div className={`game-bg relative flex flex-col overflow-hidden text-white ${embedded ? 'h-full' : 'h-dvh'}`}>
-      {/* Dans le flux et non en absolute : agrandi pour le tactile, il
-          recouvrait le pseudo de la barre d'etat. Ce bouton n'existe que sur la
-          borne (seul TablePlayPage passe onExit), le rendu telephone est donc
-          inchange. */}
+      {/* Hors flux, ancre en BAS a gauche. Dans le flux, il poussait toute la
+          surface vers le bas : la barre d'etat (pseudo, points) ne touchait
+          plus le haut de la dalle et laissait une bande vide. En bas, il ne
+          recouvre pas le pseudo non plus - c'est ce recouvrement qui l'avait
+          fait sortir de l'absolute a l'epoque, quand il etait en haut. Ce
+          bouton n'existe que sur la borne (seul TablePlayPage passe onExit),
+          le rendu telephone est donc inchange. */}
       {onExit && (
-        <div className="shrink-0 px-3 pt-3">
-          <button
-            type="button"
-            onClick={requestExit}
-            className="flex min-h-[48px] items-center gap-2 rounded-full border border-white/15 bg-black/60 px-5 py-3 text-base font-bold text-white/70 backdrop-blur active:bg-white/20"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            Retour
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={requestExit}
+          className="absolute bottom-4 left-4 z-50 flex min-h-[48px] items-center gap-2 rounded-full border border-white/15 bg-black/60 px-5 py-3 text-base font-bold text-white/70 backdrop-blur active:bg-white/20"
+        >
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+          Retour
+        </button>
       )}
 
       {confirming && (
@@ -294,6 +295,27 @@ export function BigMessage({ emoji, title, sub }: { emoji: string; title: string
       <h2 className="text-balance text-2xl font-extrabold">{title}</h2>
       {sub && <p className="mt-2 text-white/60">{sub}</p>}
     </div>
+  );
+}
+
+/**
+ * Reprise après la pause : le même décompte que sur le projecteur, pour que
+ * les joueurs relèvent la tête avant que la question tombe. Sans lui, la
+ * question apparaissait sur un téléphone encore posé sur la table.
+ */
+function ResumingScreen({ state }: { state: PublicState }) {
+  const remaining = usePhaseCountdown(state.phaseEndsAt);
+  const secondes = Math.max(1, Math.ceil((remaining ?? 0) / 1000));
+  return (
+    <Center>
+      <div className="text-center">
+        <p className="font-bold uppercase tracking-[0.3em] text-cyan-300">Reprise dans</p>
+        <div key={secondes} className="anim-pop my-3 text-8xl font-black leading-none text-cyan-200">
+          {secondes}
+        </div>
+        <p className="text-lg font-bold text-white/80">Prépare-toi, ça repart !</p>
+      </div>
+    </Center>
   );
 }
 
@@ -391,6 +413,8 @@ export function PlayerScreen(props: ScreenProps) {
             </div>
           </Center>
         );
+      case 'resuming':
+        return <ResumingScreen state={state} />;
       case 'rewards':
         return (
           <Center>
