@@ -15,6 +15,8 @@ export class GameAudio {
   private musicVolume = 0.35;
   private sfxVolume = 0.8;
   private ducked = false;
+  /** vrai = coupure totale de la musique (extrait video plein ecran), pas un simple ducking */
+  private duckFull = false;
   private drumrollTimer: ReturnType<typeof setInterval> | null = null;
   /** oscillateurs du battement de reponse, programmes a l'avance (cf. startAnswerTimer) */
   private timerNodes: OscillatorNode[] = [];
@@ -46,11 +48,11 @@ export class GameAudio {
   }
 
   private applyMusicVolume(): void {
+    const target = this.ducked ? (this.duckFull ? 0 : this.musicVolume * 0.22) : this.musicVolume;
     if (!this.musicGain || !this.ctx) {
-      if (this.musicEl) this.musicEl.volume = Math.min(1, this.ducked ? this.musicVolume * 0.22 : this.musicVolume);
+      if (this.musicEl) this.musicEl.volume = Math.min(1, target);
       return;
     }
-    const target = this.ducked ? this.musicVolume * 0.22 : this.musicVolume;
     this.musicGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.4);
   }
 
@@ -87,9 +89,15 @@ export class GameAudio {
     if (this.enabled) void el.play().catch(() => undefined);
   }
 
-  duck(on: boolean): void {
-    if (this.ducked === on) return;
+  /**
+   * Baisse la musique de fond pendant qu'un media parle. `full` la coupe
+   * completement (extrait video plein ecran : seule la video doit s'entendre),
+   * sinon elle descend a 22 % (extrait audio : la musique reste un tapis).
+   */
+  duck(on: boolean, full = false): void {
+    if (this.ducked === on && this.duckFull === (on && full)) return;
     this.ducked = on;
+    this.duckFull = on && full;
     this.applyMusicVolume();
   }
 

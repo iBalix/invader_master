@@ -23,7 +23,7 @@ import {
   TimerRing,
   mediaLabel,
   TYPE_LABELS,
-  YoutubeClip,
+  FullscreenVideo,
 } from '../ui/bits';
 import { gameAudio } from './audio';
 import { useSansZoom } from '../../hooks/useSansZoom';
@@ -229,12 +229,17 @@ function ProjectorScreen({
   // ducking : extraits & annonces
   useEffect(() => {
     const q = state.question;
-    // 'locked' compris : l'extrait vient d'etre coupe, laisser la musique de
-    // fond remonter dans la seconde donne un a-coup en pleine revelation
+    // Pendant l'extrait video plein ecran : SILENCE TOTAL de la musique de
+    // fond, seule la video parle. Pendant un extrait audio ('locked' compris :
+    // l'extrait vient d'etre coupe, laisser la musique remonter dans la
+    // seconde donne un a-coup en pleine revelation) : ducking classique.
+    const fullSilence = state.status === 'media';
     const mediaPlaying =
-      (state.status === 'question' || state.status === 'locked') &&
-      Boolean(q?.musicUrl || q?.videoYoutube);
-    gameAudio.duck(mediaPlaying || state.status === 'cinematic' || state.status === 'verdict');
+      (state.status === 'question' || state.status === 'locked') && Boolean(q?.musicUrl);
+    gameAudio.duck(
+      fullSilence || mediaPlaying || state.status === 'cinematic' || state.status === 'verdict',
+      fullSilence,
+    );
   }, [state.status, state.question]);
 
   // cues de transition
@@ -411,13 +416,18 @@ export function ProjectorBody({
   if (state.mode === 'battle') {
     return <BattleProjectorBody state={state} remaining={remaining} answeredCount={answeredCount} />;
   }
-  switch (state.status) {
+  const body = (() => {
+    switch (state.status) {
     case 'lobby':
       return <LobbyProjo state={state} />;
     case 'rules':
       return <RulesProjo state={state} />;
     case 'announce':
       return <AnnounceProjo state={state} remaining={remaining} />;
+    // extrait video plein ecran : tout passe par la couche FullscreenVideo
+    // ci-dessous, le corps reste noir derriere
+    case 'media':
+      return null;
     case 'question':
     case 'locked':
       return <QuestionProjo state={state} remaining={remaining} answeredCount={answeredCount} />;
@@ -437,7 +447,30 @@ export function ProjectorBody({
       return <EndProjo state={state} />;
     default:
       return null;
-  }
+    }
+  })();
+
+  // Couche video des questions video : montee des l'ANNONCE (prechargement,
+  // cf. FullscreenVideo) et jouee pendant 'media'. Elle vit ici et non dans
+  // un ecran par statut : entre l'annonce et l'extrait, l'iframe doit rester
+  // le meme element React, sinon le lecteur se recharge et on perd le
+  // demarrage instantane.
+  const q = state.question;
+  const videoLayer =
+    q?.videoYoutube && (state.status === 'announce' || state.status === 'media') ? (
+      <FullscreenVideo
+        spec={q.videoYoutube}
+        active={state.status === 'media'}
+        volume={state.config.mediaVolume ?? 0.9}
+      />
+    ) : null;
+
+  return (
+    <>
+      {body}
+      {videoLayer}
+    </>
+  );
 }
 
 export function FullCenter({ children }: { children: React.ReactNode }) {
@@ -718,11 +751,12 @@ function QuestionProjo({
   if (!q) return null;
   const locked = state.status === 'locked';
   const totalMs = state.phaseEndsAt && state.phaseStartedAt ? state.phaseEndsAt - state.phaseStartedAt : state.config.questionMs;
-  const hasVideo = Boolean(q.videoYoutube);
+  // la video s'est jouee plein ecran AVANT (phase 'media') : ici, une question
+  // video s'affiche comme une question sans media, pleine largeur
   const hasImage = Boolean(q.imageQuestionUrl);
 
   return (
-    <div className={`flex flex-1 flex-col px-12 py-8 ${hasVideo ? 'bg-black' : ''}`}>
+    <div className="flex flex-1 flex-col px-12 py-8">
       <div className="mb-6 flex items-start justify-between gap-8">
         <div className="min-w-0">
           <p className="text-xl uppercase tracking-widest text-white/40">
@@ -741,17 +775,9 @@ function QuestionProjo({
       </div>
 
       <div className="flex flex-1 gap-8">
-        {(hasImage || hasVideo || q.musicUrl) && (
+        {(hasImage || q.musicUrl) && (
           <div className="flex flex-1 items-center justify-center">
-            {hasVideo && q.videoYoutube ? (
-              <div className="w-full max-w-3xl">
-                <YoutubeClip
-                  spec={q.videoYoutube}
-                  volume={state.config.mediaVolume ?? 0.9}
-                  playing={state.status === 'question'}
-                />
-              </div>
-            ) : hasImage ? (
+            {hasImage ? (
               <img src={q.imageQuestionUrl ?? ''} alt="" className="max-h-[52vh] w-full rounded-3xl object-contain" />
             ) : (
               <div className="anim-glow flex h-56 w-56 items-center justify-center rounded-full border-2 border-cyan-400/40 bg-cyan-400/10 text-8xl">
@@ -768,7 +794,7 @@ function QuestionProjo({
           </div>
         )}
 
-        <div className={`grid content-center gap-4 ${hasImage || hasVideo || q.musicUrl ? 'w-[46%]' : 'flex-1 grid-cols-2'}`}>
+        <div className={`grid content-center gap-4 ${hasImage || q.musicUrl ? 'w-[46%]' : 'flex-1 grid-cols-2'}`}>
           {q.type === 'qcm' ? (
             (q.answers ?? []).map((a, i) => (
               <div key={i} className="anim-fade-up rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-3xl font-bold" style={{ animationDelay: `${i * 0.08}s` }}>

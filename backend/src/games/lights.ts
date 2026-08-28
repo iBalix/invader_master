@@ -191,6 +191,13 @@ export function computeCue(session: SessionRow): ComputedCue | null {
         `d${currentDifficulty(session) ?? ''}`,
       );
 
+    // Extrait video plein ecran : on reste sur la scene d'annonce (couleur de
+    // difficulte), aucune nouvelle scene a jouer. Le cue 'question_start' - et
+    // donc l'alerte rouge de fin - partira quand la fenetre de reponse
+    // s'ouvrira reellement, apres la video.
+    case 'media':
+      return null;
+
     case 'question':
       return base('question_start', {
         durationMs: phaseDurationMs(session),

@@ -354,6 +354,27 @@ export const SCENARIOS: LabScenario[] = [
     state: () => baseState({ status: 'rules' }),
   },
   {
+    cle: 'projo-media',
+    groupe: 'Projecteur',
+    label: 'Extrait vidéo (projo)',
+    description: 'La vidéo plein écran avant la question, chrono coupé.',
+    state: () =>
+      baseState({
+        status: 'media',
+        phaseStartedAt: serverNow(),
+        phaseEndsAt: serverNow() + 32000,
+        question: {
+          index: 4,
+          total: 30,
+          type: 'qcm',
+          difficulty: 'Difficile',
+          points: 4,
+          theme: 'QCM · vidéo',
+          videoYoutube: 'hoHUIN0bX-c?time=0&duration=30',
+        } as PublicState['question'],
+      }),
+  },
+  {
     cle: 'projo-reprise',
     groupe: 'Projecteur',
     label: 'Reprise après pause (projo)',

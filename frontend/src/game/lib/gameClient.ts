@@ -12,7 +12,7 @@ export const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:300
 // ---------------------------------------------------------------------------
 
 export type QuizStatus =
-  | 'lobby' | 'rules' | 'announce' | 'question' | 'locked' | 'reveal'
+  | 'lobby' | 'rules' | 'announce' | 'media' | 'question' | 'locked' | 'reveal'
   | 'leaderboard' | 'cinematic' | 'pause' | 'resuming' | 'rewards' | 'end'
   // statuts battle
   | 'round_intro' | 'verdict' | 'round_end' | 'closing';

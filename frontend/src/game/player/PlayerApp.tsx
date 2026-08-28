@@ -35,6 +35,7 @@ import {
   TimerRing,
   mediaLabel,
   TYPE_LABELS,
+  FullscreenVideo,
 } from '../ui/bits';
 import { BattlePlayerScreen } from './BattlePlayer';
 import QuizRules from './QuizRules';
@@ -71,6 +72,15 @@ export interface PlayerAppProps {
 
 /** plancher entre deux refetch de la répartition « avis du public » */
 const AUDIENCE_REFRESH_MS = 450;
+
+/**
+ * Dalles qui rejouent l'extrait vidéo en plein écran pendant la phase 'media'.
+ * Les autres surfaces (téléphones, autres dalles) affichent « Regarde
+ * l'écran » : la vidéo ne se joue que sur le projecteur et sur ces tables-là.
+ * L'extrait y est MUET : le son vient de la sono du bar via le projecteur,
+ * cinq lecteurs légèrement désynchronisés s'entendraient.
+ */
+const VIDEO_DALLES = new Set(['TABLE02-1', 'TABLE03-1', 'TABLE05-1', 'TABLE06-1']);
 
 export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppProps = {}) {
   const { code } = useParams<{ code?: string }>();
@@ -404,6 +414,8 @@ export function PlayerScreen(props: ScreenProps) {
     return <BattlePlayerScreen {...props} you={you} />;
   }
 
+  const videoDalle = VIDEO_DALLES.has((props.deviceLabel ?? '').toUpperCase());
+
   const body = (() => {
     switch (state.status) {
       case 'lobby':
@@ -412,6 +424,18 @@ export function PlayerScreen(props: ScreenProps) {
         return <QuizRules phaseStartedAt={state.phaseStartedAt} embedded={props.embedded} />;
       case 'announce':
         return <AnnounceScreen {...props} you={you} />;
+      case 'media':
+        // sur les dalles autorisees, la couche FullscreenVideo (plus bas)
+        // recouvre tout ; partout ailleurs on renvoie vers le projecteur
+        return videoDalle ? null : (
+          <Center>
+            <BigMessage
+              emoji="🎬"
+              title="Regarde l'écran !"
+              sub="La question arrive juste après l'extrait."
+            />
+          </Center>
+        );
       case 'question':
       case 'locked':
         return <QuestionScreen {...props} you={you} />;
@@ -454,10 +478,19 @@ export function PlayerScreen(props: ScreenProps) {
     }
   })();
 
+  // meme mecanique que le projecteur : montee des l'annonce pour precharger,
+  // jouee pendant 'media', et JAMAIS demontee entre les deux (cf. FullscreenVideo)
+  const q = state.question;
+  const videoLayer =
+    videoDalle && q?.videoYoutube && (state.status === 'announce' || state.status === 'media') ? (
+      <FullscreenVideo spec={q.videoYoutube} active={state.status === 'media'} muted />
+    ) : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <StatusBar state={state} you={you} />
       {body}
+      {videoLayer}
     </div>
   );
 }
@@ -744,9 +777,11 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
           />
         </button>
       )}
-      {(q.musicUrl || q.videoYoutube) && (
+      {/* la video, elle, s'est jouee AVANT la question (phase 'media') :
+          plus rien a regarder pendant qu'on repond, le bandeau serait faux */}
+      {q.musicUrl && (
         <div className="mb-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-white/60">
-          {q.musicUrl ? '🎵 Écoute l\'extrait...' : '🎬 Regarde l\'écran principal !'}
+          🎵 Écoute l'extrait...
         </div>
       )}
 

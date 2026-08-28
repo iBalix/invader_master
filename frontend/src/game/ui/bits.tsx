@@ -167,6 +167,86 @@ export function parseYoutube(spec: string | null | undefined): {
  * `setVolume`. On le renvoie a chaque changement ET a l'evenement load, parce
  * qu'un message envoye avant que le player soit pret est perdu sans erreur.
  */
+/**
+ * Extrait vidéo plein écran de la phase 'media' (question vidéo).
+ *
+ * MONTÉ DÈS L'ANNONCE, caché : l'iframe et le lecteur YouTube se chargent
+ * pendant que la salle lit le thème, si bien qu'au passage en phase 'media'
+ * il n'y a plus qu'à lancer la lecture - c'est le préchargement demandé, sans
+ * lequel la vidéo démarrait avec une à deux secondes d'écran noir. Le
+ * composant doit donc rester monté (même position dans l'arbre) de l'annonce
+ * jusqu'à la fin de l'extrait : le démonter le ferait recharger.
+ *
+ * `autoplay=0` : le lecteur reste sagement en attente pendant l'annonce, la
+ * lecture part par postMessage quand `active` passe à vrai. Les dalles
+ * l'affichent en muet (le son vient de la sono du bar, via le projecteur :
+ * cinq lecteurs légèrement désynchronisés s'entendraient).
+ */
+export function FullscreenVideo({
+  spec,
+  active,
+  muted = false,
+  volume,
+}: {
+  spec: string;
+  /** vrai pendant la phase 'media' : la vidéo se montre et se lance */
+  active: boolean;
+  muted?: boolean;
+  /** 0 a 1 ; ignore si muted */
+  volume?: number;
+}) {
+  const ref = useRef<HTMLIFrameElement | null>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const parsed = parseYoutube(spec);
+  const startRef = useRef(parsed?.start ?? 0);
+  startRef.current = parsed?.start ?? 0;
+
+  const cmd = useCallback((func: string, args: unknown[] = []) => {
+    ref.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func, args }),
+      '*',
+    );
+  }, []);
+
+  const lancer = useCallback(() => {
+    if (volume !== undefined) {
+      cmd('setVolume', [Math.round(Math.min(1, Math.max(0, volume)) * 100)]);
+    }
+    cmd('seekTo', [startRef.current, true]);
+    cmd('playVideo');
+  }, [cmd, volume]);
+
+  useEffect(() => {
+    if (active) lancer();
+    else cmd('pauseVideo');
+  }, [active, lancer, cmd]);
+
+  if (!parsed) return null;
+  const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=0&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&enablejsapi=1${muted ? '&mute=1' : ''}`;
+  return (
+    <div
+      className={`fixed inset-0 z-30 bg-black transition-opacity duration-300 ${
+        active ? 'opacity-100' : 'pointer-events-none opacity-0'
+      }`}
+    >
+      <iframe
+        ref={ref}
+        className="h-full w-full"
+        src={src}
+        title="Extrait vidéo"
+        allow="autoplay; encrypted-media"
+        allowFullScreen={false}
+        // le lecteur peut finir de charger APRES le passage en 'media'
+        // (annonce ecourtee) : on relance la sequence a ce moment-la
+        onLoad={() => {
+          if (activeRef.current) lancer();
+        }}
+      />
+    </div>
+  );
+}
+
 export function YoutubeClip({
   spec,
   muted = false,

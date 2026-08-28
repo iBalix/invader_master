@@ -8,6 +8,7 @@ export type QuizStatus =
   | 'lobby'
   | 'rules'
   | 'announce'
+  | 'media'
   | 'question'
   | 'locked'
   | 'reveal'
@@ -499,4 +500,3 @@ export const ANSWER_GRACE_MS = 2500;
 /** délai additionnel par média (ms), hérité du legacy */
 export const AUDIO_EXTRA_MS = 10000;
 export const IMAGE_EXTRA_MS = 2000;
-export const VIDEO_EXTRA_BASE_MS = 2000;

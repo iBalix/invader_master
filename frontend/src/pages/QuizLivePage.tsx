@@ -167,6 +167,7 @@ const STATUS_LABELS: Record<string, string> = {
   lobby: "Salle d'attente",
   rules: 'Règles affichées',
   announce: 'Annonce (fenêtre jokers)',
+  media: 'Extrait vidéo',
   question: 'Question en cours',
   locked: 'Réponses verrouillées',
   reveal: 'Révélation + séquence',
@@ -1251,6 +1252,10 @@ function BottomBar({
         };
   } else if (s === 'cinematic') {
     principal = { label: <><Gift size={17} /> Récompenses</>, onClick: () => void action('rewards') };
+  } else if (s === 'media') {
+    // l'extrait s'enchaine tout seul sur la question ; le bouton sert a
+    // l'ecourter (extrait trop long, souci de lecture sur le projo)
+    principal = { label: <><ChevronRight size={17} /> Passer la vidéo</>, onClick: () => void action('skip-media') };
   } else if (s === 'pause') {
     // 'resume' annonce la reprise (décompte 5 s) puis enchaîne sur la question
     // suivante. On passe par nextAndReset pour emporter la question spéciale.
@@ -1276,7 +1281,7 @@ function BottomBar({
       warn: true,
     });
   }
-  if (s === 'question' || s === 'locked' || s === 'reveal') {
+  if (s === 'media' || s === 'question' || s === 'locked' || s === 'reveal') {
     secondaires.push({
       label: <><RotateCcw size={13} /> Rejouer</>,
       onClick: () => void action('replay-question', {}, 'Rejouer cette question ? (réponses et points effacés)'),

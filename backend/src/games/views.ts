@@ -28,6 +28,12 @@ function publicQuestion(session: SessionRow): Record<string, unknown> | null {
     difficulty: q.difficulty,
     points: q.points,
     theme: q.theme,
+    // La video est la SEULE donnee de question exposee avant la fenetre de
+    // reponse : le projo et les dalles autorisees prechargent le lecteur
+    // pendant l'annonce, puis le jouent pendant la phase 'media'. La question
+    // et les reponses, elles, restent cachees jusqu'a 'question' (un habitue
+    // de l'onglet reseau lirait la question pendant l'extrait sinon).
+    videoYoutube: q.videoYoutube,
   };
   const visible =
     session.mode === 'battle' ? BATTLE_QUESTION_VISIBLE_STATUSES : QUESTION_VISIBLE_STATUSES;

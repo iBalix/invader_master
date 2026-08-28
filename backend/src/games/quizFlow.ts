@@ -35,7 +35,6 @@ import {
   JOKER_TYPES,
   JOKER_WEIGHTS,
   REVEAL_MIN_MS,
-  VIDEO_EXTRA_BASE_MS,
   type AnswerRow,
   type JokerAward,
   type JokerPlay,
@@ -57,11 +56,23 @@ export function questionWindowMs(q: QuestionSnapshot, config: SessionConfig): nu
   let ms = config.questionMs;
   if (q.musicUrl) ms += AUDIO_EXTRA_MS;
   if (q.imageQuestionUrl) ms += IMAGE_EXTRA_MS;
-  if (q.videoYoutube) {
-    const m = q.videoYoutube.match(/duration=(\d+)/);
-    ms += (m ? parseInt(m[1], 10) * 1000 : 15000) + VIDEO_EXTRA_BASE_MS;
-  }
+  // La video ne rallonge PLUS cette fenetre : elle se joue desormais plein
+  // ecran dans sa propre phase 'media', AVANT la question. Le chrono de
+  // reponse ne demarre qu'une fois l'extrait termine.
   return ms;
+}
+
+/**
+ * Duree de la phase 'media' : l'extrait video plein ecran. La duree vient du
+ * spec (`ID?time=X&duration=Y`), plus un battement pour le demarrage du
+ * lecteur et la fin propre. Le lecteur est precharge pendant l'annonce, donc
+ * le battement reste court.
+ */
+const MEDIA_TAIL_MS = 1200;
+
+function mediaWindowMs(q: QuestionSnapshot): number {
+  const m = q.videoYoutube?.match(/duration=(\d+)/);
+  return (m ? parseInt(m[1], 10) * 1000 : 15000) + MEDIA_TAIL_MS;
 }
 
 function currentQuestion(session: SessionRow): QuestionSnapshot | null {
@@ -89,6 +100,17 @@ function quizAdvance(session: SessionRow): boolean {
   const q = currentQuestion(session);
   switch (session.status) {
     case 'announce': {
+      if (!q) return false;
+      // Question video : la salle regarde d'abord l'extrait plein ecran, la
+      // fenetre de reponse (et son chrono) n'ouvre qu'apres.
+      if (q.videoYoutube) {
+        setPhase(session, 'media', mediaWindowMs(q));
+        return true;
+      }
+      setPhase(session, 'question', questionWindowMs(q, session.config));
+      return true;
+    }
+    case 'media': {
       if (!q) return false;
       setPhase(session, 'question', questionWindowMs(q, session.config));
       return true;
@@ -838,15 +860,23 @@ export async function gmAction(
         goAnnounce(session, session.current_question_index + 1, params.special ?? null);
         break;
       }
+      case 'skip-media': {
+        // l'animateur ecourte l'extrait : la fenetre de reponse ouvre tout de suite
+        assertStatus(session, ['media'], action);
+        const q = currentQuestion(session);
+        if (!q) throw Object.assign(new Error('Aucune question courante'), { httpStatus: 409 });
+        setPhase(session, 'question', questionWindowMs(q, session.config));
+        break;
+      }
       case 'cancel-question': {
-        assertStatus(session, ['announce', 'question', 'locked', 'reveal'], action);
+        assertStatus(session, ['announce', 'media', 'question', 'locked', 'reveal'], action);
         await rollbackQuestion(session);
         session.runtime.reveal = { cancelled: true, answeredCount: 0, results: {} };
         setPhase(session, 'reveal', null);
         break;
       }
       case 'replay-question': {
-        assertStatus(session, ['announce', 'question', 'locked', 'reveal'], action);
+        assertStatus(session, ['announce', 'media', 'question', 'locked', 'reveal'], action);
         await rollbackQuestion(session);
         goAnnounce(session, session.current_question_index, params.special ?? null);
         break;
