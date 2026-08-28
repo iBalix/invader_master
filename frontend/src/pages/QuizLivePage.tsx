@@ -35,12 +35,14 @@ import {
   Film,
   Gift,
   ListOrdered,
+  MonitorPlay,
   Music2,
   Pause,
   Play,
   Plus,
   RotateCcw,
   ScrollText,
+  Smartphone,
   Square,
   Trophy,
   UserX,
@@ -51,6 +53,7 @@ import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import LightsBadge from '../components/Live/LightsBadge';
 import { JOKER_DEFS, REVEAL_MIN_MS, type JokerType } from '../game/lib/gameClient';
+import { QrCanvas } from '../game/ui/bits';
 
 // ---------------------------------------------------------------------------
 // Types (vue GM)
@@ -270,7 +273,16 @@ export default function QuizLivePage() {
 
   return (
     <Coque>
-      <HeaderBar state={state} />
+      <HeaderBar
+        state={state}
+        onStop={async () => {
+          if (!confirm('Arrêter la partie ? Les écrans reviennent à leur état normal.')) return;
+          await action('stop');
+          setSessionId(null);
+          setState(null);
+          toast.success('Session terminée');
+        }}
+      />
 
       {/* contenu : onglets sur mobile, pilotage + colonne sur desktop */}
       {/* Mobile : l'onglet actif occupe tout. Desktop : Pilotage a gauche en
@@ -367,12 +379,40 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
     }
   };
 
+  const urlConsole = `${window.location.origin}/evenements/quiz-live`;
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <h1 className="text-2xl font-black">Quiz live</h1>
       <p className="mt-1 text-sm text-slate-400">
         Lance une session : le projecteur et les écrans du bar basculent automatiquement.
       </p>
+
+      {/* La console est faite pour le telephone, encore faut-il y arriver :
+          l'animateur scanne et atterrit dessus. Le QR pointe sur la console
+          elle-meme, pas sur un acces de contournement, l'authentification
+          back-office reste requise. */}
+      <div className="mt-5 flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <QrCanvas value={urlConsole} size={116} />
+        <div className="min-w-0">
+          <p className="font-bold">Ouvrir la console sur ton téléphone</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Scanne ce code : tu arrives directement ici. Connexion back-office demandée si tu
+            n'es pas déjà identifié sur l'appareil.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(urlConsole);
+              toast.success('Lien copié');
+            }}
+            className="mt-2 flex w-full max-w-full items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-left text-xs font-semibold text-slate-300 hover:bg-white/5"
+          >
+            <span className="min-w-0 flex-1 truncate">{urlConsole}</span>
+            <span className="shrink-0 text-slate-400">copier</span>
+          </button>
+        </div>
+      </div>
       {loading ? (
         <p className="mt-8 text-slate-500">Chargement...</p>
       ) : (
@@ -406,7 +446,7 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
 // En-tête collant
 // ---------------------------------------------------------------------------
 
-function HeaderBar({ state }: { state: GmState }) {
+function HeaderBar({ state, onStop }: { state: GmState; onStop: () => void }) {
   const progress =
     state.totalQuestions > 0
       ? Math.max(0, Math.min(1, (state.currentQuestionIndex + (state.status === 'reveal' || state.status === 'leaderboard' ? 1 : 0)) / state.totalQuestions))
@@ -417,33 +457,52 @@ function HeaderBar({ state }: { state: GmState }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h1 className="truncate text-sm font-black lg:text-lg">{state.quizName}</h1>
-            <span className="shrink-0 rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[11px] font-bold text-indigo-300 lg:text-xs">
+            <span className="max-w-[45%] shrink-0 truncate rounded-full bg-indigo-500/20 px-2.5 py-0.5 text-[11px] font-bold text-indigo-300 lg:max-w-none lg:text-xs">
               {STATUS_LABELS[state.status] ?? state.status}
             </span>
           </div>
-          <p className="mt-0.5 text-[11px] text-slate-400 lg:text-xs">
+          <p className="mt-0.5 truncate text-[11px] text-slate-400 lg:text-xs">
             Q{Math.max(1, state.currentQuestionIndex + 1)}/{state.totalQuestions} ·{' '}
             {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} · code{' '}
             <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
           </p>
         </div>
+        {/* Actions en ICONES SEULES sous lg : a trois libelles, l'en-tete ne
+            tenait plus en 375 px et le nom du quiz etait ecrase a zero. */}
         <div className="flex shrink-0 items-center gap-1.5">
           <a
             href={`${window.location.origin}/play/${state.joinCode}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-white/15 px-2 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5 lg:px-3 lg:text-xs"
+            title="Ouvrir la page joueur"
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/5"
           >
-            Joueur ↗
+            <Smartphone size={15} />
+            <span className="hidden lg:inline">Joueur ↗</span>
           </a>
           <a
             href={`${window.location.origin}/screen/PROJO`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-lg border border-white/15 px-2 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-white/5 lg:px-3 lg:text-xs"
+            title="Ouvrir le projecteur"
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/5"
           >
-            Projo ↗
+            <MonitorPlay size={15} />
+            <span className="hidden lg:inline">Projo ↗</span>
           </a>
+          {/* ARRET TOUJOURS A PORTEE. Il vivait dans l'onglet Reglages : en
+              plein direct, personne ne va chercher un onglet pour couper la
+              partie. Protege par une confirmation. */}
+          <button
+            type="button"
+            onClick={onStop}
+            title="Arrêter la partie"
+            aria-label="Arrêter la partie"
+            className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-400/10 px-2.5 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-400/20"
+          >
+            <Square size={15} />
+            <span className="hidden lg:inline">Arrêter</span>
+          </button>
         </div>
       </div>
       <div className="mx-auto mt-2 h-1 w-full max-w-6xl overflow-hidden rounded-full bg-white/10">
