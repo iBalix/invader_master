@@ -59,6 +59,20 @@ export default function GameLabPage() {
    */
   const [sonActif, setSonActif] = useState(gameAudio.enabled);
 
+  // DEVERROUILLAGE AU PREMIER GESTE, n'importe lequel : choisir un scenario
+  // suffit. C'est le pattern du kiosque (ScreenApp) ; le bouton dedie restait
+  // trop facile a rater, et un labo muet fait croire que le son n'est pas
+  // branche.
+  useEffect(() => {
+    if (gameAudio.enabled) return;
+    const surGeste = () => {
+      gameAudio.enable();
+      setSonActif(true);
+    };
+    window.addEventListener('pointerdown', surGeste, { once: true });
+    return () => window.removeEventListener('pointerdown', surGeste);
+  }, []);
+
   const scenario = SCENARIOS.find((s) => s.cle === scenarioCle) ?? SCENARIOS[0];
   const estRegles = scenario.cle === 'regles' || scenario.cle === 'projo-regles';
   // regeneres a chaque "rejouer" : phaseStartedAt repart de maintenant
@@ -229,9 +243,9 @@ export default function GameLabPage() {
                   ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
                   : 'border-amber-400/50 bg-amber-400/10 text-amber-200'
               }`}
-              title="Le navigateur exige un clic avant de laisser jouer du son"
+              title="Le premier clic dans la page active le son (exigence du navigateur)"
             >
-              {sonActif ? '🔊 Son actif' : '🔇 Activer le son'}
+              {sonActif ? '🔊 Son actif' : '🔇 Son coupé · clique n\'importe où'}
             </button>
             <button
               type="button"
