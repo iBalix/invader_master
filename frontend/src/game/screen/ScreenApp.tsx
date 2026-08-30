@@ -1186,8 +1186,6 @@ function RevealProjo({ state }: { state: PublicState }) {
   useEffect(() => {
     cuesJoues.current.clear();
   }, [state.currentQuestionIndex]);
-  const estQcm = q?.type === 'qcm';
-  const aPodium = estQcm && (reveal?.fastestTop?.length ?? 0) > 0;
   const annulee = Boolean(reveal?.cancelled);
   useEffect(() => {
     if (annulee) return;
@@ -1198,10 +1196,13 @@ function RevealProjo({ state }: { state: PublicState }) {
         fn();
       }
     };
+    // UN SEUL son sur la revelation : le mp3 legacy (montee + impact, il
+    // couvre a lui seul le suspense et la chute). Les jingles synthetiques
+    // (correctHit a la bonne reponse, fastestChime au podium) se superposaient
+    // et brouillaient le son que la salle connait. Retires a la demande de
+    // Romain apres la premiere ecoute ; le battle garde les siens.
     joue('suspense', frais(REVEAL_SUSPENSE_MS), () => gameAudio.revealSuspense());
-    joue('reponse', frais(REVEAL_REPONSE_MS), () => gameAudio.correctHit());
-    joue('podium', frais(tRapide) && aPodium, () => gameAudio.fastestChime());
-  }, [ecoule, annulee, tRapide, aPodium]);
+  }, [ecoule, annulee]);
 
   if (!q || !reveal) return null;
   if (reveal.cancelled) {
