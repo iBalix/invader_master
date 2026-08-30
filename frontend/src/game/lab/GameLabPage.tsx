@@ -173,17 +173,26 @@ export default function GameLabPage() {
                 ))}
               </span>
             )}
-            {state.status === 'reveal' && (
+            {(scenario.sauts || state.status === 'reveal') && (
               <span className="flex items-center gap-1 rounded-lg border border-white/10 px-1 py-1">
                 <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-white/40">
                   Aller à
                 </span>
                 {(
-                  [
-                    ['Verdict', 5200],
-                    ['Série', 8600],
-                    ['Jokers', 9800],
-                  ] as Array<[string, number]>
+                  scenario.sauts ??
+                  (scenario.groupe === 'Projecteur'
+                    ? ([
+                        ['Barres', 1500],
+                        ['Suspense', 4700],
+                        ['Réponse', 6300],
+                        ['Podium ⚡', 8600],
+                        ['Séries 🔥', 11900],
+                      ] as Array<[string, number]>)
+                    : ([
+                        ['Verdict', 7200],
+                        ['Série', 10800],
+                        ['Jokers', 13600],
+                      ] as Array<[string, number]>))
                 ).map(([lbl, ms]) => (
                   <button
                     key={lbl}
@@ -239,7 +248,7 @@ export default function GameLabPage() {
             )
           ) : gabarit === 'phone' || gabarit === 'mini' ? (
             <CadrePhone key={runId} hauteur={HAUTEURS[gabarit]}>
-              <SceneJoueur state={state} you={you} embedded={false} />
+              <SceneJoueur state={state} you={you} embedded={false} joinNotice={scenario.joinNotice} />
             </CadrePhone>
           ) : (
             <CadreLarge key={runId}>
@@ -250,7 +259,7 @@ export default function GameLabPage() {
               ) : (
                 /* la borne applique un zoom CSS 1.4 sur la surface joueur */
                 <div className="game-bg h-full w-full text-white" style={{ zoom: 1.4 }}>
-                  <SceneJoueur state={state} you={you} embedded />
+                  <SceneJoueur state={state} you={you} embedded joinNotice={scenario.joinNotice} />
                 </div>
               )}
             </CadreLarge>
@@ -265,16 +274,19 @@ function SceneJoueur({
   state,
   you,
   embedded,
+  joinNotice,
 }: {
   state: PublicState;
   you: You | null;
   embedded: boolean;
+  joinNotice?: string;
 }) {
   return (
     <div className="game-bg flex h-full flex-col overflow-hidden text-white">
       <PlayerScreen
         state={state}
-        you={you}
+        you={joinNotice ? null : you}
+        joinNotice={joinNotice}
         sessionRef="lab"
         playerToken="lab-token"
         embedded={embedded}

@@ -276,7 +276,10 @@ export function FullscreenVideo({
   }, [volume, active, cmd]);
 
   if (!parsed) return null;
-  const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=0&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&enablejsapi=1${muted ? '&mute=1' : ''}`;
+  // iv_load_policy=3 (pas d'annotations), fs=0, cc_load_policy=0 : le reste
+  // (controls=0, modestbranding, rel=0) vient d'invader_table, mais ces
+  // parametres ne suffisent plus a masquer le titre.
+  const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=0&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&iv_load_policy=3&fs=0&cc_load_policy=0&playsinline=1&enablejsapi=1${muted ? '&mute=1' : ''}`;
   return (
     <div
       className={`fixed inset-0 z-30 bg-black transition-opacity duration-300 ${
@@ -296,6 +299,13 @@ export function FullscreenVideo({
           if (activeRef.current) lancer();
         }}
       />
+      {/* CACHES ANTI-SPOILER. L'overlay YouTube (titre + chaine) apparait au
+          demarrage et a la pause malgre controls=0, et le titre contient
+          souvent LA reponse de la question. Bandeau cinema en haut, pave sur
+          le watermark en bas a droite. Toujours presents : un cache qui
+          clignote attirerait l'oeil au pire moment. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[12vh] bg-gradient-to-b from-black via-black/90 to-transparent" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-16 w-64 bg-gradient-to-tl from-black via-black/95 to-transparent" />
     </div>
   );
 }

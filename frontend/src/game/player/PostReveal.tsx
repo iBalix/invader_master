@@ -26,6 +26,7 @@ import JokerWheel from '../components/JokerWheel';
 import {
   JOKER_DEFS,
   JOKER_HAND_MAX,
+  REVEAL_JOUEUR_MS,
   SPEED_BONUS,
   SEQ_ATTENTE_MS,
   SEQ_JOKERS_MS,
@@ -153,8 +154,8 @@ function VerdictScreen({
   const monRang = (reveal.fastestTop ?? []).findIndex((f) => f.pseudo === you.pseudo);
   const grand = Boolean(embedded);
   // seuils relatifs a l'entree du verdict (l'anti-spoiler nous fait entrer ici
-  // a REVEAL_JOUEUR_MS ~ 3600, on echelonne la suite)
-  const dans = elapsed - 3600;
+  // a REVEAL_JOUEUR_MS, on echelonne la suite)
+  const dans = elapsed - REVEAL_JOUEUR_MS;
 
   const fete = useRef(false);
   useEffect(() => {

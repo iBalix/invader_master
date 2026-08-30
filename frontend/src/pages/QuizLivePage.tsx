@@ -293,7 +293,10 @@ export default function QuizLivePage() {
       {/* contenu : onglets sur mobile, pilotage + colonne sur desktop */}
       {/* Mobile : l'onglet actif occupe tout. Desktop : Pilotage a gauche en
           permanence, l'onglet pilote la colonne de droite (Questions par defaut). */}
-      <div className="mx-auto w-full max-w-6xl flex-1 px-3 pb-48 pt-3 lg:grid lg:grid-cols-3 lg:items-start lg:gap-4 lg:px-6">
+      <div
+        className="mx-auto w-full max-w-6xl flex-1 px-3 pt-3 lg:grid lg:grid-cols-3 lg:items-start lg:gap-4 lg:px-6"
+        style={{ paddingBottom: 'calc(var(--gm-bar-h, 12rem) + 1rem)' }}
+      >
         <div className={`space-y-3 lg:col-span-2 ${tab === 'pilotage' ? 'block' : 'hidden lg:block'}`}>
           <PilotagePanel state={state} sessionId={sessionId} action={action} />
         </div>
@@ -782,25 +785,42 @@ function QuestionCard({
             Réponses reçues ({answers.length})
           </h3>
           <div className="flex flex-wrap gap-1.5">
-            {answers.map((a) => (
-              <span
-                key={a.playerId}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                  a.correct === true
-                    ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
-                    : a.correct === false
-                      ? 'border-rose-400/30 bg-rose-400/10 text-rose-300'
-                      : 'border-white/10 bg-white/5 text-slate-300'
-                }`}
-              >
-                {a.pseudo}
-                {a.bonus === 'all_in' && ' 🎰'}
-                {typeof a.answer.choice === 'number' && ` · ${String.fromCharCode(65 + a.answer.choice)}`}
-                {typeof a.answer.number === 'number' && ` · ${a.answer.number}`}
-                {a.correct === true && <Check size={11} />}
-                {a.correct === false && <X size={11} />}
-              </span>
-            ))}
+            {(() => {
+              // le plus rapide en JAUNE : parmi les bonnes reponses quand le
+              // verdict est connu (QCM), sinon parmi tous les repondants
+              // (estimation : correct arrive au reveal seulement)
+              const bassin = answers.some((x) => x.correct === true)
+                ? answers.filter((x) => x.correct === true)
+                : answers;
+              const plusRapideId = bassin
+                .filter((x) => x.elapsedMs !== null)
+                .sort((x, y) => (x.elapsedMs ?? 0) - (y.elapsedMs ?? 0))[0]?.playerId;
+              return answers.map((a) => {
+                const rapide = a.playerId === plusRapideId;
+                return (
+                  <span
+                    key={a.playerId}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                      rapide
+                        ? 'border-amber-400/60 bg-amber-400/15 text-amber-200'
+                        : a.correct === true
+                          ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
+                          : a.correct === false
+                            ? 'border-rose-400/30 bg-rose-400/10 text-rose-300'
+                            : 'border-white/10 bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    {rapide && '⚡'}
+                    {a.pseudo}
+                    {a.bonus === 'all_in' && ' 🎰'}
+                    {typeof a.answer.choice === 'number' && ` · ${String.fromCharCode(65 + a.answer.choice)}`}
+                    {typeof a.answer.number === 'number' && ` · ${a.answer.number}`}
+                    {a.correct === true && <Check size={11} />}
+                    {a.correct === false && <X size={11} />}
+                  </span>
+                );
+              });
+            })()}
           </div>
         </div>
       )}
@@ -1028,6 +1048,11 @@ function StandingsPanel({
                   </span>
                 )}
                 <span className="truncate font-semibold">{p.pseudo}</span>
+                {p.status === 'afk' && (
+                  <span className="shrink-0 rounded-full border border-amber-400/40 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-black text-amber-300">
+                    AFK
+                  </span>
+                )}
                 {p.device !== 'mobile' && (
                   <span className="shrink-0 text-[10px] text-slate-500">{p.device}</span>
                 )}
@@ -1319,63 +1344,117 @@ function BottomBar({
     principal = { label: <><Trophy size={17} /> Écran de fin</>, onClick: () => void action('end') };
   }
 
-  // actions secondaires du statut
-  const secondaires: Array<{ label: React.ReactNode; onClick: () => void; warn?: boolean }> = [];
+  // Actions secondaires du statut. De VRAIS boutons (retour de la premiere
+  // soiree : la rangee horizontale de mini-boutons etait invisible sur
+  // telephone) : pleine largeur, empiles, chacun sa couleur et son picto.
+  // Les deux destructifs (Rejouer / Annuler) partagent une rangee.
+  type ActionTon = 'violet' | 'cyan' | 'slate' | 'indigo' | 'emerald' | 'amber' | 'rose';
+  const TONS: Record<ActionTon, string> = {
+    violet: 'border-violet-400/40 bg-violet-500/15 text-violet-200',
+    cyan: 'border-cyan-400/40 bg-cyan-500/15 text-cyan-200',
+    slate: 'border-white/20 bg-white/10 text-slate-200',
+    indigo: 'border-indigo-400/40 bg-indigo-500/15 text-indigo-200',
+    emerald: 'border-emerald-400/40 bg-emerald-500/15 text-emerald-200',
+    amber: 'border-amber-400/40 bg-amber-400/15 text-amber-200',
+    rose: 'border-rose-400/40 bg-rose-400/15 text-rose-300',
+  };
+  const secondaires: Array<{
+    label: React.ReactNode;
+    onClick: () => void;
+    ton: ActionTon;
+    /** destructif : partage une rangee a deux avec son voisin */
+    destructif?: boolean;
+  }> = [];
   if (s === 'lobby' || s === 'rules') {
     secondaires.push({
-      label: <><ScrollText size={13} /> {s === 'rules' ? 'Masquer règles' : 'Règles'}</>,
+      label: <><ScrollText size={17} /> {s === 'rules' ? 'Masquer les règles' : 'Afficher les règles'}</>,
       onClick: () => void action('rules'),
+      ton: 'violet',
     });
   }
   if (s === 'announce') {
     secondaires.push({
-      label: <><X size={13} /> Annuler la question</>,
+      label: <><X size={17} /> Annuler la question</>,
       onClick: () => void action('cancel-question', {}, 'Annuler cette question ?'),
-      warn: true,
+      ton: 'rose',
     });
   }
   if (s === 'media' || s === 'question' || s === 'locked' || s === 'reveal') {
     secondaires.push({
-      label: <><RotateCcw size={13} /> Rejouer</>,
+      label: <><RotateCcw size={17} /> Rejouer</>,
       onClick: () => void action('replay-question', {}, 'Rejouer cette question ? (réponses et points effacés)'),
-      warn: true,
+      ton: 'amber',
+      destructif: true,
     });
     secondaires.push({
-      label: <><X size={13} /> Annuler</>,
+      label: <><X size={17} /> Annuler</>,
       onClick: () => void action('cancel-question', {}, 'Annuler cette question ?'),
-      warn: true,
+      ton: 'rose',
+      destructif: true,
     });
   }
   if (s === 'reveal' || s === 'leaderboard') {
     if (s === 'reveal') {
-      secondaires.push({ label: <><ListOrdered size={13} /> Classement</>, onClick: () => void action('leaderboard') });
+      secondaires.push({
+        label: <><ListOrdered size={17} /> Afficher le classement</>,
+        onClick: () => void action('leaderboard'),
+        ton: 'cyan',
+      });
     }
-    if (isLast && s === 'reveal') {
-      // cinematic est deja le bouton principal au dernier tour
-    }
-    secondaires.push({ label: <><Pause size={13} /> Pause</>, onClick: () => void action('pause') });
+    secondaires.push({
+      label: <><Pause size={17} /> Mettre en pause</>,
+      onClick: () => void action('pause'),
+      ton: 'slate',
+    });
     if (!isLast) {
       secondaires.push({
-        label: <><Clapperboard size={13} /> Cinématique</>,
+        label: <><Clapperboard size={17} /> Cinématique finale</>,
         onClick: () => void action('cinematic'),
+        ton: 'indigo',
       });
     }
   }
   if (s === 'cinematic') {
-    secondaires.push({ label: <><Trophy size={13} /> Écran de fin</>, onClick: () => void action('end') });
+    secondaires.push({
+      label: <><Trophy size={17} /> Écran de fin</>,
+      onClick: () => void action('end'),
+      ton: 'emerald',
+    });
   }
   if (s === 'pause') {
     secondaires.push({
-      label: <><RotateCcw size={13} /> Revenir à l'écran précédent</>,
+      label: <><RotateCcw size={17} /> Revenir à l'écran précédent</>,
       onClick: () => void action('resume-back'),
+      ton: 'slate',
     });
   }
 
   const montrerSpeciale =
     (s === 'lobby' || s === 'rules' || s === 'reveal' || s === 'leaderboard' || s === 'pause') && !isLast;
 
+  // La barre grandit avec la pile de boutons : sa hauteur reelle est publiee
+  // en variable CSS pour que le contenu garde toujours son degagement (le
+  // pb fixe d'avant laissait les derniers elements caches derriere).
+  const barreRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = barreRef.current;
+    if (!el) return;
+    const pousse = () =>
+      document.documentElement.style.setProperty('--gm-bar-h', `${el.offsetHeight}px`);
+    pousse();
+    const ro = new ResizeObserver(pousse);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--gm-bar-h');
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+    <div
+      ref={barreRef}
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+    >
       <div className="mx-auto w-full max-w-6xl px-3 pt-2 lg:px-6">
         {/* rangée contextuelle : chrono, spéciale, secondaires */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 [scrollbar-width:none]">
@@ -1407,21 +1486,6 @@ function BottomBar({
               ))}
             </select>
           )}
-          {secondaires.map((b, i) => (
-            <button
-              key={i}
-              type="button"
-              disabled={busy}
-              onClick={b.onClick}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-40 ${
-                b.warn
-                  ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
-                  : 'border-white/15 text-slate-300 hover:bg-white/5'
-              }`}
-            >
-              {b.label}
-            </button>
-          ))}
         </div>
 
         {/* LE bouton du moment, plein pouce */}
@@ -1434,6 +1498,39 @@ function BottomBar({
           >
             {principal.label}
           </button>
+        )}
+
+        {/* les autres actions : de vrais boutons, empiles ; la paire
+            destructive (Rejouer/Annuler) se partage une rangee */}
+        {secondaires.length > 0 && (
+          <div className="mb-2 flex flex-col gap-2">
+            {secondaires.some((b) => b.destructif) && (
+              <div className="grid grid-cols-2 gap-2">
+                {secondaires.filter((b) => b.destructif).map((b, i) => (
+                  <button
+                    key={`d${i}`}
+                    type="button"
+                    disabled={busy}
+                    onClick={b.onClick}
+                    className={`flex min-h-[48px] items-center justify-center gap-2 rounded-xl border text-sm font-bold disabled:opacity-40 ${TONS[b.ton]}`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {secondaires.filter((b) => !b.destructif).map((b, i) => (
+              <button
+                key={i}
+                type="button"
+                disabled={busy}
+                onClick={b.onClick}
+                className={`flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border text-sm font-bold disabled:opacity-40 ${TONS[b.ton]}`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
         )}
 
         {/* onglets */}

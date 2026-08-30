@@ -502,12 +502,21 @@ export function subscribeToGame(
 
 /** duree de montee de la barre la PLUS haute ; les autres vont a la meme vitesse */
 export const REVEAL_BARRES_MS = 3000;
-/** la bonne reponse se detache sur le projecteur */
-export const REVEAL_REPONSE_MS = 3300;
-/** le podium des 3 plus rapides est annonce */
-export const REVEAL_RAPIDE_MS = 4600;
+/**
+ * Le son de suspense (answers_reveal.mp3, herite d'invader_table) part ici,
+ * une fois les pourcentages lus, et la bonne reponse tombe exactement 1646 ms
+ * plus tard : c'est le delai d'origine, mesure dans le legacy, celui que la
+ * salle connait par coeur.
+ */
+export const REVEAL_SUSPENSE_MS = 4400;
+/** la bonne reponse se detache sur le projecteur (= SUSPENSE + 1646, legacy) */
+export const REVEAL_REPONSE_MS = REVEAL_SUSPENSE_MS + 1646;
 /** les joueurs decouvrent le verdict : jamais avant le projecteur */
-export const REVEAL_JOUEUR_MS = 3600;
+export const REVEAL_JOUEUR_MS = 6600;
+/** le podium des 3 plus rapides est annonce (marches devoilees 3e, 2e puis 1er) */
+export const REVEAL_RAPIDE_MS = 7800;
+/** delais internes du podium par place [1er, 2e, 3e] : le 1er se fait desirer */
+export const PODIUM_DELAIS_S = [2.2, 0.9, 0];
 
 /**
  * Sequence personnelle post-reveal cote joueur. Trois temps, en seuils depuis
@@ -515,18 +524,44 @@ export const REVEAL_JOUEUR_MS = 3600;
  * jokers (recap de main + roue de tirage si gain). Le backend garantit que la
  * phase reveal dure au moins REVEAL_MIN_MS : le GM ne peut pas la couper.
  */
-export const SEQ_SERIE_MS = 6400;
-export const SEQ_JOKERS_MS = 9200;
+export const SEQ_SERIE_MS = 10200;
+export const SEQ_JOKERS_MS = 13000;
 /**
  * Apres les jokers, l'ecran d'attente. La sequence personnelle est finie ; si
  * l'animateur parle et ne lance pas la suite, les joueurs restaient figes sur
  * leur main de jokers sans savoir si c'etait normal. Le seuil laisse a la roue
  * d'un gain (lancee a SEQ_JOKERS_MS, ~5,3 s) le temps de finir son tour.
  */
-export const SEQ_ATTENTE_MS = 17000;
+export const SEQ_ATTENTE_MS = 20800;
 /** miroir du backend : duree minimale de la phase reveal */
-export const REVEAL_MIN_MS = 12000;
+export const REVEAL_MIN_MS = 16000;
 /** projecteur : duree d'affichage de l'image de reponse, avant les podiums */
 export const REVEAL_IMAGE_MS = 3500;
 /** projecteur : les podiums (vitesse puis series) */
-export const REVEAL_SERIE_MS = 7400;
+export const REVEAL_SERIE_MS = 11600;
+
+// ---------------------------------------------------------------------------
+// Mise en scene de la question
+// ---------------------------------------------------------------------------
+
+/**
+ * La question s'affiche seule, puis les reponses arrivent en fondu, toutes
+ * ensemble : la salle lit l'enonce avant de se jeter sur les choix.
+ */
+export const QUESTION_REPONSES_MS = 2000;
+/**
+ * Question audio : l'extrait joue SEUL pendant ce temps (ecran « extrait en
+ * cours »), puis la question apparait et l'extrait continue. Comportement
+ * herite d'invader_table (10 s a l'epoque, 5 s ici). Le backend allonge la
+ * fenetre de reponse d'autant.
+ */
+export const AUDIO_PREROLL_MS = 5000;
+/** legacy : l'extrait ducke au reveal remonte ce delai apres la bonne reponse */
+export const AUDIO_REMONTEE_MS = 3500;
+
+// ---------------------------------------------------------------------------
+// Compteurs d'attente (purement indicatifs, le GM garde la main)
+// ---------------------------------------------------------------------------
+
+export const LOBBY_COUNTDOWN_MS = 20 * 60_000;
+export const PAUSE_COUNTDOWN_MS = 15 * 60_000;

@@ -16,9 +16,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   ApiError,
+  AUDIO_PREROLL_MS,
   clearIdentity,
   gameApi,
   loadIdentity,
+  LOBBY_COUNTDOWN_MS,
+  PAUSE_COUNTDOWN_MS,
+  QUESTION_REPONSES_MS,
   questionShownAt,
   saveIdentity,
   type GameEvent,
@@ -128,7 +132,7 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
     refreshRef.current();
   }, []);
 
-  const { state, you, refresh, setYou } = useGameSession(sessionRef, { playerToken, onEvent });
+  const { state, you, youAbsent, refresh, setYou } = useGameSession(sessionRef, { playerToken, onEvent });
   refreshRef.current = refresh;
   audienceArme.current =
     state?.status === 'question' && (you?.jokerPlays ?? []).some((p) => p.type === 'audience');
@@ -141,6 +145,31 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
       setPlayerToken(identity.playerToken);
     }
   }, [state, playerToken]);
+
+  /**
+   * Ejection : deux signaux, meme traitement.
+   *  - you.status === 'afk' : retire pour inactivite (5 questions sans
+   *    reponse). Le serveur garde la ligne visible juste pour NOUS LE DIRE.
+   *  - youAbsent : une reponse /state requetee avec notre token est revenue
+   *    sans you (kick GM, ligne passee en removed). Avant, ce cas laissait un
+   *    spinner infini : identite locale intacte, JoinScreen jamais reaffiche.
+   * Ordre imperatif : clearIdentity AVANT setPlayerToken(null), sinon l'effet
+   * de reprise ci-dessus recharge l'identite et boucle.
+   */
+  const [ejectionNotice, setEjectionNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const afk = you?.status === 'afk';
+    if (!afk && !(youAbsent && playerToken)) return;
+    clearIdentity();
+    setPlayerToken(null);
+    setYou(null);
+    setEjectionNotice(
+      afk
+        ? 'Tu as été retiré de la partie après 5 questions sans réponse. Rejoins quand tu veux !'
+        : 'Tu as été retiré de la partie par l\'animateur.',
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [you?.status, youAbsent, playerToken]);
 
   const shellProps = { embedded, onExit };
 
@@ -185,7 +214,9 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
         playerToken={playerToken}
         embedded={embedded}
         deviceLabel={deviceLabel}
+        joinNotice={ejectionNotice}
         onJoined={(token, newYou) => {
+          setEjectionNotice(null);
           setPlayerToken(token);
           setYou(newYou);
           saveIdentity({ sessionId: state.id, playerToken: token, pseudo: newYou.pseudo });
@@ -392,10 +423,15 @@ export interface ScreenProps {
   onJoined: (token: string, you: You) => void;
   onLeft: () => void;
   refresh: () => Promise<void>;
+  /** bandeau au-dessus du champ pseudo (ejection AFK ou kick) */
+  joinNotice?: string | null;
 }
 
 export function PlayerScreen(props: ScreenProps) {
-  const { state, you } = props;
+  const { state } = props;
+  // un joueur ejecte pour inactivite n'est plus un joueur : direction
+  // l'inscription (PlayerApp purge l'identite en parallele)
+  const you = props.you?.status === 'afk' ? null : props.you;
 
   if (!you) {
     // Reprise en cours : le premier refresh part sans token, donc il existe
@@ -460,6 +496,11 @@ export function PlayerScreen(props: ScreenProps) {
                   {state.config.pauseText}
                 </p>
               )}
+              <MiniCompteARebours
+                depuis={state.phaseStartedAt}
+                dureeMs={PAUSE_COUNTDOWN_MS}
+                libelle="Reprise dans"
+              />
             </div>
           </Center>
         );
@@ -499,7 +540,7 @@ export function PlayerScreen(props: ScreenProps) {
 // Inscription
 // ---------------------------------------------------------------------------
 
-function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel, embedded }: ScreenProps) {
+function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel, embedded, joinNotice }: ScreenProps) {
   const [pseudo, setPseudo] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -533,10 +574,19 @@ function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel, emb
           {state.mode === 'battle' ? 'Battle Royale' : 'Quiz'}
         </p>
         <h1 className={`anim-title-glow mb-1 text-balance font-black ${embedded ? 'text-5xl' : 'text-3xl'}`}>{state.quizName}</h1>
-        <p className={`mb-8 text-white/50 ${embedded ? 'text-lg' : 'text-sm'}`}>
+        <p className={`mb-6 text-white/50 ${embedded ? 'text-lg' : 'text-sm'}`}>
           {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} connecté{state.playerCount > 1 ? 's' : ''}
           {started ? ' · partie en cours, rejoins-nous !' : ''}
         </p>
+        {joinNotice && (
+          <p
+            className={`anim-pop mb-5 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 font-semibold text-amber-200 ${
+              embedded ? 'text-lg' : 'text-sm'
+            }`}
+          >
+            {joinNotice}
+          </p>
+        )}
         <label
           className={`mb-2 block text-left font-semibold text-white/70 ${embedded ? 'text-xl' : 'text-sm'}`}
           htmlFor="pseudo"
@@ -575,6 +625,29 @@ function JoinScreen({ state, sessionRef, onJoined, playerToken, deviceLabel, emb
 // Lobby / règles
 // ---------------------------------------------------------------------------
 
+/** compte a rebours discret des attentes (indicatif, mm:ss) */
+function MiniCompteARebours({ depuis, dureeMs, libelle }: { depuis: number | null; dureeMs: number; libelle: string }) {
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 500);
+    return () => clearInterval(t);
+  }, []);
+  const reste = depuis === null ? dureeMs : Math.max(0, depuis + dureeMs - maintenant);
+  if (reste <= 0) {
+    return <p className="anim-suspense mt-4 font-black uppercase tracking-widest text-amber-300">⏳ C'est imminent !</p>;
+  }
+  const mm = Math.floor(reste / 60000);
+  const ss = Math.floor((reste % 60000) / 1000);
+  return (
+    <p className="mt-4 text-white/60">
+      {libelle}{' '}
+      <span className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-2.5 py-0.5 font-black tabular-nums text-cyan-200">
+        {mm}:{String(ss).padStart(2, '0')}
+      </span>
+    </p>
+  );
+}
+
 function LobbyScreen({ state, you, sessionRef, playerToken, onLeft }: ScreenProps & { you: You }) {
   return (
     <Center>
@@ -584,6 +657,7 @@ function LobbyScreen({ state, you, sessionRef, playerToken, onLeft }: ScreenProp
         <p className="mt-2 text-white/60">
           La partie démarre bientôt, reste sur cet écran.
         </p>
+        <MiniCompteARebours depuis={state.phaseStartedAt} dureeMs={LOBBY_COUNTDOWN_MS} libelle="Début dans" />
         <p className="mt-6 text-sm text-white/40">
           {state.playerCount} joueur{state.playerCount > 1 ? 's' : ''} connecté{state.playerCount > 1 ? 's' : ''}
         </p>
@@ -667,6 +741,20 @@ function AnnounceScreen({ state, you, sessionRef, playerToken, refresh, embedded
 // ---------------------------------------------------------------------------
 // Question (par type)
 // ---------------------------------------------------------------------------
+
+/**
+ * Fondu d'entree des reponses : la question se lit seule, puis les choix
+ * arrivent tous ensemble (QUESTION_REPONSES_MS). Style et non className :
+ * la transition CSS a besoin de voir l'etat initial rendu.
+ */
+function fonduReponses(visible: boolean): React.CSSProperties {
+  return {
+    opacity: visible ? 1 : 0,
+    transform: visible ? 'translateY(0)' : 'translateY(14px)',
+    transition: 'opacity 600ms ease, transform 600ms cubic-bezier(0.3, 1.1, 0.4, 1)',
+    pointerEvents: visible ? undefined : 'none',
+  };
+}
 
 export const ANSWER_COLORS = [
   'border-cyan-400/50 bg-cyan-400/10 active:bg-cyan-400/25',
@@ -753,6 +841,36 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
   const answered = sendState === 'recorded';
   const totalMs = state.phaseEndsAt && state.phaseStartedAt ? state.phaseEndsAt - state.phaseStartedAt : state.config.questionMs;
 
+  // Mise en scene synchronisee avec le projecteur, en seuils sur
+  // phaseStartedAt : pre-roll audio (extrait seul), puis la question, puis les
+  // reponses en fondu global. En locked, phase_started_at est reecrit par le
+  // serveur : le drapeau locked force tout visible.
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 200);
+    return () => clearInterval(t);
+  }, []);
+  const ecouleQ = maintenant - (state.phaseStartedAt ?? maintenant);
+  const preroll = q.musicUrl ? AUDIO_PREROLL_MS : 0;
+  const questionVisible = locked || ecouleQ >= preroll;
+  const reponsesVisibles = locked || ecouleQ >= preroll + QUESTION_REPONSES_MS;
+
+  // pre-roll audio : l'extrait seul, le telephone n'a rien a lire
+  if (!questionVisible && q.musicUrl) {
+    const resteS = Math.max(0, Math.ceil((preroll - ecouleQ) / 1000));
+    return (
+      <Center>
+        <div className={`anim-glow flex items-center justify-center rounded-full border-4 border-cyan-400/50 bg-cyan-400/10 ${embedded ? 'h-48 w-48 text-7xl' : 'h-32 w-32 text-5xl'}`}>
+          🎵
+        </div>
+        <p className={`mt-6 font-black uppercase tracking-[0.3em] text-cyan-300 ${embedded ? 'text-2xl' : 'text-base'}`}>
+          Écoute bien...
+        </p>
+        <p className={`mt-2 font-black tabular-nums text-white/70 ${embedded ? 'text-5xl' : 'text-3xl'}`}>{resteS}</p>
+      </Center>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-3">
       <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
@@ -794,6 +912,7 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
           className={`grid min-h-0 flex-1 ${
             embedded ? 'grid-cols-2 grid-rows-2 gap-5' : 'grid-rows-4 gap-2'
           }`}
+          style={fonduReponses(reponsesVisibles)}
         >
           {(q.answers ?? []).map((a, i) => {
             const retiree = fiftyRemoved.includes(i);
@@ -804,7 +923,7 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
               <button
                 key={i}
                 type="button"
-                disabled={answered || locked || retiree}
+                disabled={answered || locked || retiree || !reponsesVisibles}
                 onClick={() => {
                   setSelected(i);
                   void send({ choice: i });
@@ -838,17 +957,19 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
           })}
         </div>
       ) : q.type === 'estimation' ? (
-        <EstimationInput
-          value={numberValue}
-          onChange={setNumberValue}
-          disabled={answered || locked}
-          onSubmit={() => {
-            const n = parseFloat(numberValue.replace(',', '.'));
-            if (Number.isFinite(n)) void send({ number: n });
-          }}
-        />
+        <div style={fonduReponses(reponsesVisibles)}>
+          <EstimationInput
+            value={numberValue}
+            onChange={setNumberValue}
+            disabled={answered || locked || !reponsesVisibles}
+            onSubmit={() => {
+              const n = parseFloat(numberValue.replace(',', '.'));
+              if (Number.isFinite(n)) void send({ number: n });
+            }}
+          />
+        </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" style={fonduReponses(reponsesVisibles)}>
           <input
             value={textValue}
             onChange={(e) => setTextValue(e.target.value)}

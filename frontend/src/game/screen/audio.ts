@@ -1,11 +1,15 @@
 /**
- * Moteur audio du projecteur — 100% synthétisé en WebAudio (aucun asset).
+ * Moteur audio du projecteur — synthétisé en WebAudio, plus UN asset hérité
+ * d'invader_table : le son de suspense du reveal (answers-reveal.mp3), que la
+ * salle connaît par cœur et qu'aucune synthèse ne remplace.
  *
  * 3 canaux mixés : musique de fond (HTMLAudio + gain), effets (synthèse),
  * médias de question (gérés par les éléments <audio>/<iframe> de la page).
  * Ducking : la musique descend pendant les phases bruyantes et remonte
  * exactement à son niveau, jamais plus haut.
  */
+
+import answersRevealUrl from '../assets/answers-reveal.mp3';
 
 export class GameAudio {
   private ctx: AudioContext | null = null;
@@ -287,6 +291,27 @@ export class GameAudio {
   }
 
   /** montée de suspense avant les pourcentages */
+  /**
+   * Le son de suspense du reveal, celui d'invader_table (answers_reveal.mp3,
+   * volume legacy 0.4). La bonne reponse tombe 1646 ms apres son depart
+   * (REVEAL_SUSPENSE_MS -> REVEAL_REPONSE_MS) : ne pas le raccourcir.
+   */
+  private suspenseEl: HTMLAudioElement | null = null;
+
+  revealSuspense(): void {
+    if (!this.enabled) return;
+    try {
+      if (!this.suspenseEl) {
+        this.suspenseEl = new Audio(answersRevealUrl);
+      }
+      this.suspenseEl.volume = Math.min(1, 0.5 * this.sfxVolume);
+      this.suspenseEl.currentTime = 0;
+      void this.suspenseEl.play().catch(() => undefined);
+    } catch {
+      /* asset indisponible : le reveal reste muet, jamais bloque */
+    }
+  }
+
   revealSweep(): void {
     this.tone(220, 1.1, { type: 'sawtooth', gain: 0.16, slideTo: 880 });
   }

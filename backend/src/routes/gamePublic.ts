@@ -137,9 +137,12 @@ gamePublicRoutes.post('/:idOrCode/join', async (req, res) => {
       playerToken?: string;
     };
 
-    // Reprise de session
+    // Reprise de session. Un joueur ejecte pour inactivite (afk) ne reprend
+    // PAS son ancienne ligne : il repart de zero, nouveau pseudo, nouveau
+    // token (son pseudo_norm a ete libere a l'ejection). Les statuts battle
+    // (eliminated/waiting/spectator) gardent leur reprise normale.
     const existing = await findPlayerByToken(session.id, playerToken);
-    if (existing) {
+    if (existing && existing.status !== 'afk') {
       const you = buildYou(session, existing, await hasAnswered(session, existing));
       res.json({
         status: 'success',

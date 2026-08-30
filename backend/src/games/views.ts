@@ -146,7 +146,7 @@ export function buildPublicState(
     playerCount: active.length,
     // en battle, tout le monde est "eliminated" entre deux manches : l'ecran bar
     // doit annoncer les PARTICIPANTS, pas les seuls survivants du moment
-    participantCount: players.filter((p) => p.status !== 'removed').length,
+    participantCount: players.filter((p) => p.status !== 'removed' && p.status !== 'afk').length,
     players: active.map((p) => ({ pseudo: p.pseudo, device: p.device })),
     question: publicQuestion(session),
     // qui a joue quoi sur la question courante (chips cote joueur et projo)

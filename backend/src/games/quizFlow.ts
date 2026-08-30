@@ -24,7 +24,9 @@ import {
 import { broadcast } from './realtime.js';
 import { computeReveal } from './scoring.js';
 import {
+  AFK_MISS_LIMIT,
   ANSWER_GRACE_MS,
+  AUDIO_PREROLL_MS,
   DEFAULT_CONFIG,
   DIFFICULTY_POINTS,
   JOKER_DRAW_BASE,
@@ -52,9 +54,10 @@ import {
 
 /**
  * Taper une reponse au clavier (nombre ou texte) prend plus de temps que
- * toucher une case de QCM : 20 s pour un QCM, 25 s pour les deux autres types.
+ * toucher une case de QCM : 20 s pour un QCM, 30 s pour les deux autres types
+ * (retour de la premiere soiree : 25 s etaient trop courtes pour taper).
  */
-const NON_QCM_EXTRA_MS = 5000;
+const NON_QCM_EXTRA_MS = 10_000;
 
 /**
  * Fenetres STRICTES par type, sans rallonge media. Les +10 s audio et +2 s
@@ -64,7 +67,14 @@ const NON_QCM_EXTRA_MS = 5000;
  * instantanement, et la video a sa propre phase plein ecran avant la question.
  */
 export function questionWindowMs(q: QuestionSnapshot, config: SessionConfig): number {
-  return config.questionMs + (q.type !== 'qcm' ? NON_QCM_EXTRA_MS : 0);
+  return (
+    config.questionMs +
+    (q.type !== 'qcm' ? NON_QCM_EXTRA_MS : 0) +
+    // l'extrait joue SEUL pendant AUDIO_PREROLL_MS avant que la question ne
+    // s'affiche : on rend ce temps au joueur, sinon le preroll mangerait le
+    // chrono (pattern du timer +10 s d'invader_table)
+    (q.musicUrl ? AUDIO_PREROLL_MS : 0)
+  );
 }
 
 /**
@@ -327,6 +337,8 @@ export async function createQuizSession(
     config,
     questionOrder: snapshots,
     runtime: {},
+    // base du compte a rebours indicatif du lobby (20 min) sur les ecrans
+    phaseStartedAt: new Date().toISOString(),
   });
 }
 
@@ -476,16 +488,41 @@ async function applyReveal(session: SessionRow): Promise<void> {
       if (alreadyJudged.has(p.id) || !r) {
         return supabaseAdmin.from('game_players').update({ bonuses: p.bonuses }).eq('id', p.id);
       }
+      // Compteur de non-reponses consecutives. lastMissQi est le garde-fou
+      // d'idempotence : un non-repondant n'a AUCUNE ligne game_answers, donc
+      // jamais de alreadyJudged ; si ce reveal est rejoue apres un crash
+      // partiel, sans le marqueur la meme question compterait deux fois.
+      const missed = !r.answered;
+      const missStreak = !missed
+        ? 0
+        : p.stats.lastMissQi === qi
+          ? (p.stats.missStreak ?? 0)
+          : (p.stats.missStreak ?? 0) + 1;
+      // Spread impératif : le litteral nu perdait manualPoints (points GM) et
+      // roundBonusPoints a chaque reveal.
       const stats = {
+        ...p.stats,
         strike: r.correct ? (p.stats.strike ?? 0) + 1 : 0,
         bestStrike: Math.max(p.stats.bestStrike ?? 0, r.correct ? (p.stats.strike ?? 0) + 1 : 0),
         correctCount: (p.stats.correctCount ?? 0) + (r.correct ? 1 : 0),
         answerCount: (p.stats.answerCount ?? 0) + (r.answered ? 1 : 0),
         totalTimeMs: (p.stats.totalTimeMs ?? 0) + (r.correct && r.elapsedMs ? r.elapsedMs : 0),
+        missStreak,
+        lastMissQi: missed ? qi : null,
       };
+      // Ejection AFK dans le MEME update (atomique par ligne) : le joueur sort
+      // des actifs (classement, percentile jokers, comptages) et son pseudo
+      // est libere facon route leave, pour qu'il puisse revenir sous le meme
+      // nom via un nouveau join.
+      const ejecte = missStreak >= AFK_MISS_LIMIT;
       return supabaseAdmin
         .from('game_players')
-        .update({ score: p.score + r.delta, stats, bonuses: p.bonuses })
+        .update({
+          score: p.score + r.delta,
+          stats,
+          bonuses: p.bonuses,
+          ...(ejecte ? { status: 'afk', pseudo_norm: `${p.pseudo_norm}:afk:${p.id}` } : {}),
+        })
         .eq('id', p.id);
     });
 
@@ -564,13 +601,21 @@ async function rollbackQuestion(session: SessionRow): Promise<void> {
 
   // Si la question avait été révélée : reconstruit scores et stats depuis zéro
   if (wasRevealed) {
-    await rebuildPlayersFromAnswers(session);
+    await rebuildPlayersFromAnswers(session, qi);
   }
   session.runtime.judge = undefined;
   session.runtime.special = null;
 }
 
-async function rebuildPlayersFromAnswers(session: SessionRow): Promise<void> {
+/**
+ * @param rolledBackQi index de la question annulee/rejouee, pour rendre leur
+ * miss aux joueurs qui ne lui avaient pas repondu (une non-reponse ne laisse
+ * aucune trace dans game_answers, le compteur n'est donc pas reconstructible :
+ * on le corrige via le marqueur lastMissQi). Les joueurs deja passes 'afk' ne
+ * sont PAS restaures : le retour se fait par un nouveau join, et restaurer le
+ * pseudo_norm risquerait un doublon si le pseudo a ete repris.
+ */
+async function rebuildPlayersFromAnswers(session: SessionRow, rolledBackQi?: number): Promise<void> {
   const players = await loadPlayers(session.id);
   const { data } = await supabaseAdmin
     .from('game_answers')
@@ -614,6 +659,11 @@ async function rebuildPlayersFromAnswers(session: SessionRow): Promise<void> {
       }
       // Les points manuels du GM sont stockés dans stats.manualPoints
       const manual = (p.stats as { manualPoints?: number }).manualPoints ?? 0;
+      // la question annulée avait compté un miss pour ce joueur : on le rend
+      const missAnnule =
+        rolledBackQi !== undefined &&
+        p.status === 'active' &&
+        p.stats.lastMissQi === rolledBackQi;
       return supabaseAdmin
         .from('game_players')
         .update({
@@ -625,6 +675,9 @@ async function rebuildPlayersFromAnswers(session: SessionRow): Promise<void> {
             correctCount,
             answerCount: list.length,
             totalTimeMs,
+            ...(missAnnule
+              ? { missStreak: Math.max(0, (p.stats.missStreak ?? 0) - 1), lastMissQi: null }
+              : {}),
           },
         })
         .eq('id', p.id);
@@ -913,7 +966,12 @@ export async function gmAction(
       }
       case 'give-points': {
         const players = await loadPlayers(session.id);
-        const target = players.find((p) => p.pseudo === params.pseudo);
+        // priorite a la ligne ACTIVE : un joueur afk qui a rejoint sous le
+        // meme pseudo a deux lignes, et l'ancienne (afk, plus vieille) prenait
+        // les points du GM a la place de la nouvelle
+        const target =
+          players.find((p) => p.pseudo === params.pseudo && p.status === 'active') ??
+          players.find((p) => p.pseudo === params.pseudo);
         if (!target || typeof params.points !== 'number') {
           throw Object.assign(new Error('Joueur introuvable'), { httpStatus: 404 });
         }
@@ -1096,6 +1154,11 @@ export async function playJoker(
   let dejaJoue = false;
 
   await withSession(sessionId, async (session) => {
+    // un joueur ejecte (afk) ou retire garde parfois l'app ouverte : il ne
+    // doit plus pouvoir engager de joker
+    if (player.status !== 'active') {
+      throw Object.assign(new Error('error_not_active'), { httpStatus: 409 });
+    }
     // FENETRE UNIQUE : l'annonce, avant que la question s'affiche. Tous les
     // jokers s'engagent a l'aveugle, c'est ce qui en fait des paris et non des
     // aides de derniere seconde. Une fois la question lancee, plus rien.

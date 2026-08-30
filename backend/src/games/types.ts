@@ -219,12 +219,28 @@ export const STREAK_BONUS_FROM = 5;
 export const SPEED_BONUS = [2, 1, 1];
 
 /**
+ * Ejection automatique : un joueur sans reponse a AFK_MISS_LIMIT questions
+ * CONSECUTIVES est passe en 'afk'. Il sort du classement, du percentile des
+ * jokers et du comptage ; son pseudo est libere. S'il revient, son ecran lui
+ * redemande un pseudo comme a un nouveau venu.
+ */
+export const AFK_MISS_LIMIT = 5;
+
+/**
+ * Question audio : l'extrait joue seul ce temps avant que la question ne
+ * s'affiche (mise en scene cote ecrans). La fenetre de reponse est allongee
+ * d'autant pour ne pas manger le temps de jeu. Miroir de AUDIO_PREROLL_MS
+ * cote frontend (gameClient.ts).
+ */
+export const AUDIO_PREROLL_MS = 5000;
+
+/**
  * Duree minimale de la phase reveal. Cote joueur, une sequence personnelle
  * (verdict -> serie -> jokers) se joue apres la revelation ; le GM ne peut pas
  * lancer la suite avant la fin, sinon la question suivante court-circuite la
  * sequence. La console affiche un compte a rebours sur le bouton.
  */
-export const REVEAL_MIN_MS = 12_000;
+export const REVEAL_MIN_MS = 16_000;
 
 /** un joker joue sur une question */
 export interface JokerPlay {
@@ -458,6 +474,19 @@ export interface PlayerStats {
   manualPoints?: number;
   /** battle : cumul des bonus de fin de manche (préservés par les rollbacks) */
   roundBonusPoints?: number;
+  /**
+   * Questions consécutives sans réponse (quiz). NON reconstructible depuis
+   * game_answers : une non-réponse ne laisse aucune trace. Préservé par le
+   * spread des rebuilds, décrémenté explicitement au rollback via lastMissQi.
+   */
+  missStreak?: number;
+  /**
+   * Dernier index de question ayant compté un miss : marqueur d'idempotence.
+   * Un reveal rejoué après un crash partiel réécrirait les stats des
+   * non-répondants (jamais dans alreadyJudged) et compterait deux fois la
+   * même question sans lui.
+   */
+  lastMissQi?: number | null;
 }
 
 export interface PlayerRow {
@@ -468,8 +497,12 @@ export interface PlayerRow {
   device: string;
   player_token: string;
   score: number;
-  /** spectator : battle uniquement, non qualifié pour la finale (définitif) */
-  status: 'active' | 'eliminated' | 'waiting' | 'removed' | 'spectator';
+  /**
+   * spectator : battle uniquement, non qualifié pour la finale (définitif).
+   * afk : quiz uniquement, éjecté pour non-réponse (AFK_MISS_LIMIT) ; reste
+   * visible du GM et signalable au joueur, contrairement à removed.
+   */
+  status: 'active' | 'eliminated' | 'waiting' | 'removed' | 'spectator' | 'afk';
   /** main de jokers (JOKER_HAND_MAX au plus). Les vieux jsonb {qdLeft} sont ignores. */
   bonuses: { jokers?: JokerType[] };
   stats: PlayerStats;

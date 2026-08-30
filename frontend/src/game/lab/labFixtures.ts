@@ -7,6 +7,7 @@
  * donc les séquences cadencées (règles, post-reveal) se jouent en vrai.
  */
 
+import extraitDemoUrl from '../assets/answers-reveal.mp3';
 import {
   serverNow,
   type JokerType,
@@ -127,6 +128,10 @@ export interface LabScenario {
   description: string;
   state: () => PublicState;
   you?: () => You;
+  /** boutons « Aller a » dedies (ms depuis phaseStartedAt) ; sinon defauts du groupe */
+  sauts?: Array<[string, number]>;
+  /** bandeau d'ejection sur l'ecran d'inscription (scenario AFK) */
+  joinNotice?: string;
 }
 
 export const SCENARIOS: LabScenario[] = [
@@ -159,7 +164,11 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'question',
     groupe: 'Joueur',
     label: 'Question QCM',
-    description: 'Grille de réponses, plein écran pour le pouce.',
+    description: "L'énoncé d'abord, les réponses en fondu à 2 s.",
+    sauts: [
+      ['Question', 500],
+      ['Réponses', 2400],
+    ],
     state: () =>
       baseState({
         status: 'question',
@@ -167,6 +176,76 @@ export const SCENARIOS: LabScenario[] = [
         question: QUESTION_QCM,
       }),
     you: () => baseYou({ jokers: ['fifty', 'audience'] }),
+  },
+  {
+    cle: 'question-audio',
+    groupe: 'Joueur',
+    label: 'Question audio (pré-roll)',
+    description: "5 s d'extrait seul, puis question, puis réponses.",
+    sauts: [
+      ['Extrait', 1000],
+      ['Question', 5400],
+      ['Réponses', 7400],
+    ],
+    state: () =>
+      baseState({
+        status: 'question',
+        phaseEndsAt: serverNow() + 28000,
+        question: { ...QUESTION_QCM, question: 'Quel jeu utilise ce thème musical ?', musicUrl: extraitDemoUrl },
+      }),
+    you: () => baseYou({ jokers: ['fifty'] }),
+  },
+  {
+    cle: 'question-estimation',
+    groupe: 'Joueur',
+    label: 'Question estimation',
+    description: 'Saisie du nombre, 30 s de fenêtre.',
+    sauts: [
+      ['Question', 500],
+      ['Réponses', 2400],
+    ],
+    state: () =>
+      baseState({
+        status: 'question',
+        phaseEndsAt: serverNow() + 30000,
+        question: {
+          ...QUESTION_QCM,
+          type: 'estimation',
+          answers: undefined,
+          question: 'En quelle année est sortie la Super Nintendo en Europe ?',
+        },
+      }),
+    you: () => baseYou({ jokers: ['all_in'] }),
+  },
+  {
+    cle: 'question-libre',
+    groupe: 'Joueur',
+    label: 'Question réponse libre',
+    description: 'Champ texte, 30 s de fenêtre.',
+    sauts: [
+      ['Question', 500],
+      ['Réponses', 2400],
+    ],
+    state: () =>
+      baseState({
+        status: 'question',
+        phaseEndsAt: serverNow() + 30000,
+        question: {
+          ...QUESTION_QCM,
+          type: 'free_text',
+          answers: undefined,
+          question: 'Quel studio a créé la série Zelda ?',
+        },
+      }),
+    you: () => baseYou({}),
+  },
+  {
+    cle: 'ejection-afk',
+    groupe: 'Joueur',
+    label: 'Éjection AFK (inscription)',
+    description: "L'écran que voit un joueur retiré pour inactivité.",
+    state: () => baseState({ status: 'question', phaseEndsAt: serverNow() + 20000, question: QUESTION_QCM }),
+    joinNotice: 'Tu as été retiré de la partie après 5 questions sans réponse. Rejoins quand tu veux !',
   },
   {
     cle: 'question-fifty',
@@ -450,6 +529,55 @@ export const SCENARIOS: LabScenario[] = [
           { pseudo: 'Max', type: 'fifty' },
           { pseudo: 'Nina', type: 'audience' },
         ],
+      }),
+  },
+  {
+    cle: 'projo-question',
+    groupe: 'Projecteur',
+    label: 'Question QCM (projo)',
+    description: "L'énoncé d'abord, les réponses en fondu à 2 s.",
+    sauts: [
+      ['Question', 500],
+      ['Réponses', 2400],
+    ],
+    state: () =>
+      baseState({
+        status: 'question',
+        phaseEndsAt: serverNow() + 20000,
+        question: QUESTION_QCM,
+      }),
+  },
+  {
+    cle: 'projo-question-audio',
+    groupe: 'Projecteur',
+    label: 'Question audio (projo)',
+    description: "Pré-roll 5 s « écoute bien », l'extrait continue ensuite.",
+    sauts: [
+      ['Extrait', 1000],
+      ['Question', 5400],
+      ['Réponses', 7400],
+    ],
+    state: () =>
+      baseState({
+        status: 'question',
+        phaseEndsAt: serverNow() + 28000,
+        question: { ...QUESTION_QCM, question: 'Quel jeu utilise ce thème musical ?', musicUrl: extraitDemoUrl },
+      }),
+  },
+  {
+    cle: 'projo-video',
+    groupe: 'Projecteur',
+    label: 'Question vidéo (projo)',
+    description: 'FullscreenVideo réel : vérifier les caches du titre YouTube.',
+    state: () =>
+      baseState({
+        status: 'media',
+        phaseEndsAt: serverNow() + 31000,
+        question: {
+          ...QUESTION_QCM,
+          question: 'De quel jeu vient cette cinématique ?',
+          videoYoutube: 'M7lc1UVf-VE?time=10&duration=30',
+        },
       }),
   },
   {

@@ -29,6 +29,14 @@ export interface UseGameSessionOptions {
 export function useGameSession(idOrCode: string | null, options: UseGameSessionOptions = {}) {
   const [state, setState] = useState<PublicState | null>(null);
   const [you, setYou] = useState<You | null>(null);
+  /**
+   * Vrai quand une reponse /state REQUETEE AVEC LE TOKEN COURANT est revenue
+   * avec you=null : le serveur ne connait plus ce joueur (kick GM). Distinct
+   * de l'etat initial you=null, qui ne prouve rien (premiere requete possible
+   * sans token). C'est le signal qui permet a PlayerApp de purger l'identite
+   * locale au lieu de tourner sur un spinner infini.
+   */
+  const [youAbsent, setYouAbsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const versionRef = useRef(0);
   const tokenRef = useRef(options.playerToken ?? null);
@@ -63,7 +71,10 @@ export function useGameSession(idOrCode: string | null, options: UseGameSessionO
             // "you" n'est mis à jour que par une réponse requêtée avec le token
             // COURANT : une requête partie sans token (ou avec un ancien) qui se
             // termine après un join ne doit pas écraser l'identité fraîche
-            if (usedToken !== null && usedToken === tokenRef.current) setYou(data.you);
+            if (usedToken !== null && usedToken === tokenRef.current) {
+              setYou(data.you);
+              setYouAbsent(data.you === null);
+            }
           }
           setError(null);
         } catch (err) {
@@ -78,6 +89,7 @@ export function useGameSession(idOrCode: string | null, options: UseGameSessionO
   // un token qui apparaît (join, reprise d'identité) => refetch immédiat avec ce token
   const token = options.playerToken ?? null;
   useEffect(() => {
+    setYouAbsent(false);
     if (token) void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -137,7 +149,7 @@ export function useGameSession(idOrCode: string | null, options: UseGameSessionO
     return unsubscribe;
   }, [state?.id, refresh]);
 
-  return { state, you, error, refresh, setYou };
+  return { state, you, youAbsent, error, refresh, setYou };
 }
 
 /** Compte à rebours basé horloge serveur ; re-render ~4x/s */

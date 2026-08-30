@@ -27,7 +27,22 @@ import {
 } from '../ui/bits';
 import { gameAudio } from './audio';
 import { useSansZoom } from '../../hooks/useSansZoom';
-import { REVEAL_BARRES_MS, REVEAL_IMAGE_MS, REVEAL_RAPIDE_MS, REVEAL_REPONSE_MS, REVEAL_SERIE_MS, serverNow, SPEED_BONUS } from '../lib/gameClient';
+import {
+  AUDIO_PREROLL_MS,
+  AUDIO_REMONTEE_MS,
+  LOBBY_COUNTDOWN_MS,
+  PAUSE_COUNTDOWN_MS,
+  PODIUM_DELAIS_S,
+  QUESTION_REPONSES_MS,
+  REVEAL_BARRES_MS,
+  REVEAL_IMAGE_MS,
+  REVEAL_RAPIDE_MS,
+  REVEAL_REPONSE_MS,
+  REVEAL_SERIE_MS,
+  REVEAL_SUSPENSE_MS,
+  serverNow,
+  SPEED_BONUS,
+} from '../lib/gameClient';
 import { BattleProjectorBody } from './BattleScreens';
 import QuizRules from '../player/QuizRules';
 import '../game.css';
@@ -255,10 +270,15 @@ function ProjectorScreen({
     // 30 s laissait la salle dans le silence complet pendant 10 s.
     // Le ducking a 22 % ne sert plus qu'aux moments de scene (cinematique,
     // verdict), ou la musique reste un tapis sous le roulement de tambour.
+    // L'extrait audio ne s'arrete plus au verrou : il continue en fond
+    // pendant locked et reveal (ducke par ExtraitAudio lui-meme), comme sur
+    // invader_table. La musique de fond reste donc coupee sur ces trois
+    // statuts tant que l'extrait n'est pas naturellement termine.
     const fullSilence =
       !mediaFini &&
       (state.status === 'media' ||
-        (state.status === 'question' && Boolean(q?.musicUrl)));
+        (Boolean(q?.musicUrl) &&
+          (state.status === 'question' || state.status === 'locked' || state.status === 'reveal')));
     gameAudio.duck(
       fullSilence || state.status === 'cinematic' || state.status === 'verdict',
       fullSilence,
@@ -289,7 +309,9 @@ function ProjectorScreen({
         gameAudio.verdictPad();
         break;
       case 'reveal': {
-        gameAudio.revealSweep();
+        // battle garde son sweep synthetique ; le quiz a son mp3 de suspense
+        // cale plus tard dans la sequence (REVEAL_SUSPENSE_MS)
+        if (isBattle) gameAudio.revealSweep();
         if (isBattle) {
           const r = state.battle?.reveal;
           setTimeout(() => {
@@ -301,11 +323,17 @@ function ProjectorScreen({
           }, 1200);
         } else {
           // Cales sur les MEMES constantes que l'animation : c'est tout l'interet
-          // de les avoir sorties dans gameClient. Des valeurs en dur ici avaient
-          // laisse le son de bonne reponse partir 1,1 s avant l'image quand les
-          // temps visuels ont ete ralentis.
+          // de les avoir sorties dans gameClient. Le chime du podium suit le
+          // temps EFFECTIF (decale quand une image de reponse s'intercale),
+          // sinon il sonnait 2,4 s avant les marches.
+          setTimeout(() => gameAudio.revealSuspense(), REVEAL_SUSPENSE_MS);
           setTimeout(() => gameAudio.correctHit(), REVEAL_REPONSE_MS);
-          if (state.reveal?.fastest) setTimeout(() => gameAudio.fastestChime(), REVEAL_RAPIDE_MS);
+          const tPodium = state.question?.imageAnswerUrl
+            ? REVEAL_REPONSE_MS + REVEAL_IMAGE_MS + 200
+            : REVEAL_RAPIDE_MS;
+          if (state.question?.type === 'qcm' && (state.reveal?.fastestTop?.length ?? 0) > 0) {
+            setTimeout(() => gameAudio.fastestChime(), tPodium);
+          }
         }
         break;
       }
@@ -459,12 +487,7 @@ export function ProjectorBody({
     case 'question':
     case 'locked':
       return (
-        <QuestionProjo
-          state={state}
-          remaining={remaining}
-          answeredCount={answeredCount}
-          onMediaEnded={onMediaEnded}
-        />
+        <QuestionProjo state={state} remaining={remaining} answeredCount={answeredCount} />
       );
     case 'reveal':
       return <RevealProjo state={state} />;
@@ -501,11 +524,77 @@ export function ProjectorBody({
       />
     ) : null;
 
+  // Couche extrait audio : elle vit ICI et non dans QuestionProjo, car
+  // l'extrait SURVIT a la question. Comme sur invader_table : il continue
+  // pendant le verrou, il est ducke a l'arrivee du reveal, il remonte apres la
+  // bonne reponse, et il ne s'arrete qu'en quittant ces trois statuts (question
+  // suivante, classement).
+  const audioLayer =
+    q?.musicUrl &&
+    (state.status === 'question' || state.status === 'locked' || state.status === 'reveal') ? (
+      <ExtraitAudio
+        src={q.musicUrl}
+        status={state.status}
+        phaseStartedAt={state.phaseStartedAt}
+        mediaVolume={state.config.mediaVolume ?? 0.9}
+        onEnded={onMediaEnded}
+      />
+    ) : null;
+
   return (
     <>
       {body}
       {videoLayer}
+      {audioLayer}
     </>
+  );
+}
+
+/**
+ * Compte a rebours INDICATIF des temps d'attente (lobby 20 min, pause 15 min).
+ * Base sur phaseStartedAt : purement informatif, rien ne se declenche a zero,
+ * le GM garde la main. A zero, on annonce l'imminence au lieu d'un 00:00 mort.
+ * Un toggle regles <-> lobby repose phaseStartedAt et repart : assume.
+ */
+export function CompteARebours({
+  depuis,
+  dureeMs,
+  libelle,
+  grand = false,
+}: {
+  depuis: number | null;
+  dureeMs: number;
+  libelle: string;
+  grand?: boolean;
+}) {
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 500);
+    return () => clearInterval(t);
+  }, []);
+  const reste = depuis === null ? dureeMs : Math.max(0, depuis + dureeMs - maintenant);
+  const mm = Math.floor(reste / 60000);
+  const ss = Math.floor((reste % 60000) / 1000);
+  if (reste <= 0) {
+    return (
+      <p className={`anim-suspense font-black uppercase tracking-[0.25em] text-amber-300 ${grand ? 'text-4xl' : 'text-2xl'}`}>
+        ⏳ C'est imminent !
+      </p>
+    );
+  }
+  return (
+    <div className="flex items-center gap-4">
+      <span className={`font-bold uppercase tracking-[0.25em] text-white/50 ${grand ? 'text-2xl' : 'text-lg'}`}>
+        {libelle}
+      </span>
+      <span
+        className={`rounded-2xl border border-cyan-400/40 bg-cyan-400/10 px-5 py-1.5 font-black tabular-nums text-cyan-200 ${
+          grand ? 'text-6xl' : 'text-4xl'
+        }`}
+      >
+        {mm}:{String(ss).padStart(2, '0')}
+      </span>
+    </div>
   );
 }
 
@@ -562,7 +651,16 @@ export function LobbyProjo({ state }: { state: PublicState }) {
         </div>
       </div>
 
-      <div className="anim-pop mt-10 rounded-full border border-white/15 bg-white/5 px-8 py-3 text-2xl">
+      <div className="anim-fade-up mt-8">
+        <CompteARebours
+          depuis={state.phaseStartedAt}
+          dureeMs={LOBBY_COUNTDOWN_MS}
+          libelle="Début dans"
+          grand
+        />
+      </div>
+
+      <div className="anim-pop mt-6 rounded-full border border-white/15 bg-white/5 px-8 py-3 text-2xl">
         <span className="font-black text-cyan-300 tabular-nums">{state.playerCount}</span>
         <span className="text-white/60"> joueur{state.playerCount > 1 ? 's' : ''} connecté{state.playerCount > 1 ? 's' : ''}</span>
       </div>
@@ -683,9 +781,13 @@ function PauseProjo({ state, remaining }: { state: PublicState; remaining: numbe
                 {state.config.pauseText}
               </p>
             )}
-            <p className="mt-8 text-2xl uppercase tracking-[0.3em] text-white/40">
-              La suite arrive très vite
-            </p>
+            <div className="mt-8 flex justify-center">
+              <CompteARebours
+                depuis={state.phaseStartedAt}
+                dureeMs={PAUSE_COUNTDOWN_MS}
+                libelle="Reprise dans"
+              />
+            </div>
           </>
         )}
       </div>
@@ -750,66 +852,129 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
 // --- Question ----------------------------------------------------------------
 
 /**
- * Extrait audio de la question.
+ * Extrait audio de la question, avec son enveloppe de volume.
  *
- * Il se COUPE dès que la fenêtre de réponse se ferme. `QuestionProjo` reste
- * monté en phase 'locked' (l'écran garde la question à l'affiche), donc un
- * <audio autoPlay> continuait de jouer pendant que le ducking de la musique de
- * fond, lui, se levait : la salle entendait la musique du bar par-dessus
- * l'extrait de la question. Le volume passe par une propriété de l'élément et
- * non par un attribut, sinon l'extrait sort à 100 %, hors de portée du mixer.
+ * Cycle herite d'invader_table : plein volume pendant la question ET le
+ * verrou (le temps de reponse ecoule ne coupe plus la musique), fondu vers le
+ * bas a l'entree du reveal (la revelation parle par-dessus un tapis), remontee
+ * a mi-volume une fois la bonne reponse donnee (AUDIO_REMONTEE_MS apres), et
+ * fondu de sortie quand on quitte question/locked/reveal (le composant est
+ * demonte : l'extrait s'arrete a la question suivante).
+ *
+ * Le fondu est un interval de 60 ms sur el.volume : le projecteur est un
+ * ecran toujours visible, pas de piege de throttling ici. Le volume passe par
+ * la propriete de l'element, jamais par un attribut (sinon 100 %).
  */
-function QuestionAudio({
+function ExtraitAudio({
   src,
-  volume,
-  playing,
+  status,
+  phaseStartedAt,
+  mediaVolume,
   onEnded,
 }: {
   src: string;
-  volume: number;
-  playing: boolean;
-  /** fin de l'extrait, naturelle ou coupee par le verrou */
+  status: string;
+  phaseStartedAt: number | null;
+  mediaVolume: number;
   onEnded?: () => void;
 }) {
   const ref = useRef<HTMLAudioElement | null>(null);
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
+
+  // cible de volume selon le moment de la sequence
+  const [cible, setCible] = useState(mediaVolume);
+  useEffect(() => {
+    if (status !== 'reveal') {
+      setCible(mediaVolume);
+      return;
+    }
+    const debut = phaseStartedAt ?? serverNow();
+    const calc = () => {
+      const ecoule = serverNow() - debut;
+      setCible(
+        ecoule >= REVEAL_REPONSE_MS + AUDIO_REMONTEE_MS ? mediaVolume * 0.5 : mediaVolume * 0.15,
+      );
+    };
+    calc();
+    const t = setInterval(calc, 250);
+    return () => clearInterval(t);
+  }, [status, phaseStartedAt, mediaVolume]);
+
+  // fondu continu vers la cible
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.volume = Math.min(1, Math.max(0, volume));
-    if (playing) void el.play().catch(() => undefined);
-    else {
-      el.pause();
-      // coupe par le verrou : pour la musique de fond, c'est une fin aussi
-      onEndedRef.current?.();
-    }
-  }, [playing, volume]);
+    void el.play().catch(() => undefined);
+    const t = setInterval(() => {
+      const delta = cible - el.volume;
+      if (Math.abs(delta) < 0.02) {
+        el.volume = Math.min(1, Math.max(0, cible));
+        return;
+      }
+      el.volume = Math.min(1, Math.max(0, el.volume + Math.sign(delta) * 0.05));
+    }, 60);
+    return () => clearInterval(t);
+  }, [cible]);
+
   return <audio ref={ref} src={src} autoPlay onEnded={() => onEndedRef.current?.()} />;
 }
 
+/**
+ * La question, en trois temps cales sur phaseStartedAt (un ecran qui recharge
+ * retombe au bon moment ; en 'locked', phase_started_at est reecrit, donc tout
+ * est force visible par le drapeau locked) :
+ *   audio : 0 -> AUDIO_PREROLL_MS, l'extrait joue SEUL (ecran dedie) ;
+ *   la question s'affiche (immediatement sans audio) ;
+ *   les reponses arrivent QUESTION_REPONSES_MS apres, en fondu, toutes
+ *   ensemble : la salle lit l'enonce avant de voir les choix.
+ */
 function QuestionProjo({
   state,
   remaining,
   answeredCount,
-  onMediaEnded,
 }: {
   state: PublicState;
   remaining: number | null;
   answeredCount: number;
-  onMediaEnded?: () => void;
 }) {
   const q = state.question;
-  if (!q) return null;
   const locked = state.status === 'locked';
+
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 200);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!q) return null;
   const totalMs = state.phaseEndsAt && state.phaseStartedAt ? state.phaseEndsAt - state.phaseStartedAt : state.config.questionMs;
-  // la video s'est jouee plein ecran AVANT (phase 'media') : ici, une question
-  // video s'affiche comme une question sans media, pleine largeur
   const hasImage = Boolean(q.imageQuestionUrl);
+
+  const ecoule = maintenant - (state.phaseStartedAt ?? maintenant);
+  const preroll = q.musicUrl ? AUDIO_PREROLL_MS : 0;
+  const questionVisible = locked || ecoule >= preroll;
+  const reponsesVisibles = locked || ecoule >= preroll + QUESTION_REPONSES_MS;
+
+  // ecran dedie du pre-roll audio : l'extrait seul, un decompte, rien a lire
+  if (!questionVisible && q.musicUrl) {
+    const resteS = Math.max(0, Math.ceil((preroll - ecoule) / 1000));
+    return (
+      <FullCenter>
+        <div className="anim-glow flex h-72 w-72 items-center justify-center rounded-full border-4 border-cyan-400/50 bg-cyan-400/10 text-9xl">
+          🎵
+        </div>
+        <p className="mt-10 text-3xl font-black uppercase tracking-[0.35em] text-cyan-300">
+          Écoute bien...
+        </p>
+        <p className="mt-4 text-6xl font-black tabular-nums text-white/70">{resteS}</p>
+      </FullCenter>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col px-12 py-8">
-      <div className="mb-6 flex items-start justify-between gap-8">
+      <div className="anim-fade-up mb-6 flex items-start justify-between gap-8">
         <div className="min-w-0">
           <p className="text-xl uppercase tracking-widest text-white/40">
             Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''} · {q.difficulty}
@@ -834,23 +999,23 @@ function QuestionProjo({
             ) : (
               <div className="anim-glow flex h-56 w-56 items-center justify-center rounded-full border-2 border-cyan-400/40 bg-cyan-400/10 text-8xl">
                 🎵
-                {q.musicUrl && (
-                  <QuestionAudio
-                    src={q.musicUrl}
-                    volume={state.config.mediaVolume ?? 0.9}
-                    playing={state.status === 'question'}
-                    onEnded={onMediaEnded}
-                  />
-                )}
               </div>
             )}
           </div>
         )}
 
-        <div className={`grid content-center gap-4 ${hasImage || q.musicUrl ? 'w-[46%]' : 'flex-1 grid-cols-2'}`}>
+        {/* fondu GLOBAL des reponses : pas de stagger, tout arrive ensemble */}
+        <div
+          className={`grid content-center gap-4 ${hasImage || q.musicUrl ? 'w-[46%]' : 'flex-1 grid-cols-2'}`}
+          style={{
+            opacity: reponsesVisibles ? 1 : 0,
+            transform: reponsesVisibles ? 'translateY(0)' : 'translateY(18px)',
+            transition: 'opacity 700ms ease, transform 700ms cubic-bezier(0.3, 1.1, 0.4, 1)',
+          }}
+        >
           {q.type === 'qcm' ? (
             (q.answers ?? []).map((a, i) => (
-              <div key={i} className="anim-fade-up rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-3xl font-bold" style={{ animationDelay: `${i * 0.08}s` }}>
+              <div key={i} className="rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-3xl font-bold">
                 <span className="mr-3 font-black text-cyan-300">{String.fromCharCode(65 + i)}</span>
                 {a}
               </div>
@@ -1271,6 +1436,16 @@ function PodiumProjo({
 
   // ordre d'affichage : 2e, 1er, 3e (podium classique)
   const places = [1, 0, 2].filter((i) => i < entrees.length);
+  /**
+   * Taille du pseudo selon sa longueur : on prefere le lire ENTIER un cran
+   * plus petit que tronque (retour de la premiere soiree : « Jean-Bapti... »
+   * sur le podium, personne ne se reconnaissait).
+   */
+  const taillePseudo = (pseudo: string, premier: boolean): string => {
+    if (pseudo.length > 14) return premier ? 'text-xl' : 'text-lg';
+    if (pseudo.length > 9) return premier ? 'text-2xl' : 'text-xl';
+    return premier ? 'text-4xl' : 'text-3xl';
+  };
   const hauteurs = [112, 86, 68];
   const medailles = ['🥇', '🥈', '🥉'];
 
@@ -1298,13 +1473,13 @@ function PodiumProjo({
         <div className="mt-3 flex items-end justify-center gap-5">
           {places.map((i) => {
             const e = entrees[i];
-            // le 3e sort en premier, le 1er en dernier
-            const delai = (entrees.length - 1 - i) * 0.65;
+            // le 3e sort en premier, le 2e ensuite, et le 1er se fait desirer
+            const delai = PODIUM_DELAIS_S[i] ?? 0;
             const premier = i === 0;
             return (
               <div
                 key={e.pseudo}
-                className="flex w-44 flex-col items-center"
+                className="flex w-56 flex-col items-center"
                 style={{
                   opacity: visible ? 1 : 0,
                   transform: visible ? 'translateY(0) scale(1)' : 'translateY(30px) scale(0.85)',
@@ -1315,7 +1490,7 @@ function PodiumProjo({
                   {medailles[i]}
                 </span>
                 <span
-                  className={`mt-1.5 max-w-full truncate font-black ${palette.texte} ${premier ? 'text-4xl' : 'text-3xl'}`}
+                  className={`mt-1.5 max-w-full truncate font-black ${palette.texte} ${taillePseudo(e.pseudo, premier)}`}
                 >
                   {e.pseudo}
                 </span>
@@ -1417,7 +1592,14 @@ function LeaderboardProjo({ state }: { state: PublicState }) {
       {affiches.length > 0 && (
         <div
           className="grid min-h-0 flex-1 content-start gap-x-8 gap-y-1.5"
-          style={{ gridTemplateColumns: `repeat(${colonnes}, minmax(0, 1fr))` }}
+          // Lecture en COLONNES : 4-5-6 se lisent vers le bas, pas vers la
+          // droite (retour de la premiere soiree, l'oeil suit un classement
+          // verticalement). grid-auto-flow: column exige des rangees definies.
+          style={{
+            gridTemplateColumns: `repeat(${colonnes}, minmax(0, 1fr))`,
+            gridTemplateRows: `repeat(${Math.max(1, Math.ceil(affiches.length / colonnes))}, minmax(0, auto))`,
+            gridAutoFlow: 'column',
+          }}
         >
           {affiches.map((s) => (
             <StandingRow key={s.pseudo} s={s} big={!dense} />
