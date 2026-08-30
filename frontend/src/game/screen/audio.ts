@@ -304,6 +304,9 @@ export class GameAudio {
       if (!this.suspenseEl) {
         this.suspenseEl = new Audio(answersRevealUrl);
       }
+      // one-shot : un second appel pendant la lecture est toujours un doublon
+      // (double-montage StrictMode en dev, sauts du laboratoire)
+      if (!this.suspenseEl.paused) return;
       this.suspenseEl.volume = Math.min(1, 0.5 * this.sfxVolume);
       this.suspenseEl.currentTime = 0;
       void this.suspenseEl.play().catch(() => undefined);

@@ -321,20 +321,13 @@ function ProjectorScreen({
             else gameAudio.correctHit();
             if (r?.milestone != null) setTimeout(() => gameAudio.milestoneHit(), 1000);
           }, 1200);
-        } else {
-          // Cales sur les MEMES constantes que l'animation : c'est tout l'interet
-          // de les avoir sorties dans gameClient. Le chime du podium suit le
-          // temps EFFECTIF (decale quand une image de reponse s'intercale),
-          // sinon il sonnait 2,4 s avant les marches.
-          setTimeout(() => gameAudio.revealSuspense(), REVEAL_SUSPENSE_MS);
-          setTimeout(() => gameAudio.correctHit(), REVEAL_REPONSE_MS);
-          const tPodium = state.question?.imageAnswerUrl
-            ? REVEAL_REPONSE_MS + REVEAL_IMAGE_MS + 200
-            : REVEAL_RAPIDE_MS;
-          if (state.question?.type === 'qcm' && (state.reveal?.fastestTop?.length ?? 0) > 0) {
-            setTimeout(() => gameAudio.fastestChime(), tPodium);
-          }
         }
+        // quiz : les cues du reveal (suspense, bonne reponse, podium) vivent
+        // dans RevealProjo, a seuils sur l'horloge serveur comme le visuel.
+        // Des setTimeout poses ICI au changement de statut rejouaient toute la
+        // bande-son depuis le debut sur un ecran recharge en plein reveal, et
+        // ne jouaient jamais dans le laboratoire (qui monte ProjectorBody sans
+        // cet ecran).
         break;
       }
       case 'round_end':
@@ -1184,6 +1177,31 @@ function RevealProjo({ state }: { state: PublicState }) {
   const tSerie = imageReponse ? finImage + 2600 : REVEAL_SERIE_MS;
   const rapideDevoile = ecoule >= tRapide;
   const serieDevoilee = ecoule >= tSerie;
+
+  // CUES AUDIO, memes seuils que le visuel. Chaque cue a une fenetre de
+  // fraicheur : il ne part qu'a son heure (pas en rafale sur un ecran qui
+  // arrive en retard, ou le suspense d'il y a 6 s n'a plus de sens) et une
+  // seule fois par question.
+  const cuesJoues = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    cuesJoues.current.clear();
+  }, [state.currentQuestionIndex]);
+  const estQcm = q?.type === 'qcm';
+  const aPodium = estQcm && (reveal?.fastestTop?.length ?? 0) > 0;
+  const annulee = Boolean(reveal?.cancelled);
+  useEffect(() => {
+    if (annulee) return;
+    const frais = (t: number) => ecoule >= t && ecoule < t + 1500;
+    const joue = (cle: string, quand: boolean, fn: () => void) => {
+      if (quand && !cuesJoues.current.has(cle)) {
+        cuesJoues.current.add(cle);
+        fn();
+      }
+    };
+    joue('suspense', frais(REVEAL_SUSPENSE_MS), () => gameAudio.revealSuspense());
+    joue('reponse', frais(REVEAL_REPONSE_MS), () => gameAudio.correctHit());
+    joue('podium', frais(tRapide) && aPodium, () => gameAudio.fastestChime());
+  }, [ecoule, annulee, tRapide, aPodium]);
 
   if (!q || !reveal) return null;
   if (reveal.cancelled) {

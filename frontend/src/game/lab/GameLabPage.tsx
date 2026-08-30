@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import JokerWheel from '../components/JokerWheel';
 import { PlayerScreen } from '../player/PlayerApp';
+import { gameAudio } from '../screen/audio';
 import { ProjectorBody } from '../screen/ScreenApp';
 import { JOKER_TYPES, type JokerType, type PublicState, type You } from '../lib/gameClient';
 import QuizRules, { NB_CHAPITRES_REGLES } from '../player/QuizRules';
@@ -50,6 +51,13 @@ export default function GameLabPage() {
   const [sautMs, setSautMs] = useState(0);
   /** regles : chapitre fige, ou null pour laisser la sequence tourner */
   const [chapitre, setChapitre] = useState<number | null>(null);
+  /**
+   * Le son du jeu exige un geste utilisateur (autoplay policy) : sur le vrai
+   * projecteur c'est le voile « Activer le son », ici c'est ce bouton. Sans
+   * lui, les cues du reveal (suspense, bonne reponse, podium) restent muets
+   * et on croit a tort qu'ils ne sont pas branches.
+   */
+  const [sonActif, setSonActif] = useState(gameAudio.enabled);
 
   const scenario = SCENARIOS.find((s) => s.cle === scenarioCle) ?? SCENARIOS[0];
   const estRegles = scenario.cle === 'regles' || scenario.cle === 'projo-regles';
@@ -213,10 +221,25 @@ export default function GameLabPage() {
             <button
               type="button"
               onClick={() => {
+                gameAudio.enable();
+                setSonActif(true);
+              }}
+              className={`ml-auto rounded-lg border px-3 py-1.5 text-sm font-bold ${
+                sonActif
+                  ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300'
+                  : 'border-amber-400/50 bg-amber-400/10 text-amber-200'
+              }`}
+              title="Le navigateur exige un clic avant de laisser jouer du son"
+            >
+              {sonActif ? '🔊 Son actif' : '🔇 Activer le son'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setSautMs(0);
                 setRunId((v) => v + 1);
               }}
-              className="ml-auto rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-4 py-1.5 text-sm font-bold text-cyan-200 hover:bg-cyan-400/20"
+              className="rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-4 py-1.5 text-sm font-bold text-cyan-200 hover:bg-cyan-400/20"
             >
               ↻ Rejouer la séquence
             </button>
