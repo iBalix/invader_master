@@ -116,9 +116,13 @@ export interface ChessState {
   /** dernière invitation générale envoyée au bar (anti-spam) */
   inviteAt?: number;
   /**
-   * playerId ayant confirmé « je suis prêt » (statut 'ready'). Même motif que
-   * les `skipVotes` du blackjack : on attend l'unanimité des sièges humains.
-   * Le siège machine est réputé prêt d'office.
+   * Attente de confirmation avant le premier coup. Tant que ce champ existe,
+   * la partie est en 'playing' mais la pendule n'est pas armee : on attend que
+   * chaque siege humain confirme. Il est SUPPRIME au depart reel.
+   *
+   * C'est un champ d'etat et non un statut, exprès : un statut supplementaire
+   * casserait les dalles qui n'ont pas encore recharge leur bundle (cf. le
+   * commentaire de ChessSessionStatus).
    */
   readyBy?: string[];
 }

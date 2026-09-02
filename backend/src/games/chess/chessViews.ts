@@ -98,10 +98,11 @@ export function buildChessPublicState(session: SessionRow): ChessPublicState {
     turn: state.turn,
     clocks,
     drawOffer: state.drawOffer?.by ?? null,
-    // confirmations de depart (statut 'ready') : « 1/2 » cote joueur. On ne
-    // sort que des compteurs, jamais les playerId.
+    // Confirmations de depart : « 1/2 » cote joueur. Non nul UNIQUEMENT pendant
+    // l'attente, ce qui sert aussi de signal au client (« affiche l'ecran de
+    // confirmation »). On ne sort que des compteurs, jamais les playerId.
     ready:
-      session.status === 'ready'
+      state.readyBy !== undefined
         ? {
             count: (['w', 'b'] as const).filter((c) => {
               const seat = state.seats[c];

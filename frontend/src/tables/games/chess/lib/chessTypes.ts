@@ -41,7 +41,7 @@ export interface ChessPublicState {
   id: string;
   joinCode: string;
   mode: 'chess';
-  status: 'lobby' | 'ready' | 'playing' | 'end';
+  status: 'lobby' | 'playing' | 'end';
   v: number;
   serverNow: number;
   phaseStartedAt: number | null;
@@ -59,7 +59,12 @@ export interface ChessPublicState {
   /** restants décomptés à serverNow */
   clocks: { wMs: number; bMs: number; running: boolean } | null;
   drawOffer: ChessColor | null;
-  /** confirmations de depart (statut 'ready'), ex. { count: 1, total: 2 } */
+  /**
+   * Non nul tant que la partie attend la confirmation des joueurs (la pendule
+   * n'est alors pas armee). C'est CE champ qui declenche l'ecran de
+   * confirmation, et non un statut : un statut supplementaire cassait les
+   * dalles n'ayant pas recharge leur bundle.
+   */
   ready: { count: number; total: number } | null;
   check: boolean;
   rematch: { offers: { w: boolean; b: boolean }; sessionId: string | null };

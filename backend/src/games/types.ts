@@ -35,12 +35,16 @@ export type BattleStatus =
 
 /** échecs : pas de phases de questions, 3 états suffisent (le détail vit dans runtime.chess) */
 /**
- * 'ready' : les deux sieges sont pris mais la pendule N'EST PAS armee. On
- * attend que chaque joueur confirme, puis un decompte de 3 s precede le
- * depart. Sans ce sas, le chrono partait des l'arrivee de l'adversaire (et
- * pire encore sur une revanche : des le clic, avant meme la navigation).
+ * L'attente de confirmation avant le premier coup n'est PAS un statut : elle
+ * vit dans `ChessState.readyBy`, la partie etant deja en 'playing' avec une
+ * pendule non armee.
+ *
+ * Un 4e statut avait ete essaye, et il a casse le bar : les dalles tournent en
+ * kiosk et gardent leur bundle en cache: celles qui n'avaient pas recharge
+ * recevaient un statut inconnu, n'affichaient plus aucun ecran et ne
+ * pouvaient plus jouer. Le contrat de statuts doit rester stable.
  */
-export type ChessSessionStatus = 'lobby' | 'ready' | 'playing' | 'end';
+export type ChessSessionStatus = 'lobby' | 'playing' | 'end';
 
 /** blackjack : phases d'une manche, le détail vit dans runtime.blackjack */
 export type BlackjackStatus =

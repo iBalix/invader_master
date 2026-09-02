@@ -239,7 +239,11 @@ export default function ChessGamePage() {
   );
 
   const status = state?.status ?? 'lobby';
-  const playing = status === 'playing';
+  // « la partie tourne vraiment » : le statut ne suffit plus, il vaut deja
+  // 'playing' pendant l'attente de confirmation. Ce booleen pilote le liseré
+  // de trait, le badge « a toi de jouer » et les actions abandon / nulle, qui
+  // n'ont aucun sens tant que personne n'a confirme.
+  const playing = status === 'playing' && state?.ready == null;
   const myColor: ChessColor | null = isDemo ? (chess.turn() as ChessColor) : (you?.color ?? null);
   const canPlay =
     (isDemo && !state?.result) ||
@@ -497,7 +501,7 @@ export default function ChessGamePage() {
         />
       )}
 
-      {status === 'ready' && (
+      {state.ready !== null && (
         <ReadyOverlay
           ready={state.ready}
           voted={you?.readyVoted ?? false}

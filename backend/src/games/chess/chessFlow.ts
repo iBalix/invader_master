@@ -247,7 +247,8 @@ export async function createChessSession(
     // solo : pas d'adversaire a attendre, mais on passe quand meme par la
     // confirmation, sinon la pendule du joueur courrait avant qu'il ait vu le
     // plateau. Un seul « pret » a cliquer, le siege machine est pret d'office.
-    status: ai ? 'ready' : 'lobby',
+    // (enterReady, plus bas, repose le statut et le marqueur d'attente.)
+    status: ai ? 'playing' : 'lobby',
     config,
     runtime: { chess: state },
     phaseStartedAt: nowIso(),
@@ -341,10 +342,12 @@ export async function playChessMove(
     if (session.mode !== 'chess') throw httpErr('Session introuvable', 404);
     const state = chessStateOf(session);
     if (session.status === 'lobby') throw httpErr('error_chess_not_started', 409);
-    // sans ce cas, un coup joue pendant la confirmation renvoyait
-    // « partie terminee », message trompeur
-    if (session.status === 'ready') throw httpErr('error_chess_not_ready', 409);
     if (session.status !== 'playing') throw httpErr('error_chess_game_over', 409);
+    // Jouer VAUT confirmer. Ce filet sert aux dalles qui n'ont pas encore
+    // recharge leur bundle : elles ignorent l'ecran de confirmation, posent
+    // directement un coup, et la partie demarre normalement au lieu de rester
+    // bloquee. La pendule s'arme juste avant que le coup ne soit decompte.
+    if (enAttenteDeConfirmation(state)) startPlaying(session, state);
 
     const color = seatColorOf(state, player.id);
     if (!color) throw httpErr('error_chess_not_seated', 403);
@@ -475,7 +478,7 @@ export async function chessPlayerAction(
         case 'ready': {
         // Confirmation de depart. Idempotent : un double appui ne compte
         // qu'une fois.
-        if (session.status !== 'ready') throw httpErr('error_chess_not_ready', 409);
+        if (!enAttenteDeConfirmation(state)) throw httpErr('error_chess_not_ready', 409);
         const votes = state.readyBy ?? [];
         if (!votes.includes(player.id)) state.readyBy = [...votes, player.id];
         if (everyoneReady(state)) {
@@ -631,7 +634,7 @@ async function handleRematch(
   newState.clocks = null;
   const newSession = await insertSession({
     mode: 'chess',
-    status: 'ready',
+    status: 'playing',
     config: newConfig,
     runtime: { chess: newState },
     phaseStartedAt: new Date(now).toISOString(),
@@ -721,11 +724,19 @@ function enterReady(session: SessionRow, state: ChessState): void {
   const aiColor = aiColorOf(session);
   const seatIa = aiColor ? state.seats[aiColor]?.playerId : null;
   state.readyBy = seatIa ? [seatIa] : [];
+  // pendule NON armee : c'est ce qui distingue l'attente d'une partie lancee
   state.clocks = null;
-  session.status = 'ready';
+  // statut 'playing' des maintenant : une dalle qui n'a pas recharge son
+  // bundle continue d'afficher un plateau jouable au lieu d'un ecran mort
+  session.status = 'playing';
   session.started_at = null;
   session.phase_started_at = nowIso();
   session.phase_ends_at = new Date(Date.now() + CHESS_READY_TTL_MS).toISOString();
+}
+
+/** la partie attend-elle encore une confirmation ? */
+function enAttenteDeConfirmation(state: ChessState): boolean {
+  return state.readyBy !== undefined;
 }
 
 /**
@@ -736,6 +747,8 @@ function enterReady(session: SessionRow, state: ChessState): void {
 function startPlaying(session: SessionRow, state: ChessState): void {
   const config = chessConfigOf(session);
   const now = Date.now();
+  // le marqueur d'attente disparait : a partir d'ici c'est une partie normale
+  delete state.readyBy;
   session.status = 'playing';
   session.started_at = nowIso();
   session.phase_started_at = nowIso();
@@ -784,16 +797,16 @@ function chessAdvance(session: SessionRow): boolean {
     finishChess(session, state, { winner: null, reason: 'lobby_expired' });
     return true;
   }
-  if (session.status === 'ready') {
-    // deux echeances possibles sur ce statut : le decompte (tout le monde a
-    // confirme, on part) ou le TTL (personne n'a confirme, la table a ete
-    // abandonnee). Sans cette branche, le sweeper repecherait la session
-    // toutes les 15 s indefiniment.
-    if (everyoneReady(state)) startPlaying(session, state);
-    else finishChess(session, state, { winner: null, reason: 'lobby_expired' });
-    return true;
-  }
   if (session.status === 'playing') {
+    // Attente de confirmation : deux echeances possibles, le decompte (tout le
+    // monde a confirme, on part) ou le TTL (table abandonnee sans confirmer).
+    // Ce test passe AVANT la chute de drapeau, sinon une pendule non armee
+    // serait prise pour une partie sans pendule et terminee en 'inactivity'.
+    if (enAttenteDeConfirmation(state)) {
+      if (everyoneReady(state)) startPlaying(session, state);
+      else finishChess(session, state, { winner: null, reason: 'lobby_expired' });
+      return true;
+    }
     const aiColor = aiColorOf(session);
     // c'est a la machine de jouer et il lui reste du temps : elle joue, la
     // chute de drapeau ne s'applique qu'ensuite
