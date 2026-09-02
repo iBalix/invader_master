@@ -24,6 +24,7 @@ import {
   mediaLabel,
   TYPE_LABELS,
   FullscreenVideo,
+  MEDIA_ANNONCE,
 } from '../ui/bits';
 import { gameAudio } from './audio';
 import { useSansZoom } from '../../hooks/useSansZoom';
@@ -31,6 +32,7 @@ import {
   AUDIO_PREROLL_MS,
   AUDIO_REMONTEE_MS,
   LOBBY_COUNTDOWN_MS,
+  MENTION_VALEUR_MS,
   PAUSE_COUNTDOWN_MS,
   PODIUM_DELAIS_S,
   QUESTION_REPONSES_MS,
@@ -837,6 +839,10 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
   if (!q) return null;
   const special = state.special ? SPECIAL_LABELS[state.special] : null;
   const progress = remaining !== null ? Math.max(0, Math.min(1, remaining / state.config.announceMs)) : 0;
+  // audio et video demandent de se preparer : bandeau dedie sous les badges ;
+  // l'image reste une pastille dans la rangee
+  const media = mediaLabel(q);
+  const bandeau = media === 'audio' || media === 'vidéo' ? MEDIA_ANNONCE[media] : null;
   return (
     <FullCenter>
       <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-white/40">
@@ -851,12 +857,23 @@ function AnnounceProjo({ state, remaining }: { state: PublicState; remaining: nu
         <span className="rounded-full border border-white/15 bg-white/5 px-6 py-2 text-2xl text-white/70">
           {TYPE_LABELS[q.type]}
         </span>
-        {mediaLabel(q) && (
+        {media && !bandeau && (
           <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-6 py-2 text-2xl font-bold uppercase text-cyan-300">
-            {mediaLabel(q)}
+            {media}
           </span>
         )}
       </div>
+      {bandeau && (
+        <div className="anim-pop mt-8">
+          <div className="anim-glow flex items-center gap-6 rounded-2xl border-2 border-cyan-400/60 bg-cyan-400/15 px-10 py-5">
+            <span className="text-6xl">{bandeau.emoji}</span>
+            <div className="text-left">
+              <p className="text-4xl font-black uppercase tracking-wide text-cyan-300">{bandeau.titre}</p>
+              <p className="mt-1 text-2xl text-cyan-100/80">{bandeau.sous}</p>
+            </div>
+          </div>
+        </div>
+      )}
       {special && (
         <div className="anim-pop mt-8 rounded-2xl border-2 border-amber-400/60 bg-amber-400/15 px-10 py-5 text-4xl font-black text-amber-300">
           {special.emoji} QUESTION SPÉCIALE : {special.label}
@@ -1036,7 +1053,7 @@ function QuestionProjo({
         >
           {q.type === 'qcm' ? (
             (q.answers ?? []).map((a, i) => (
-              <div key={i} className="rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-3xl font-bold">
+              <div key={i} className="rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-[2.125rem] font-bold leading-snug">
                 <span className="mr-3 font-black text-cyan-300">{String.fromCharCode(65 + i)}</span>
                 {a}
               </div>
@@ -1754,29 +1771,88 @@ const REWARD_DEFS = [
   { key: 'bonnetDane', emoji: '🫏', title: 'Le bonnet d\'âne', sub: 'On ne le félicite pas' },
 ] as const;
 
+/**
+ * La valeur du record, a lire de loin : le pseudo dit QUI, le chiffre dit
+ * COMBIEN (retour de soiree : « la gachette » sans son temps ne disait rien).
+ * Memes formats que les podiums du reveal : le temps en secondes a deux
+ * decimales, la serie en nombre nu (pas de « d'affilee »), le taux en
+ * pourcentage avec la fraction en dessous.
+ */
+function valeurMention(
+  key: (typeof REWARD_DEFS)[number]['key'],
+  rewards: NonNullable<PublicState['rewards']>,
+): { chiffre: string; unite?: string } | null {
+  switch (key) {
+    case 'fastest':
+      return rewards.fastest
+        ? { chiffre: (rewards.fastest.avgMs / 1000).toFixed(2), unite: 'secondes en moyenne' }
+        : null;
+    case 'bestStrike':
+      return rewards.bestStrike ? { chiffre: String(rewards.bestStrike.strike) } : null;
+    case 'bestRatio':
+    case 'bonnetDane': {
+      const v = rewards[key];
+      if (!v || v.answered <= 0) return null;
+      return {
+        chiffre: `${Math.round((v.correct / v.answered) * 100)} %`,
+        unite: `${v.correct} / ${v.answered} bonnes réponses`,
+      };
+    }
+  }
+}
+
+/**
+ * Les mentions se devoilent une a une, au rythme du SERVEUR (revealed, 6 s par
+ * pas) : aucun seuil client pour l'ordre. phase_started_at est reecrit a
+ * chaque pas, l'ecoule mesure donc la derniere revelation : la valeur suit le
+ * pseudo de MENTION_VALEUR_MS sur cette carte-la, les precedentes montrent
+ * tout d'emblee (un ecran qui recharge retombe juste).
+ */
 function RewardsProjo({ state }: { state: PublicState }) {
   const rewards = state.rewards;
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 200);
+    return () => clearInterval(t);
+  }, []);
   if (!rewards) return null;
+  const ecoule = maintenant - (state.phaseStartedAt ?? maintenant);
   return (
     <FullCenter>
-      <h1 className="mb-12 text-6xl font-black uppercase tracking-widest">🏅 Les mentions spéciales</h1>
+      <h1 className="mb-8 text-6xl font-black uppercase tracking-widest">🏅 Les mentions spéciales</h1>
       <div className="grid w-full max-w-5xl grid-cols-2 gap-8">
         {REWARD_DEFS.map((def, i) => {
           const revealed = rewards.revealed > i;
           const value = rewards[def.key];
+          const mention = revealed ? valeurMention(def.key, rewards) : null;
+          const valeurVisible = revealed && (i < rewards.revealed - 1 || ecoule >= MENTION_VALEUR_MS);
           return (
             <div
               key={def.key}
-              className={`rounded-3xl border px-8 py-8 text-center transition-all ${
+              className={`rounded-3xl border px-8 py-6 text-center transition-all ${
                 revealed ? 'anim-pop border-cyan-400/40 bg-cyan-400/10' : 'border-white/10 bg-white/5 opacity-30'
               }`}
             >
-              <div className="text-6xl">{def.emoji}</div>
+              <div className="text-5xl">{def.emoji}</div>
               <h2 className="mt-3 text-3xl font-black">{def.title}</h2>
               <p className="text-lg text-white/50">{def.sub}</p>
               <p className="mt-4 text-4xl font-black text-cyan-300">
                 {revealed ? (value ? ('pseudo' in value ? value.pseudo : '?') : 'Personne !') : '???'}
               </p>
+              {mention && (
+                <div
+                  style={{
+                    opacity: valeurVisible ? 1 : 0,
+                    transform: valeurVisible ? 'translateY(0) scale(1)' : 'translateY(14px) scale(0.9)',
+                    transition: 'opacity 420ms ease, transform 460ms cubic-bezier(0.3, 1.2, 0.4, 1)',
+                  }}
+                >
+                  <p className="mt-3 text-6xl font-black tabular-nums leading-none text-white">{mention.chiffre}</p>
+                  {mention.unite && (
+                    <p className="mt-2 text-lg font-bold uppercase tracking-wider text-white/50">{mention.unite}</p>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

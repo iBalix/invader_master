@@ -539,6 +539,12 @@ export const REVEAL_MIN_MS = 16000;
 export const REVEAL_IMAGE_MS = 3500;
 /** projecteur : les podiums (vitesse puis series) */
 export const REVEAL_SERIE_MS = 11600;
+/**
+ * Mentions speciales (fin de partie) : le pseudo pop a la revelation (pas
+ * serveur, 6 s par mention), la valeur du record arrive ce delai apres, en
+ * second temps de lecture : d'abord QUI, puis COMBIEN.
+ */
+export const MENTION_VALEUR_MS = 900;
 
 // ---------------------------------------------------------------------------
 // Mise en scene de la question
@@ -546,9 +552,12 @@ export const REVEAL_SERIE_MS = 11600;
 
 /**
  * La question s'affiche seule, puis les reponses arrivent en fondu, toutes
- * ensemble : la salle lit l'enonce avant de se jeter sur les choix.
+ * ensemble : la salle lit l'enonce avant de se jeter sur les choix. 3 s (2 s
+ * a l'origine, un poil court en soiree). Ce temps est pris sur la fenetre de
+ * reponse : le backend ne connait pas ce delai, le chrono reste celui de la
+ * config.
  */
-export const QUESTION_REPONSES_MS = 2000;
+export const QUESTION_REPONSES_MS = 3000;
 /**
  * Question audio : l'extrait joue SEUL pendant ce temps (ecran « extrait en
  * cours »), puis la question apparait et l'extrait continue. Comportement

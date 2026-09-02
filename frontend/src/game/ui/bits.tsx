@@ -136,6 +136,18 @@ export function mediaLabel(q: {
   return null;
 }
 
+/**
+ * Bandeau d'annonce des medias qui demandent de se PREPARER : l'extrait audio
+ * joue seul avant la question, la video passe plein ecran avant elle. La salle
+ * doit le savoir avant, pas le decouvrir (retour de soiree : la pastille
+ * « audio » perdue parmi quatre badges ne preparait personne). L'image, elle,
+ * n'a rien a preparer et reste une simple etiquette.
+ */
+export const MEDIA_ANNONCE: Record<'audio' | 'vidéo', { emoji: string; titre: string; sous: string }> = {
+  audio: { emoji: '🎧', titre: 'Extrait audio', sous: "Tends l'oreille, l'extrait joue avant la question" },
+  'vidéo': { emoji: '🎬', titre: 'Vidéo', sous: "Regarde l'écran, la vidéo passe avant la question" },
+};
+
 export const SPECIAL_LABELS: Record<string, { label: string; emoji: string }> = {
   double: { label: 'POINTS X2', emoji: '✨' },
   quitte_double: { label: 'QUITTE OU DOUBLE COLLECTIF', emoji: '⚡' },

@@ -9,6 +9,8 @@
 
 import extraitDemoUrl from '../assets/answers-reveal.mp3';
 import {
+  AUDIO_PREROLL_MS,
+  QUESTION_REPONSES_MS,
   serverNow,
   type JokerType,
   type PublicState,
@@ -164,10 +166,10 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'question',
     groupe: 'Joueur',
     label: 'Question QCM',
-    description: "L'énoncé d'abord, les réponses en fondu à 2 s.",
+    description: "L'énoncé d'abord, les réponses en fondu à 3 s.",
     sauts: [
       ['Question', 500],
-      ['Réponses', 2400],
+      ['Réponses', QUESTION_REPONSES_MS + 400],
     ],
     state: () =>
       baseState({
@@ -184,8 +186,8 @@ export const SCENARIOS: LabScenario[] = [
     description: "5 s d'extrait seul, puis question, puis réponses.",
     sauts: [
       ['Extrait', 1000],
-      ['Question', 5400],
-      ['Réponses', 7400],
+      ['Question', AUDIO_PREROLL_MS + 400],
+      ['Réponses', AUDIO_PREROLL_MS + QUESTION_REPONSES_MS + 400],
     ],
     state: () =>
       baseState({
@@ -202,7 +204,7 @@ export const SCENARIOS: LabScenario[] = [
     description: 'Saisie du nombre, 30 s de fenêtre.',
     sauts: [
       ['Question', 500],
-      ['Réponses', 2400],
+      ['Réponses', QUESTION_REPONSES_MS + 400],
     ],
     state: () =>
       baseState({
@@ -224,7 +226,7 @@ export const SCENARIOS: LabScenario[] = [
     description: 'Champ texte, 30 s de fenêtre.',
     sauts: [
       ['Question', 500],
-      ['Réponses', 2400],
+      ['Réponses', QUESTION_REPONSES_MS + 400],
     ],
     state: () =>
       baseState({
@@ -553,13 +555,43 @@ export const SCENARIOS: LabScenario[] = [
       }),
   },
   {
+    cle: 'projo-annonce-audio',
+    groupe: 'Projecteur',
+    label: 'Annonce audio (projo)',
+    description: 'Le bandeau « extrait audio » qui prépare la salle.',
+    state: () =>
+      baseState({
+        status: 'announce',
+        phaseEndsAt: serverNow() + 8000,
+        question: { ...QUESTION_QCM, question: undefined, answers: undefined, musicUrl: extraitDemoUrl },
+      }),
+  },
+  {
+    cle: 'projo-annonce-video',
+    groupe: 'Projecteur',
+    label: 'Annonce vidéo (projo)',
+    description: 'Le bandeau « vidéo », avec une question spéciale en plus.',
+    state: () =>
+      baseState({
+        status: 'announce',
+        phaseEndsAt: serverNow() + 8000,
+        special: 'double',
+        question: {
+          ...QUESTION_QCM,
+          question: undefined,
+          answers: undefined,
+          videoYoutube: 'M7lc1UVf-VE?time=10&duration=30',
+        },
+      }),
+  },
+  {
     cle: 'projo-question',
     groupe: 'Projecteur',
     label: 'Question QCM (projo)',
-    description: "L'énoncé d'abord, les réponses en fondu à 2 s.",
+    description: "L'énoncé d'abord, les réponses en fondu à 3 s.",
     sauts: [
       ['Question', 500],
-      ['Réponses', 2400],
+      ['Réponses', QUESTION_REPONSES_MS + 400],
     ],
     state: () =>
       baseState({
@@ -575,8 +607,8 @@ export const SCENARIOS: LabScenario[] = [
     description: "Pré-roll 5 s « écoute bien », l'extrait continue ensuite.",
     sauts: [
       ['Extrait', 1000],
-      ['Question', 5400],
-      ['Réponses', 7400],
+      ['Question', AUDIO_PREROLL_MS + 400],
+      ['Réponses', AUDIO_PREROLL_MS + QUESTION_REPONSES_MS + 400],
     ],
     state: () =>
       baseState({
@@ -729,6 +761,23 @@ export const SCENARIOS: LabScenario[] = [
           device: 'mobile',
           score: Math.max(1, 62 - i * 3 + (i % 3)),
         })),
+      }),
+  },
+  {
+    cle: 'projo-mentions',
+    groupe: 'Projecteur',
+    label: 'Mentions spéciales (projo)',
+    description: 'Les 4 mentions dévoilées, la valeur du record dans la case.',
+    state: () =>
+      baseState({
+        status: 'rewards',
+        rewards: {
+          revealed: 4,
+          fastest: { pseudo: 'Léa', avgMs: 3120 },
+          bestRatio: { pseudo: 'Marco', correct: 18, answered: 20 },
+          bestStrike: { pseudo: 'Sam', strike: 9 },
+          bonnetDane: { pseudo: 'Tom', correct: 3, answered: 19 },
+        },
       }),
   },
   {
