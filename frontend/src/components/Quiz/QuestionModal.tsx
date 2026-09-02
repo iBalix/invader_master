@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Check, AlertTriangle } from 'lucide-react';
+import { X, Check } from 'lucide-react';
 import FileUpload from './FileUpload';
 
 const DIFFICULTIES = ['Facile', 'Moyen', 'Difficile'] as const;
@@ -62,20 +62,6 @@ interface Props {
   onClose: () => void;
   saving?: boolean;
 }
-
-/**
- * Bandeau d'avertissement sur les types de questions.
- *
- * Estimation et Reponse libre sont saisissables en back-office mais pas encore
- * exploitables en jeu : une question de ce type creee aujourd'hui casserait la
- * partie. Le bandeau le dit explicitement plutot que de desactiver les deux
- * boutons, pour que les tests de saisie restent possibles.
- *
- * Il s'efface tout seul le 1er septembre. Si le developpement glisse, il suffit
- * de repousser cette date : c'est le seul endroit a toucher.
- */
-const TYPES_WIP_JUSQUAU = new Date('2026-09-01T00:00:00');
-const TYPES_EN_CHANTIER = new Date() < TYPES_WIP_JUSQUAU;
 
 export default function QuestionModal({ initial, onSave, onClose, saving }: Props) {
   const [form, setForm] = useState<QuestionData>({ ...EMPTY });
@@ -144,17 +130,6 @@ export default function QuestionModal({ initial, onSave, onClose, saving }: Prop
             <X className="w-5 h-5" />
           </button>
         </div>
-
-        {TYPES_EN_CHANTIER && (
-          <div className="mx-5 mt-5 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-            <p className="text-sm text-amber-800">
-              <span className="font-semibold">Utilisez uniquement le type QCM pour le moment.</span>{' '}
-              Les types <em>Estimation</em> et <em>Réponse libre</em> sont en cours de développement
-              et ne doivent pas être utilisés avant le 1<sup>er</sup> septembre.
-            </p>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="p-5 space-y-5">
           {/* Question text */}
