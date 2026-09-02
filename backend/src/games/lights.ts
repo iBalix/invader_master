@@ -164,9 +164,13 @@ export function computeCue(session: SessionRow): ComputedCue | null {
   });
 
   switch (status) {
+    // Lobby et regles = theme par defaut du bar (le saumon chaud, cinq
+    // cibles). La scene 'lobby' (cyan en boucle) s'allumait des l'ouverture de
+    // la session, soit vingt bonnes minutes de bleu avant la premiere question :
+    // l'ambiance ne doit changer qu'avec le jeu lui-meme.
     case 'lobby':
     case 'rules':
-      return base('lobby');
+      return base('idle');
 
     // Pause = THEME PAR DEFAUT du bar. La scene 'pause' heritait de 'lobby'
     // (cyan en boucle sur les deux rampes, les autres cibles gardant la
