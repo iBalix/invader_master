@@ -29,6 +29,8 @@ interface Props {
   onJoinRematch: () => void;
   onSpectateRematch: () => void;
   onBackToLobby: () => void;
+  /** absent quand la partie n'a pas de coups a rejouer (abandon avant depart) */
+  onAnalyse?: () => void;
 }
 
 function titleOf(state: ChessPublicState, t: TFunction): string {
@@ -117,6 +119,7 @@ export default function GameOverOverlay({
   onJoinRematch,
   onSpectateRematch,
   onBackToLobby,
+  onAnalyse,
 }: Props) {
   const t = useT();
   const result = state.result;
@@ -277,6 +280,11 @@ export default function GameOverOverlay({
           {!you && state.rematch.sessionId && (
             <ArcadeButton variant="cyan" size="lg" fullWidth onClick={onSpectateRematch}>
               {t('table.chess.end.rematch.follow')}
+            </ArcadeButton>
+          )}
+          {onAnalyse && (
+            <ArcadeButton variant="cyan" size="lg" fullWidth onClick={onAnalyse}>
+              {t('table.chess.end.analyse')}
             </ArcadeButton>
           )}
           <ArcadeButton variant="ghost" size="lg" fullWidth onClick={onBackToLobby}>

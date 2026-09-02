@@ -26,6 +26,7 @@ import JoinPseudoModal from '../components/JoinPseudoModal';
 import PlayerPanel from '../components/PlayerPanel';
 import SpectatorBadge from '../components/SpectatorBadge';
 import SyncDebugBadge from '../components/SyncDebugBadge';
+import AnalysisOverlay from '../components/AnalysisOverlay';
 import ReadyOverlay from '../components/ReadyOverlay';
 import WaitingOverlay from '../components/WaitingOverlay';
 import { useBoardInteraction } from '../hooks/useBoardInteraction';
@@ -296,6 +297,9 @@ export default function ChessGamePage() {
 
   // ----- quitter (joueur en cours de partie : quitter = abandonner)
   const [quitConfirm, setQuitConfirm] = useState(false);
+  // ouverture de l'analyse de fin : DOIT rester au-dessus du `if (!state)`
+  // plus bas, sinon le hook n'est appele que sur certains rendus
+  const [analyseOpen, setAnalyseOpen] = useState(false);
   const backToLobby = useCallback(() => navigate('/table/games/chess'), [navigate]);
   const handleQuit = useCallback(() => {
     if (!isDemo && you && playing) {
@@ -482,6 +486,17 @@ export default function ChessGamePage() {
         />
       )}
 
+      {analyseOpen && (
+        <AnalysisOverlay
+          state={state}
+          theme={theme}
+          boardSize={boardSize}
+          orientation={orientation}
+          reduced={perf.reduced}
+          onClose={() => setAnalyseOpen(false)}
+        />
+      )}
+
       {status === 'ready' && (
         <ReadyOverlay
           ready={state.ready}
@@ -508,6 +523,7 @@ export default function ChessGamePage() {
             state.rematch.sessionId && navigate(`/table/games/chess/${state.rematch.sessionId}`)
           }
           onBackToLobby={backToLobby}
+          onAnalyse={state.moves.length > 0 ? () => setAnalyseOpen(true) : undefined}
         />
       )}
 
