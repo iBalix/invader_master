@@ -139,7 +139,7 @@ export const SCENARIOS: LabScenario[] = [
     cle: 'regles',
     groupe: 'Joueur',
     label: 'Règles (titre + 9 chapitres)',
-    description: "8 s par chapitre, puis ça se fige sur l'attente.",
+    description: "7 s par chapitre, puis ça se fige sur l'attente.",
     state: () => baseState({ status: 'rules' }),
     you: () => baseYou({}),
   },
@@ -495,6 +495,27 @@ export const SCENARIOS: LabScenario[] = [
       }),
   },
   {
+    cle: 'bar-permanent',
+    groupe: 'Projecteur',
+    label: 'Écran bar BAR01/02',
+    description: 'Page permanente des TV du bar pendant la partie.',
+    state: () =>
+      baseState({
+        status: 'question',
+        phaseEndsAt: serverNow() + 20000,
+        question: QUESTION_QCM,
+        config: {
+          announceMs: 8000,
+          questionMs: 23000,
+          showScores: true,
+          wifiSsid: 'INVADER BAR',
+          wifiPassword: 'invader2026',
+          pauseText: '',
+          musicUrl: null,
+        },
+      }),
+  },
+  {
     cle: 'projo-lobby',
     groupe: 'Projecteur',
     label: "Salle d'attente (projo)",
@@ -634,7 +655,7 @@ export const SCENARIOS: LabScenario[] = [
           type: 'estimation',
           answers: undefined,
           question: 'En quelle année est sortie la PlayStation 1 au Japon ?',
-          musicUrl: 'https://exemple.invalid/extrait.mp3',
+          musicUrl: extraitDemoUrl,
         },
         reveal: r,
       });

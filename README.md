@@ -76,3 +76,5 @@ Back-office du bar connecté Invader : pilotage des dispositifs (tables tactiles
 - **Frontend** : `frontend/` avec `npm run preview`, variable `PORT` pour Vite preview.
 
 Configurer les variables d'environnement (Supabase, `VITE_BACKEND_URL` pour le front, etc.) dans le dashboard Railway.
+
+Écrans du bar : au lancement d'une session quiz/battle, le backend envoie PROJO sur `/screen/PROJO` et BAR01/BAR02 sur `/screen/BAR` via l'agent SRV1, puis les ramène à leur écran par défaut à l'arrêt (`FRONTEND_PUBLIC_URL` optionnel, `SCREENS_AUTOSWITCH=0` pour couper). Le retour au défaut exige la version à jour de `agent/scripts/url_edge_server.ps1` sur SRV1 (`git pull`).

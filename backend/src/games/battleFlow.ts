@@ -38,6 +38,7 @@ import {
   validatePseudo,
   withSession,
 } from './engine.js';
+import { switchScreensToDefault } from './screens.js';
 import { broadcast } from './realtime.js';
 import { ensureQuestionStock } from '../services/battleQuestionGen.js';
 import {
@@ -318,6 +319,9 @@ function battleAdvance(session: SessionRow): boolean {
     case 'closing': {
       session.ended_at = new Date().toISOString();
       setPhase(session, 'end', null);
+      // a la fin du fondu promis aux joueurs, pas au clic stop : sinon Edge
+      // serait tue en plein fondu sur le projecteur
+      switchScreensToDefault('battle end');
       return true;
     }
     default:

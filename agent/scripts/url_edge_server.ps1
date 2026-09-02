@@ -18,9 +18,24 @@ foreach ($client in $filteredClients) {
     try {
         $forceURLFile = "C:\INVADER\forceURL.txt"
 
-        Invoke-Command -ComputerName $client -ScriptBlock {
+        $ecrit = Invoke-Command -ComputerName $client -ScriptBlock {
             param ($GameName, $forceURLFile)
-            
+
+            # 'DEFAULT' = retour a l'ecran de demarrage du poste. Le back-office
+            # ne connait pas cette URL : on la lit ICI, sur le poste lui-meme
+            # (kioskURL.txt), et on l'ecrit comme n'importe quelle URL forcee.
+            # Une chaine vide ne ferait rien : l'agent ne la transmet pas et le
+            # lanceur garde la derniere URL en memoire jusqu'au reboot.
+            if ($GameName -eq 'DEFAULT') {
+                $kioskFile = "C:\INVADER\kioskURL.txt"
+                $default = ""
+                if (Test-Path $kioskFile) { $default = (Get-Content -Path $kioskFile -Raw).Trim() }
+                if ([string]::IsNullOrWhiteSpace($default)) {
+                    throw "kioskURL.txt absent ou vide, retour au defaut impossible"
+                }
+                $GameName = $default
+            }
+
             if (-not (Test-Path "C:\INVADER")) {
                 New-Item -Path "C:\INVADER" -ItemType Directory -Force | Out-Null
             }
@@ -30,9 +45,10 @@ foreach ($client in $filteredClients) {
             }
 
             Set-Content -Path $forceURLFile -Value $GameName
+            $GameName
         } -ArgumentList $GameName, $forceURLFile
 
-        Write-Host "L URL a ete ecrite dans $client : $GameName"
+        Write-Host "L URL a ete ecrite dans $client : $ecrit"
     }
     catch {
         Write-Host "Une erreur est survenue lors du traitement de $client : $_"

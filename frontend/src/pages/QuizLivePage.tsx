@@ -786,15 +786,16 @@ function QuestionCard({
           </h3>
           <div className="flex flex-wrap gap-1.5">
             {(() => {
-              // le plus rapide en JAUNE : parmi les bonnes reponses quand le
-              // verdict est connu (QCM), sinon parmi tous les repondants
-              // (estimation : correct arrive au reveal seulement)
-              const bassin = answers.some((x) => x.correct === true)
-                ? answers.filter((x) => x.correct === true)
-                : answers;
-              const plusRapideId = bassin
-                .filter((x) => x.elapsedMs !== null)
-                .sort((x, y) => (x.elapsedMs ?? 0) - (y.elapsedMs ?? 0))[0]?.playerId;
+              // le plus rapide en JAUNE : QCM uniquement, et parmi les BONNES
+              // reponses seulement (le bonus de vitesse ne recompense que ca).
+              // Avant, faute de bonne reponse connue, le premier venu passait
+              // en jaune, faux compris : l'animateur lisait un mensonge.
+              const plusRapideId =
+                q.type === 'qcm'
+                  ? answers
+                      .filter((x) => x.correct === true && x.elapsedMs !== null)
+                      .sort((x, y) => (x.elapsedMs ?? 0) - (y.elapsedMs ?? 0))[0]?.playerId
+                  : undefined;
               return answers.map((a) => {
                 const rapide = a.playerId === plusRapideId;
                 return (

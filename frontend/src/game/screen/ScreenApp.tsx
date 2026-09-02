@@ -181,7 +181,11 @@ export default function ScreenApp() {
     return <IdleScreen hostname={hostname} />;
   }
   if (!isProjector) {
-    return <BarScreen state={state} />;
+    return (
+      <div className="h-dvh overflow-hidden">
+        <BarScreen state={state} />
+      </div>
+    );
   }
   return (
     <ProjectorScreen state={state} toasts={toasts} answeredCount={answeredCount} />
@@ -201,21 +205,35 @@ function IdleScreen({ hostname }: { hostname: string }) {
   );
 }
 
-function BarScreen({ state }: { state: PublicState }) {
+/**
+ * Page permanente des TV du bar (BAR01 / BAR02) pendant une session.
+ *
+ * Elle reste affichee du lobby a la fin : nom du quiz, wifi (avec le mot de
+ * passe, absent de l'ancienne version) et LE QR pour rejoindre, meme
+ * disposition que le lobby du projecteur pour que la salle reconnaisse les
+ * deux etapes. Pas de compte a rebours ici : il n'aurait de sens qu'en lobby.
+ * Le poste est amene sur cette URL par la bascule automatique (screens.ts) et
+ * renvoye sur son ecran par defaut a l'arret de la session.
+ */
+export function BarScreen({ state }: { state: PublicState }) {
+  const enJeu = state.status !== 'lobby' && state.status !== 'rules';
+  const nb = state.participantCount ?? state.playerCount;
   return (
-    <div className="game-bg flex h-dvh flex-col items-center justify-center gap-8 overflow-hidden px-8 text-center text-white">
-      <p className="anim-pop rounded-full border border-cyan-400/40 bg-cyan-400/10 px-6 py-2 text-xl font-bold uppercase tracking-widest text-cyan-300">
-        🎮 Partie en cours
+    <div className="game-bg flex h-full flex-col items-center justify-center gap-7 overflow-hidden px-10 text-center text-white">
+      <p className="anim-pop rounded-full border border-cyan-400/40 bg-cyan-400/10 px-6 py-2 text-xl font-bold uppercase tracking-[0.35em] text-cyan-300">
+        {state.mode === 'battle' ? 'Battle Royale' : 'Quiz'}
+        {enJeu ? ' · partie en cours' : ' · ça démarre bientôt'}
       </p>
-      <h1 className="anim-title-glow text-balance text-5xl font-black">{state.quizName}</h1>
-      <p className="max-w-xl text-2xl text-white/70">
-        Il n'est pas trop tard : scanne le QR code et rejoins la partie !
+      <h1 className="anim-title-glow text-balance text-6xl font-black">{state.quizName}</h1>
+      <p className="max-w-3xl text-2xl text-white/70">
+        {enJeu
+          ? "Il n'est pas trop tard pour rejoindre, deux étapes et tu joues !"
+          : 'Deux étapes et tu es dans la partie.'}
       </p>
-      <QrCanvas value={playUrl(state.joinCode)} size={260} />
-      <p className="text-xl text-white/50">
-        {state.participantCount ?? state.playerCount} joueur
-        {(state.participantCount ?? state.playerCount) > 1 ? 's' : ''} en jeu · WiFi{' '}
-        <span className="font-bold text-white">{state.config.wifiSsid}</span>
+      <EtapesConnexion state={state} />
+      <p className="text-2xl text-white/50">
+        <span className="font-black text-cyan-300 tabular-nums">{nb}</span> joueur{nb > 1 ? 's' : ''}{' '}
+        {enJeu ? 'en jeu' : 'déjà connecté' + (nb > 1 ? 's' : '')}
       </p>
     </div>
   );
@@ -597,6 +615,52 @@ export function FullCenter({ children }: { children: React.ReactNode }) {
 
 // --- Lobby : accueil WiFi 2 étapes (partagé quiz / battle) -------------------
 
+/**
+ * Les deux etapes pour entrer dans la partie, EMPILEES, avec un seul QR.
+ * Le QR wifi d'avant faisait deux codes cote a cote sur le mur : la salle
+ * scannait l'un pour l'autre et n'arrivait nulle part. Le wifi se lit et se
+ * tape, le QR sert a jouer. Partage entre le lobby du projecteur et la page
+ * permanente des TV du bar.
+ */
+export function EtapesConnexion({ state }: { state: PublicState }) {
+  return (
+    <div className="flex w-full max-w-4xl flex-col gap-6">
+      <div className="anim-fade-up flex items-center gap-8 rounded-3xl border border-white/10 bg-white/5 px-10 py-7">
+        <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-cyan-400/60 bg-cyan-400/10 text-4xl font-black text-cyan-300">
+          1
+        </span>
+        <div className="min-w-0 text-left">
+          <h2 className="text-3xl font-bold">Connecte-toi au WiFi</h2>
+          <p className="mt-2 text-4xl font-black text-cyan-300">{state.config.wifiSsid}</p>
+          {state.config.wifiPassword && (
+            <p className="mt-1 text-2xl text-white/70">
+              mot de passe <span className="font-black text-white">{state.config.wifiPassword}</span>
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div
+        className="anim-fade-up flex items-center gap-8 rounded-3xl border-2 border-violet-400/40 bg-violet-500/10 px-10 py-7"
+        style={{ animationDelay: '0.15s' }}
+      >
+        <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-violet-400/60 bg-violet-400/10 text-4xl font-black text-violet-300">
+          2
+        </span>
+        <div className="min-w-0 flex-1 text-left">
+          <h2 className="text-3xl font-bold">Scanne pour jouer</h2>
+          <p className="mt-2 text-2xl text-white/70">
+            Choisis ton pseudo d'équipe et c'est parti !
+          </p>
+        </div>
+        <div className="shrink-0">
+          <QrCanvas value={playUrl(state.joinCode)} size={230} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function LobbyProjo({ state }: { state: PublicState }) {
   return (
     <FullCenter>
@@ -606,43 +670,7 @@ export function LobbyProjo({ state }: { state: PublicState }) {
       <h1 className="anim-title-glow mb-10 mt-2 text-balance text-center text-6xl font-black">
         {state.quizName}
       </h1>
-      {/* Deux etapes EMPILEES, un seul QR. Le QR wifi d'avant faisait deux
-          codes cote a cote sur le mur : la salle scannait l'un pour l'autre et
-          n'arrivait nulle part. Le wifi se lit et se tape, le QR sert a jouer. */}
-      <div className="flex w-full max-w-4xl flex-col gap-6">
-        <div className="anim-fade-up flex items-center gap-8 rounded-3xl border border-white/10 bg-white/5 px-10 py-7">
-          <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-cyan-400/60 bg-cyan-400/10 text-4xl font-black text-cyan-300">
-            1
-          </span>
-          <div className="min-w-0 text-left">
-            <h2 className="text-3xl font-bold">Connecte-toi au WiFi</h2>
-            <p className="mt-2 text-4xl font-black text-cyan-300">{state.config.wifiSsid}</p>
-            {state.config.wifiPassword && (
-              <p className="mt-1 text-2xl text-white/70">
-                mot de passe <span className="font-black text-white">{state.config.wifiPassword}</span>
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div
-          className="anim-fade-up flex items-center gap-8 rounded-3xl border-2 border-violet-400/40 bg-violet-500/10 px-10 py-7"
-          style={{ animationDelay: '0.15s' }}
-        >
-          <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-violet-400/60 bg-violet-400/10 text-4xl font-black text-violet-300">
-            2
-          </span>
-          <div className="min-w-0 flex-1 text-left">
-            <h2 className="text-3xl font-bold">Scanne pour jouer</h2>
-            <p className="mt-2 text-2xl text-white/70">
-              Choisis ton pseudo d'équipe et c'est parti !
-            </p>
-          </div>
-          <div className="shrink-0">
-            <QrCanvas value={playUrl(state.joinCode)} size={230} />
-          </div>
-        </div>
-      </div>
+      <EtapesConnexion state={state} />
 
       <div className="anim-fade-up mt-8">
         <CompteARebours
@@ -1036,74 +1064,42 @@ function QuestionProjo({
 // --- Révélation ---------------------------------------------------------------
 
 /**
- * Compteur anime de 0 vers `cible`, demarre quand `actif` passe a vrai.
- * Meme courbe que la barre, pour que le chiffre et la barre restent solidaires.
- */
-function useCompteurAnime(cible: number, actif: boolean, dureeMs: number, delaiMs = 0): number {
-  const [valeur, setValeur] = useState(0);
-  useEffect(() => {
-    if (!actif) {
-      setValeur(0);
-      return;
-    }
-    let raf = 0;
-    let debut = 0;
-    const tick = (t: number) => {
-      if (!debut) debut = t;
-      const p = Math.min(1, Math.max(0, (t - debut - delaiMs) / dureeMs));
-      setValeur(Math.round(cible * p));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    // Filet de securite : rAF ne tourne pas si la page ne compose pas. Sans ce
-    // timeout, le chiffre resterait bloque a 0 alors que la barre, elle, est
-    // animee par le compositeur CSS et arriverait bien a destination.
-    const filet = setTimeout(() => setValeur(cible), delaiMs + dureeMs + 120);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(filet);
-    };
-  }, [cible, actif, dureeMs, delaiMs]);
-  return valeur;
-}
-
-/**
  * Une reponse a la revelation, sur le projecteur.
  *
- * La barre part de 0 et monte vers son pourcentage, avec un decalage par
- * reponse : la salle voit la repartition SE CONSTRUIRE au lieu de la decouvrir
- * figee, et devine peu a peu qui l'emporte. Le chiffre compte en meme temps.
+ * La largeur de la barre est une FONCTION DE L'HORLOGE (phaseStartedAt), pas
+ * le resultat d'une transition CSS lancee au montage. Toutes les barres
+ * avancent a la meme vitesse et chacune s'arrete a son pourcentage : la salle
+ * voit la repartition se construire et devine peu a peu qui l'emporte. Le
+ * chiffre est la largeur arrondie, donc solidaire par construction.
  *
- * A ne PAS "simplifier" en posant la largeur finale des le premier rendu :
- * une transition CSS ne joue que sur un changement de valeur. C'etait le defaut
- * d'origine, les barres apparaissaient pleines d'un coup et la revelation
- * tombait a plat, sans que rien ne casse visiblement.
+ * Pourquoi pas une transition unique de 0 vers la cible : elle exigeait que le
+ * navigateur ait PEINT la largeur 0 avant le changement de valeur. Sur le PC du
+ * projecteur, le montage de la revelation depassait la fenetre de 60 ms qu'on
+ * lui laissait, la barre sautait a sa taille finale pendant que le chiffre
+ * (anime a part) comptait tranquillement : « les barres ne bougent plus ». Et
+ * une duree proportionnelle a la cible faisait finir une barre a 5 % en 176 ms.
+ * Ici, une petite transition lisse seulement l'ecart entre deux ticks.
  */
 function LigneReponseProjo({
   lettre,
   texte,
   pourcent,
   pourcentMax,
-  ouvert,
+  avancement,
   correcte,
   devoilee,
 }: {
   lettre: string;
   texte: string;
   pourcent: number;
-  /** plus haut pourcentage de la question, sert d'echelle de temps */
+  /** plus haut pourcentage de la question : atteint a REVEAL_BARRES_MS */
   pourcentMax: number;
-  ouvert: boolean;
+  /** progression 0..1 de la montee, sur l'horloge serveur */
+  avancement: number;
   correcte: boolean;
   devoilee: boolean;
 }) {
-  // MEME VITESSE POUR TOUTES LES BARRES. La duree est proportionnelle a la
-  // cible : elles demarrent ensemble, avancent au meme rythme, et chacune
-  // s'arrete en atteignant son pourcentage. La plus haute met REVEAL_BARRES_MS.
-  // C'est ce qui donne la lecture progressive du resultat, alors qu'une duree
-  // identique pour tous ferait arriver tout le monde en meme temps.
-  const dureeMs = pourcentMax > 0 ? (pourcent / pourcentMax) * REVEAL_BARRES_MS : REVEAL_BARRES_MS;
-  const affiche = useCompteurAnime(pourcent, ouvert, dureeMs);
+  const largeur = Math.min(pourcent, pourcentMax * avancement);
   return (
     <div
       className={`relative overflow-hidden rounded-2xl border-2 px-7 py-5 text-3xl font-bold transition-all duration-500 ${
@@ -1117,11 +1113,9 @@ function LigneReponseProjo({
       <div
         className={`absolute inset-y-0 left-0 ${devoilee && correcte ? 'bg-emerald-400/25' : 'bg-white/10'}`}
         style={{
-          width: `${ouvert ? pourcent : 0}%`,
-          // lineaire, et non easing : une courbe ferait ralentir les grandes
-          // barres en fin de course, on ne verrait plus qu'elles avancent a la
-          // meme vitesse que les petites.
-          transition: `width ${Math.round(dureeMs)}ms linear, background-color 0.5s ease-out`,
+          width: `${largeur}%`,
+          // lisse l'ecart entre deux ticks (150 ms), rien de plus
+          transition: 'width 160ms linear, background-color 0.5s ease-out',
         }}
       />
       <div className="relative flex items-center justify-between">
@@ -1130,7 +1124,7 @@ function LigneReponseProjo({
           {texte}
           {devoilee && correcte && ' \u2714'}
         </span>
-        <span className="text-2xl tabular-nums text-white/60">{affiche}%</span>
+        <span className="text-2xl tabular-nums text-white/60">{Math.round(largeur)}%</span>
       </div>
     </div>
   );
@@ -1148,21 +1142,14 @@ function RevealProjo({ state }: { state: PublicState }) {
   // simple intervalle fait avancer les seuils ; aucun requestAnimationFrame,
   // suspendu des que la page cesse de composer.
   const [maintenant, setMaintenant] = useState(() => serverNow());
-  const [ouvert, setOuvert] = useState(false);
   useEffect(() => {
     const t = setInterval(() => setMaintenant(serverNow()), 150);
     return () => clearInterval(t);
   }, []);
-  useEffect(() => {
-    setOuvert(false);
-    // une frame avant d'ouvrir : la transition CSS a besoin de voir la largeur
-    // 0 rendue avant de partir vers sa cible. setTimeout et NON rAF, pour la
-    // meme raison que ci-dessus.
-    const t0 = setTimeout(() => setOuvert(true), 60);
-    return () => clearTimeout(t0);
-  }, [state.currentQuestionIndex]);
 
   const ecoule = maintenant - (state.phaseStartedAt ?? maintenant);
+  // montee des barres : 0 -> 1 sur REVEAL_BARRES_MS, meme horloge que le reste
+  const avancement = Math.min(1, Math.max(0, ecoule / REVEAL_BARRES_MS));
   const devoilee = ecoule >= REVEAL_REPONSE_MS;
 
   // IMAGE DE REPONSE : elle prend TOUTE la place des podiums pendant quelques
@@ -1201,8 +1188,10 @@ function RevealProjo({ state }: { state: PublicState }) {
     // (correctHit a la bonne reponse, fastestChime au podium) se superposaient
     // et brouillaient le son que la salle connait. Retires a la demande de
     // Romain apres la premiere ecoute ; le battle garde les siens.
-    joue('suspense', frais(REVEAL_SUSPENSE_MS), () => gameAudio.revealSuspense());
-  }, [ecoule, annulee]);
+    // QCM seulement : estimation et reponse libre affichent la reponse
+    // directement, une montee de suspense n'aurait rien a annoncer.
+    joue('suspense', frais(REVEAL_SUSPENSE_MS) && q?.type === 'qcm', () => gameAudio.revealSuspense());
+  }, [ecoule, annulee, q?.type]);
 
   if (!q || !reveal) return null;
   if (reveal.cancelled) {
@@ -1271,7 +1260,7 @@ function RevealProjo({ state }: { state: PublicState }) {
               texte={a}
               pourcent={reveal.percents?.[i] ?? 0}
               pourcentMax={Math.max(1, ...(reveal.percents ?? [0]))}
-              ouvert={ouvert}
+              avancement={avancement}
               correcte={i === reveal.correctIndex}
               devoilee={devoilee}
             />

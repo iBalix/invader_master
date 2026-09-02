@@ -16,7 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import JokerWheel from '../components/JokerWheel';
 import { PlayerScreen } from '../player/PlayerApp';
 import { gameAudio } from '../screen/audio';
-import { ProjectorBody } from '../screen/ScreenApp';
+import { BarScreen, ProjectorBody } from '../screen/ScreenApp';
 import { JOKER_TYPES, type JokerType, type PublicState, type You } from '../lib/gameClient';
 import QuizRules, { NB_CHAPITRES_REGLES } from '../player/QuizRules';
 import { SCENARIOS } from './labFixtures';
@@ -289,7 +289,9 @@ export default function GameLabPage() {
             </CadrePhone>
           ) : (
             <CadreLarge key={runId}>
-              {scenario.groupe === 'Projecteur' ? (
+              {scenario.cle === 'bar-permanent' ? (
+                <BarScreen state={state} />
+              ) : scenario.groupe === 'Projecteur' ? (
                 <div className="game-bg flex h-full w-full flex-col text-white">
                   <ProjectorBody state={state} remaining={null} answeredCount={state.reveal?.answeredCount ?? 0} />
                 </div>

@@ -168,8 +168,12 @@ export function computeCue(session: SessionRow): ComputedCue | null {
     case 'rules':
       return base('lobby');
 
+    // Pause = THEME PAR DEFAUT du bar. La scene 'pause' heritait de 'lobby'
+    // (cyan en boucle sur les deux rampes, les autres cibles gardant la
+    // couleur d'avant) : la salle passait dix minutes dans un bleu sombre qui
+    // pulsait. 'idle' est la seule scene qui adresse les cinq cibles.
     case 'pause':
-      return base('pause');
+      return base('idle');
 
     // Décompte de reprise : l'écran reste celui de la pause, les lumières
     // aussi. Renvoyer null (et non un cue 'pause' de plus) évite un message
@@ -278,8 +282,6 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
     if (!(await isActiveSession(session.id))) return;
 
     const seq = nextSeq();
-    lastCueKey.set(session.id, computed.key);
-
     const sent = sendLightCue({
       v: 1,
       seq,
@@ -287,6 +289,10 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
       scene: computed.scene,
       params: computed.params,
     });
+    // la cle n'est memorisee que si le cue est PARTI : un agent absent une
+    // seconde au mauvais moment laissait sinon le cue marque comme joue, jamais
+    // rejoue, et le bar figeait sur la scene precedente (parfois une boucle)
+    if (sent) lastCueKey.set(session.id, computed.key);
 
     console.log(
       `[lights] cue=${computed.scene} session=${session.id.slice(0, 8)} seq=${seq} sent=${sent}`,

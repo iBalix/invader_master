@@ -24,8 +24,9 @@ import {
   STREAK_BONUS_FROM,
 } from '../lib/gameClient';
 
-// 5 s par slide : les 8 s d'origine trainaient, la salle decroche vite
-const CHAPITRE_MS = 5000;
+// 7 s par slide : 8 s trainaient, 5 s ne laissaient pas finir de lire les
+// chapitres denses (jokers, serie). Retour de la deuxieme soiree : +2 s.
+const CHAPITRE_MS = 7000;
 
 interface Chapitre {
   cle: string;
@@ -433,7 +434,7 @@ export default function QuizRules({
   const index = chapitreForce === undefined ? naturel : chapitreForce % CHAPITRES.length;
   // Temps ecoule DANS le chapitre courant. Sur le dernier il continue de
   // croitre au lieu de repartir a zero : sans ca, les elements deja apparus
-  // disparaitraient toutes les 8 s en clignotant.
+  // disparaitraient a chaque periode en clignotant.
   const dansNaturel = ecoule - naturel * CHAPITRE_MS;
   // Labo : un chapitre choisi s'affiche dans son etat FINAL, tous les seuils
   // franchis. C'est ce qu'on veut pour regler une mise en page ; l'animation

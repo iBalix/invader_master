@@ -9,6 +9,7 @@ import { requireRole } from '../middleware/rbac.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { isAdvanceDue, loadPlayers, loadSession, withSession } from '../games/engine.js';
 import { createQuizSession, gmAction, type ActionParams } from '../games/quizFlow.js';
+import { switchScreensToGame } from '../games/screens.js';
 // import à effet de bord indispensable : enregistre l'advancer 'battle'
 import {
   battleGmAction,
@@ -71,16 +72,17 @@ gameSessionRoutes.post('/', async (req, res) => {
       quizId?: string;
       config?: ActionParams['config'];
     };
-    if (mode === 'battle') {
-      const session = await createBattleSession(config ?? {});
-      res.json({ status: 'success', data: { id: session.id, joinCode: session.join_code } });
-      return;
-    }
-    if (!quizId) {
+    if (mode !== 'battle' && !quizId) {
       res.status(400).json({ status: 'error', message: 'quizId requis' });
       return;
     }
-    const session = await createQuizSession(quizId, config ?? {});
+    const session =
+      mode === 'battle'
+        ? await createBattleSession(config ?? {})
+        : await createQuizSession(quizId as string, config ?? {});
+    // ICI et pas dans createXSession : endActiveSessions a deja tourne avant
+    // insertSession, donc une seule bascule des postes par lancement
+    switchScreensToGame(`${session.mode} ${session.id.slice(0, 8)}`);
     res.json({ status: 'success', data: { id: session.id, joinCode: session.join_code } });
   } catch (err) {
     httpError(res, err);

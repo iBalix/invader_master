@@ -21,6 +21,8 @@ import {
   validatePseudo,
   withSession,
 } from './engine.js';
+import { invalidateActiveSession } from './lights.js';
+import { switchScreensToDefault } from './screens.js';
 import { broadcast } from './realtime.js';
 import { computeReveal } from './scoring.js';
 import {
@@ -329,6 +331,9 @@ export async function createQuizSession(
   // Un seul run PROJO actif à la fois (quiz/battle s'excluent mutuellement).
   // Les jeux de tables (chess, ...) vivent en parallèle : jamais fauchés ici.
   await endActiveSessions(['quiz', 'battle']);
+  // le cache « session qui eclaire le bar » (10 s) ne doit pas jeter les
+  // premiers cues de la session qui nait
+  invalidateActiveSession();
 
   return insertSession({
     mode: 'quiz',
@@ -962,6 +967,9 @@ export async function gmAction(
       case 'stop': {
         session.ended_at = new Date().toISOString();
         setPhase(session, 'end', null);
+        // seul chemin « le GM libere les ecrans » : les postes reviennent a
+        // leur ecran par defaut (le 'end' naturel garde l'ecran de fin)
+        switchScreensToDefault('quiz stop');
         break;
       }
       case 'give-points': {

@@ -298,7 +298,13 @@ function Step-ScenePlayer {
         if ($def) {
             $script:Timeline = @()
             foreach ($st in $def['steps']) { $script:Timeline += ,$st }
-            $script:SceneStart = [DateTime]::UtcNow
+            # Avancer d'UNE periode, pas repartir de maintenant : la boucle se
+            # rechargeait des que le DERNIER pas etait pousse, donc la periode
+            # reelle valait max(atMs) au lieu de loopMs, et le pas atMs:0
+            # suivait le dernier a 20 ms d'ecart. Avec des fondus de 2,8 s, les
+            # ampoules n'atteignaient jamais leur cible : c'est le « ca pulse »
+            # bizarre vu en salle sur lobby, pause et verdict.
+            $script:SceneStart = $script:SceneStart.AddMilliseconds($script:SceneLoopMs)
         }
     }
 }

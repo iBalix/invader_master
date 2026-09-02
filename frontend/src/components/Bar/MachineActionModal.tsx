@@ -63,16 +63,40 @@ const V1_URL_BY_SCREEN: Record<string, string> = {
  * compte, ScreenApp s'en sert pour distinguer un projecteur d'une TV de bar
  * (tout ce qui commence par BAR est une TV).
  */
-const V2_PROJO_URL = 'https://invadermaster-frontend-production.up.railway.app/screen/PROJO';
+const V2_ORIGIN = 'https://invadermaster-frontend-production.up.railway.app';
+const V2_PROJO_URL = `${V2_ORIGIN}/screen/PROJO`;
+const V2_BAR_URL = `${V2_ORIGIN}/screen/BAR`;
+/**
+ * Retour a l'ecran de demarrage du poste (kioskURL.txt), resolu par le script
+ * SRV1. Une chaine vide ne marchait pas : l'agent ne la transmettait pas, et
+ * le lanceur gardait la derniere URL forcee jusqu'au reboot du PC.
+ */
+const DEFAULT_SCREEN = 'DEFAULT';
 
-const PROJO_MODES = [
-  { label: 'Invader', value: '' },
+interface ScreenMode {
+  label: string;
+  value: string;
+}
+
+const PROJO_MODES: ScreenMode[] = [
+  { label: 'Invader', value: DEFAULT_SCREEN },
   { label: 'Quizz', value: 'http://quizz.invader.bar?type=projecteur' },
   { label: 'Battle Royale', value: 'http://quizz.invader.bar/battle.php?type=projecteur&hostname=PROJO' },
   { label: 'TV', value: 'http://localhost/tv.php?type=projecteur&hostname=PROJO' },
   { label: 'Stand Up', value: 'http://localhost/standup.php?type=projecteur&hostname=PROJO' },
   { label: 'V2 · Quiz + Battle (Invader Master)', value: V2_PROJO_URL },
 ];
+
+/** TV du bar (BAR01 / BAR02) : ecran par defaut ou page permanente du quiz */
+const BAR_MODES: ScreenMode[] = [
+  { label: 'Invader', value: DEFAULT_SCREEN },
+  { label: 'V2 · Écran bar quiz (Invader Master)', value: V2_BAR_URL },
+];
+
+const SCREEN_MODES_BY_TYPE: Partial<Record<MachineType, ScreenMode[]>> = {
+  projo: PROJO_MODES,
+  bar: BAR_MODES,
+};
 
 const ACTIONS_BY_TYPE: Record<MachineType, ActionDef[]> = {
   table: [
@@ -158,7 +182,8 @@ export default function MachineActionModal({ machine, tableNames = [], agentConn
   const [actionLogs, setActionLogs] = useState<ActionLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [selectedGame, setSelectedGame] = useState(BORNE_GAMES[0].value);
-  const [selectedProjoMode, setSelectedProjoMode] = useState(PROJO_MODES[0].value);
+  const screenModes = SCREEN_MODES_BY_TYPE[machine.type];
+  const [selectedScreenMode, setSelectedScreenMode] = useState(screenModes?.[0]?.value ?? '');
   const [editingLabels, setEditingLabels] = useState(false);
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editTechName, setEditTechName] = useState('');
@@ -247,17 +272,19 @@ export default function MachineActionModal({ machine, tableNames = [], agentConn
     }
   };
 
-  const handleChangeProjoMode = async () => {
-    setExecuting('projo_mode');
+  const handleChangeScreenMode = async () => {
+    setExecuting('screen_mode');
     try {
+      // targetName = le nom du poste (PROJO, BAR01 ou BAR02) : la bascule
+      // manuelle se fait ecran par ecran
       await api.post('/api/bar/execute-command', {
         command: 'url_edge_server',
-        targetName: 'PROJO',
-        gameName: selectedProjoMode,
+        targetName,
+        gameName: selectedScreenMode,
       });
       await api.post('/api/bar/execute-command', {
         command: 'restart_edge',
-        targetName: 'PROJO',
+        targetName,
       });
       toast.success('Mode d\'affichage modifié');
     } catch (err: any) {
@@ -641,17 +668,17 @@ export default function MachineActionModal({ machine, tableNames = [], agentConn
                   </div>
                 )}
 
-                {machine.type === 'projo' && (
+                {screenModes && (
                   <div className="mt-4 pt-4 border-t">
                     <label className="block text-xs font-medium text-gray-500 mb-2">Mode d'affichage</label>
                     <div className="flex items-center gap-2">
                       <select
-                        value={selectedProjoMode}
-                        onChange={(e) => setSelectedProjoMode(e.target.value)}
+                        value={selectedScreenMode}
+                        onChange={(e) => setSelectedScreenMode(e.target.value)}
                         disabled={!agentConnected || executing !== null}
                         className="flex-1 rounded-lg border border-gray-300 px-3 py-2.5 text-sm bg-white disabled:opacity-50"
                       >
-                        {PROJO_MODES.map((mode) => (
+                        {screenModes.map((mode) => (
                           <option key={mode.label} value={mode.value}>
                             {mode.label}
                           </option>
@@ -659,10 +686,10 @@ export default function MachineActionModal({ machine, tableNames = [], agentConn
                       </select>
                       <button
                         disabled={!agentConnected || executing !== null}
-                        onClick={handleChangeProjoMode}
+                        onClick={handleChangeScreenMode}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-100 hover:bg-green-200 text-green-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {executing === 'projo_mode' ? (
+                        {executing === 'screen_mode' ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
                           <Play className="w-4 h-4" />
@@ -670,7 +697,7 @@ export default function MachineActionModal({ machine, tableNames = [], agentConn
                         Appliquer
                       </button>
                     </div>
-                    {selectedProjoMode === V2_PROJO_URL && (
+                    {selectedScreenMode === V2_PROJO_URL && (
                       <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                         <p className="font-semibold">Un clic sur le projecteur est nécessaire après bascule.</p>
                         <p className="mt-1">
@@ -681,7 +708,8 @@ export default function MachineActionModal({ machine, tableNames = [], agentConn
                         <p className="mt-1.5">
                           Cet écran couvre le quiz <strong>et</strong> le battle : il suit la session
                           lancée depuis « Quiz live » ou « Battle live », et affiche un écran
-                          d'attente entre deux parties.
+                          d'attente entre deux parties. Lancer ou arrêter une session bascule
+                          désormais le projecteur et les TV du bar automatiquement.
                         </p>
                       </div>
                     )}
