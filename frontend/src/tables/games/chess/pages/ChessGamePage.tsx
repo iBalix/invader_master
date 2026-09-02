@@ -26,6 +26,7 @@ import JoinPseudoModal from '../components/JoinPseudoModal';
 import PlayerPanel from '../components/PlayerPanel';
 import SpectatorBadge from '../components/SpectatorBadge';
 import SyncDebugBadge from '../components/SyncDebugBadge';
+import ReadyOverlay from '../components/ReadyOverlay';
 import WaitingOverlay from '../components/WaitingOverlay';
 import { useBoardInteraction } from '../hooks/useBoardInteraction';
 import { useChessSession } from '../hooks/useChessSession';
@@ -478,6 +479,18 @@ export default function ChessGamePage() {
           onJoin={() => setJoinOpen(true)}
           onInvite={() => sendAction('invite')}
           soloVsAi={state.config.ai !== null}
+        />
+      )}
+
+      {status === 'ready' && (
+        <ReadyOverlay
+          ready={state.ready}
+          voted={you?.readyVoted ?? false}
+          seated={isSeatedViewer}
+          busy={busy}
+          phaseEndsAt={state.phaseEndsAt}
+          soloVsAi={state.config.ai !== null}
+          onReady={() => sendAction('ready')}
         />
       )}
 

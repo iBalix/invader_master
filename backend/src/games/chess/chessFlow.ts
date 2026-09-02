@@ -40,7 +40,9 @@ import {
   AI_DEVICE,
   AI_PLAYER_ID,
   CHESS_LOBBY_TOPIC,
+  CHESS_COUNTDOWN_MS,
   CHESS_LOBBY_TTL_MS,
+  CHESS_READY_TTL_MS,
   CHESS_NOCLOCK_IDLE_MS,
   CHESS_THEME_MAX_LEN,
   chessStateOf,
@@ -242,12 +244,14 @@ export async function createChessSession(
 
   const session = await insertSession({
     mode: 'chess',
-    status: ai ? 'playing' : 'lobby',
+    // solo : pas d'adversaire a attendre, mais on passe quand meme par la
+    // confirmation, sinon la pendule du joueur courrait avant qu'il ait vu le
+    // plateau. Un seul « pret » a cliquer, le siege machine est pret d'office.
+    status: ai ? 'ready' : 'lobby',
     config,
     runtime: { chess: state },
     phaseStartedAt: nowIso(),
-    // solo : la partie commence tout de suite, pas d'attente d'adversaire
-    phaseEndsAt: new Date(Date.now() + (ai ? CHESS_NOCLOCK_IDLE_MS : CHESS_LOBBY_TTL_MS)).toISOString(),
+    phaseEndsAt: new Date(Date.now() + (ai ? CHESS_READY_TTL_MS : CHESS_LOBBY_TTL_MS)).toISOString(),
   });
 
   const player = await insertChessPlayer(session.id, input.pseudo, input.device);
@@ -268,24 +272,9 @@ export async function createChessSession(
         pseudo: aiSeatPseudo(ai.level),
         device: AI_DEVICE,
       };
-      const now = Date.now();
-      s.started_at = nowIso();
-      s.phase_started_at = nowIso();
-      if (clock) {
-        st.clocks = {
-          wMs: clock.initialMs,
-          bMs: clock.initialMs,
-          lastMoveAt: new Date(now).toISOString(),
-        };
-      }
-      if (st.turn === aiColor) {
-        // la machine a les blancs : elle ouvre la partie toute seule
-        scheduleAiTurn(s, st, aiColor);
-      } else {
-        s.phase_ends_at = clock
-          ? new Date(now + clock.initialMs).toISOString()
-          : new Date(now + CHESS_NOCLOCK_IDLE_MS).toISOString();
-      }
+      // ni pendule ni coup d'ouverture ici : startPlaying s'en charge apres le
+      // decompte, y compris le premier coup de la machine si elle a les blancs
+      enterReady(s, st);
     }
     markDirty(s);
     return s;
@@ -320,21 +309,7 @@ export async function joinChessSession(
         pseudo: player.pseudo,
         device: player.device,
       };
-      const now = Date.now();
-      s.status = 'playing';
-      s.started_at = nowIso();
-      s.phase_started_at = nowIso();
-      if (config.clock) {
-        state.clocks = {
-          wMs: config.clock.initialMs,
-          bMs: config.clock.initialMs,
-          lastMoveAt: new Date(now).toISOString(),
-        };
-        s.phase_ends_at = new Date(now + config.clock.initialMs).toISOString();
-      } else {
-        state.clocks = null;
-        s.phase_ends_at = new Date(now + CHESS_NOCLOCK_IDLE_MS).toISOString();
-      }
+      enterReady(s, state);
       markDirty(s);
       return s;
     });
@@ -366,6 +341,9 @@ export async function playChessMove(
     if (session.mode !== 'chess') throw httpErr('Session introuvable', 404);
     const state = chessStateOf(session);
     if (session.status === 'lobby') throw httpErr('error_chess_not_started', 409);
+    // sans ce cas, un coup joue pendant la confirmation renvoyait
+    // « partie terminee », message trompeur
+    if (session.status === 'ready') throw httpErr('error_chess_not_ready', 409);
     if (session.status !== 'playing') throw httpErr('error_chess_game_over', 409);
 
     const color = seatColorOf(state, player.id);
@@ -469,6 +447,7 @@ function playAiMove(session: SessionRow, state: ChessState, aiColor: ChessColor)
 // ---------------------------------------------------------------------------
 
 export type ChessPlayerAction =
+  | 'ready'
   | 'resign'
   | 'draw-offer'
   | 'draw-accept'
@@ -493,6 +472,22 @@ export async function chessPlayerAction(
     };
 
     switch (action) {
+        case 'ready': {
+        // Confirmation de depart. Idempotent : un double appui ne compte
+        // qu'une fois.
+        if (session.status !== 'ready') throw httpErr('error_chess_not_ready', 409);
+        const votes = state.readyBy ?? [];
+        if (!votes.includes(player.id)) state.readyBy = [...votes, player.id];
+        if (everyoneReady(state)) {
+          // Tout le monde est pret : 3 s de decompte avant le depart. C'est
+          // l'advancer qui bascule, donc les deux dalles partent ensemble et
+          // un rechargement retombe au bon endroit.
+          session.phase_started_at = nowIso();
+          session.phase_ends_at = new Date(Date.now() + CHESS_COUNTDOWN_MS).toISOString();
+        }
+        markDirty(session);
+        return session;
+      }
       case 'resign': {
         requirePlaying();
         finishChess(session, state, { winner: opponentOf(color), reason: 'resign' });
@@ -630,15 +625,17 @@ async function handleRematch(
     result: null,
   };
 
+  // La revanche naissait en 'playing' AU CLIC : le temps courait pendant que le
+  // perdant lisait encore le recap et n'avait meme pas navigue vers la nouvelle
+  // partie. Elle attend desormais la confirmation, comme un premier depart.
+  newState.clocks = null;
   const newSession = await insertSession({
     mode: 'chess',
-    status: 'playing',
+    status: 'ready',
     config: newConfig,
     runtime: { chess: newState },
     phaseStartedAt: new Date(now).toISOString(),
-    phaseEndsAt: config.clock
-      ? new Date(now + config.clock.initialMs).toISOString()
-      : new Date(now + CHESS_NOCLOCK_IDLE_MS).toISOString(),
+    phaseEndsAt: new Date(now + CHESS_READY_TTL_MS).toISOString(),
   });
 
   // solo : un seul vrai joueur, la machine reprend son siège virtuel
@@ -655,9 +652,9 @@ async function handleRematch(
         pseudo: aiSeatPseudo(newConfig.ai?.level ?? 2),
         device: AI_DEVICE,
       };
-      s.started_at = nowIso();
-      // si la machine ouvre, elle joue toute seule
-      if (st.turn === aiColor) scheduleAiTurn(s, st, aiColor);
+      // ni started_at ni coup d'ouverture : startPlaying s'en charge apres le
+      // decompte, une fois le joueur pret
+      enterReady(s, st);
       markDirty(s);
     });
     rematch.sessionId = newSession.id;
@@ -676,7 +673,7 @@ async function handleRematch(
     const st = chessStateOf(s);
     st.seats.w = { playerId: newWhite.id, pseudo: newWhite.pseudo, device: newWhite.device };
     st.seats.b = { playerId: newBlack.id, pseudo: newBlack.pseudo, device: newBlack.device };
-    s.started_at = nowIso();
+    enterReady(s, st);
     markDirty(s);
   });
 
@@ -713,6 +710,60 @@ export async function listOpenChessSessions(): Promise<SessionRow[]> {
 // Transitions automatiques (drapeau, expirations)
 // ---------------------------------------------------------------------------
 
+/**
+ * Place la session en attente de confirmation. La pendule N'EST PAS armee : en
+ * 'ready', buildChessPublicState calcule deja running=false, donc les deux
+ * panneaux affichent la cadence figee sans traitement particulier.
+ *
+ * Le siege machine ne confirme pas : on le porte deja comme pret.
+ */
+function enterReady(session: SessionRow, state: ChessState): void {
+  const aiColor = aiColorOf(session);
+  const seatIa = aiColor ? state.seats[aiColor]?.playerId : null;
+  state.readyBy = seatIa ? [seatIa] : [];
+  state.clocks = null;
+  session.status = 'ready';
+  session.started_at = null;
+  session.phase_started_at = nowIso();
+  session.phase_ends_at = new Date(Date.now() + CHESS_READY_TTL_MS).toISOString();
+}
+
+/**
+ * Depart effectif : c'est ICI, et seulement ici, que la pendule commence a
+ * tourner. Appele par l'advancer a la fin du decompte, jamais au moment ou un
+ * joueur s'assoit.
+ */
+function startPlaying(session: SessionRow, state: ChessState): void {
+  const config = chessConfigOf(session);
+  const now = Date.now();
+  session.status = 'playing';
+  session.started_at = nowIso();
+  session.phase_started_at = nowIso();
+  if (config.clock) {
+    state.clocks = {
+      wMs: config.clock.initialMs,
+      bMs: config.clock.initialMs,
+      lastMoveAt: new Date(now).toISOString(),
+    };
+    session.phase_ends_at = new Date(now + config.clock.initialMs).toISOString();
+  } else {
+    state.clocks = null;
+    session.phase_ends_at = new Date(now + CHESS_NOCLOCK_IDLE_MS).toISOString();
+  }
+  // l'IA ouvre : elle ne doit reflechir qu'apres le decompte, pas pendant
+  const aiColor = aiColorOf(session);
+  if (aiColor && state.turn === aiColor) scheduleAiTurn(session, state, aiColor);
+}
+
+/** tous les sieges humains ont-ils confirme ? */
+function everyoneReady(state: ChessState): boolean {
+  const votes = state.readyBy ?? [];
+  return (['w', 'b'] as const).every((c) => {
+    const seat = state.seats[c];
+    return !seat || votes.includes(seat.playerId);
+  });
+}
+
 function applyFlagFall(session: SessionRow, state: ChessState): void {
   if (!state.clocks) return;
   const flagged = state.turn;
@@ -731,6 +782,15 @@ function chessAdvance(session: SessionRow): boolean {
   const state = chessStateOf(session);
   if (session.status === 'lobby') {
     finishChess(session, state, { winner: null, reason: 'lobby_expired' });
+    return true;
+  }
+  if (session.status === 'ready') {
+    // deux echeances possibles sur ce statut : le decompte (tout le monde a
+    // confirme, on part) ou le TTL (personne n'a confirme, la table a ete
+    // abandonnee). Sans cette branche, le sweeper repecherait la session
+    // toutes les 15 s indefiniment.
+    if (everyoneReady(state)) startPlaying(session, state);
+    else finishChess(session, state, { winner: null, reason: 'lobby_expired' });
     return true;
   }
   if (session.status === 'playing') {

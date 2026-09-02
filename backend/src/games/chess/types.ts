@@ -115,6 +115,12 @@ export interface ChessState {
   result: ChessResult | null;
   /** dernière invitation générale envoyée au bar (anti-spam) */
   inviteAt?: number;
+  /**
+   * playerId ayant confirmé « je suis prêt » (statut 'ready'). Même motif que
+   * les `skipVotes` du blackjack : on attend l'unanimité des sièges humains.
+   * Le siège machine est réputé prêt d'office.
+   */
+  readyBy?: string[];
 }
 
 export function chessStateOf(session: SessionRow): ChessState {
@@ -137,6 +143,10 @@ export function opponentOf(color: ChessColor): ChessColor {
 
 /** partie en attente d'adversaire : annulée automatiquement au bout de 15 min */
 export const CHESS_LOBBY_TTL_MS = 15 * 60_000;
+/** sans confirmation des deux joueurs, la partie s'annule (table abandonnee) */
+export const CHESS_READY_TTL_MS = 2 * 60_000;
+/** decompte affiche avant le premier coup, une fois tout le monde pret */
+export const CHESS_COUNTDOWN_MS = 3_000;
 /** partie sans pendule : terminée automatiquement après 2 h sans coup */
 export const CHESS_NOCLOCK_IDLE_MS = 2 * 60 * 60_000;
 /** topic realtime du lobby (signal "relis la liste", sans donnée) */

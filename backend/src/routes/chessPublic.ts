@@ -38,6 +38,7 @@ function httpError(res: Parameters<Parameters<typeof chessPublicRoutes.get>[1]>[
 const SQUARE_RE = /^[a-h][1-8]$/;
 const PROMOTIONS = new Set(['q', 'r', 'b', 'n']);
 const PLAYER_ACTIONS = new Set<ChessPlayerAction>([
+  'ready',
   'resign',
   'draw-offer',
   'draw-accept',

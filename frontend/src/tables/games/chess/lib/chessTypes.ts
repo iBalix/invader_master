@@ -41,7 +41,7 @@ export interface ChessPublicState {
   id: string;
   joinCode: string;
   mode: 'chess';
-  status: 'lobby' | 'playing' | 'end';
+  status: 'lobby' | 'ready' | 'playing' | 'end';
   v: number;
   serverNow: number;
   phaseStartedAt: number | null;
@@ -59,6 +59,8 @@ export interface ChessPublicState {
   /** restants décomptés à serverNow */
   clocks: { wMs: number; bMs: number; running: boolean } | null;
   drawOffer: ChessColor | null;
+  /** confirmations de depart (statut 'ready'), ex. { count: 1, total: 2 } */
+  ready: { count: number; total: number } | null;
   check: boolean;
   rematch: { offers: { w: boolean; b: boolean }; sessionId: string | null };
   result: ChessResult | null;
@@ -70,6 +72,8 @@ export interface ChessYou {
   pseudo: string;
   color: ChessColor;
   canMove: boolean;
+  /** ai-je deja confirme « je suis pret » ? */
+  readyVoted: boolean;
   drawOfferFromOpponent: boolean;
   rematch: { sessionId: string; playerToken: string; color: ChessColor } | null;
 }

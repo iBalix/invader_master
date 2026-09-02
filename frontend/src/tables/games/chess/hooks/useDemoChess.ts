@@ -61,6 +61,8 @@ export function useDemoChess(theme: string): DemoChess {
     turn: chess.turn(),
     clocks: null,
     drawOffer: null,
+    // demo hotseat : on ne passe jamais par la confirmation de depart
+    ready: null,
     check: chess.inCheck(),
     rematch: { offers: { w: false, b: false }, sessionId: null },
     result,
@@ -73,6 +75,7 @@ export function useDemoChess(theme: string): DemoChess {
     color: chess.turn(),
     canMove: result === null,
     drawOfferFromOpponent: false,
+    readyVoted: true,
     rematch: null,
   };
 

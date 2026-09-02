@@ -43,6 +43,8 @@ export interface ChessPublicState {
   /** restants DÉCOMPTÉS à serverNow (le client interpole depuis là) */
   clocks: { wMs: number; bMs: number; running: boolean } | null;
   drawOffer: ChessColor | null;
+  /** avancement des confirmations de depart, null hors du statut 'ready' */
+  ready: { count: number; total: number } | null;
   check: boolean;
   rematch: { offers: { w: boolean; b: boolean }; sessionId: string | null };
   result: ChessResult | null;
@@ -96,6 +98,18 @@ export function buildChessPublicState(session: SessionRow): ChessPublicState {
     turn: state.turn,
     clocks,
     drawOffer: state.drawOffer?.by ?? null,
+    // confirmations de depart (statut 'ready') : « 1/2 » cote joueur. On ne
+    // sort que des compteurs, jamais les playerId.
+    ready:
+      session.status === 'ready'
+        ? {
+            count: (['w', 'b'] as const).filter((c) => {
+              const seat = state.seats[c];
+              return seat ? (state.readyBy ?? []).includes(seat.playerId) : false;
+            }).length,
+            total: (['w', 'b'] as const).filter((c) => state.seats[c]).length,
+          }
+        : null,
     // la FEN suffit pour l'échec (pas besoin de rejouer l'historique)
     check: new Chess(state.fen).inCheck(),
     rematch: {
@@ -112,6 +126,8 @@ export interface ChessYou {
   pseudo: string;
   color: ChessColor;
   canMove: boolean;
+  /** ai-je deja confirme « je suis pret » ? */
+  readyVoted: boolean;
   drawOfferFromOpponent: boolean;
   /** posé quand la revanche est créée : de quoi rejoindre la nouvelle partie */
   rematch: { sessionId: string; playerToken: string; color: ChessColor } | null;
@@ -128,6 +144,7 @@ export function buildChessYou(session: SessionRow, player: PlayerRow): ChessYou 
     pseudo: player.pseudo,
     color,
     canMove: session.status === 'playing' && state.turn === color,
+    readyVoted: (state.readyBy ?? []).includes(player.id),
     drawOfferFromOpponent: state.drawOffer?.by === opponentOf(color),
     rematch:
       rematch?.sessionId && rematch.tokens

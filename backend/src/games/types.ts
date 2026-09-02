@@ -34,7 +34,13 @@ export type BattleStatus =
   | 'end';
 
 /** échecs : pas de phases de questions, 3 états suffisent (le détail vit dans runtime.chess) */
-export type ChessSessionStatus = 'lobby' | 'playing' | 'end';
+/**
+ * 'ready' : les deux sieges sont pris mais la pendule N'EST PAS armee. On
+ * attend que chaque joueur confirme, puis un decompte de 3 s precede le
+ * depart. Sans ce sas, le chrono partait des l'arrivee de l'adversaire (et
+ * pire encore sur une revanche : des le clic, avant meme la navigation).
+ */
+export type ChessSessionStatus = 'lobby' | 'ready' | 'playing' | 'end';
 
 /** blackjack : phases d'une manche, le détail vit dans runtime.blackjack */
 export type BlackjackStatus =
