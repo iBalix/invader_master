@@ -273,8 +273,12 @@ function ProjectorScreen({
 
   // musique de fond + volumes
   useEffect(() => {
+    // La battle pilote SON lit de fond (gameAudio.battleBed), qui change de
+    // piste en fondu croise selon le nombre de survivants. Laisser passer un
+    // setMusic(null) ici le coupait net a chaque montage.
+    if (state.mode === 'battle') return;
     gameAudio.setMusic(state.config.musicUrl);
-  }, [state.config.musicUrl]);
+  }, [state.config.musicUrl, state.mode]);
   useEffect(() => {
     gameAudio.setVolumes(state.config.musicVolume ?? 0.35, state.config.sfxVolume ?? 0.8);
   }, [state.config.musicVolume, state.config.sfxVolume]);
@@ -311,11 +315,13 @@ function ProjectorScreen({
     const to = state.status;
     if (from === to) return;
     prevStatus.current = to;
-    const isBattle = state.mode === 'battle';
+    // La BATTLE a ses propres sons, les mp3 travailles du legacy, joues par
+    // BattleProjectorBody a des seuils sur l'horloge serveur. Des cues
+    // synthetiques poses ici doublaient la bande-son et suivaient une autre
+    // horloge que l'image ; et le laboratoire, qui monte ProjectorBody sans
+    // cet ecran, ne les entendait jamais.
+    if (state.mode === 'battle') return;
     switch (to) {
-      case 'round_intro':
-        gameAudio.roundIntroSting();
-        break;
       case 'announce':
         gameAudio.announceSting();
         break;
@@ -325,33 +331,13 @@ function ProjectorScreen({
       case 'locked':
         gameAudio.lockSting();
         break;
-      case 'verdict':
-        gameAudio.verdictPad();
-        break;
-      case 'reveal': {
-        // battle garde son sweep synthetique ; le quiz a son mp3 de suspense
-        // cale plus tard dans la sequence (REVEAL_SUSPENSE_MS)
-        if (isBattle) gameAudio.revealSweep();
-        if (isBattle) {
-          const r = state.battle?.reveal;
-          setTimeout(() => {
-            if (r?.victory) gameAudio.battleVictory();
-            else if (r?.repechage) gameAudio.repechageHit();
-            else if ((r?.eliminated.length ?? 0) > 0) gameAudio.eliminationSting();
-            else gameAudio.correctHit();
-            if (r?.milestone != null) setTimeout(() => gameAudio.milestoneHit(), 1000);
-          }, 1200);
-        }
+      case 'reveal':
         // quiz : les cues du reveal (suspense, bonne reponse, podium) vivent
         // dans RevealProjo, a seuils sur l'horloge serveur comme le visuel.
         // Des setTimeout poses ICI au changement de statut rejouaient toute la
         // bande-son depuis le debut sur un ecran recharge en plein reveal, et
         // ne jouaient jamais dans le laboratoire (qui monte ProjectorBody sans
         // cet ecran).
-        break;
-      }
-      case 'round_end':
-        gameAudio.fanfare();
         break;
       case 'cinematic':
         gameAudio.drumrollStart();
@@ -387,13 +373,16 @@ function ProjectorScreen({
   // chiffre affiché. La clé est la deadline de la phase, unique par question,
   // ce qui évite de reprogrammer à chaque rafraîchissement d'état.
   useEffect(() => {
+    // la battle a son propre son de trois secondes (fichier legacy), pose par
+    // BattleProjectorBody : ne pas y superposer le battement synthetique
+    if (state.mode === 'battle') return;
     if (state.status !== 'question' || state.phaseEndsAt === null) {
       gameAudio.stopAnswerTimer();
       return;
     }
     gameAudio.startAnswerTimer(state.phaseEndsAt - serverNow(), String(state.phaseEndsAt));
     return () => gameAudio.stopAnswerTimer();
-  }, [state.status, state.phaseEndsAt, soundOn]);
+  }, [state.status, state.phaseEndsAt, soundOn, state.mode]);
 
   // décompte de reprise après la pause, même mécanique de programmation
   useEffect(() => {
@@ -711,7 +700,7 @@ export function LobbyProjo({ state }: { state: PublicState }) {
  * meme endroit du cycle. Les delais negatifs font demarrer l'ecran deja peuple
  * au lieu d'attendre vingt secondes que la premiere bulle monte.
  */
-function PauseProjo({ state, remaining }: { state: PublicState; remaining: number | null }) {
+export function PauseProjo({ state, remaining }: { state: PublicState; remaining: number | null }) {
   const EMOJIS = ['🍹', '🍺', '🥤', '🍕', '🎮', '🕹️', '🍿', '🥨'];
 
   // hachage stable : meme pseudo, meme trajectoire, d'un rendu a l'autre

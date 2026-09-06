@@ -7,11 +7,63 @@
  * closing (fondu), end (victoire couronne + confettis).
  */
 
-import { useEffect, useState } from 'react';
-import type { BattleStandingEntry, PublicState } from '../lib/gameClient';
+import { useEffect, useRef, useState } from 'react';
+import {
+  BR_DECOMPTE_MS,
+  BR_INTRO_MANCHE_MS,
+  BR_INTRO_PSEUDOS_MS,
+  BR_PALIER_DUREE_MS,
+  BR_PALIER_MS,
+  BR_REVEAL_COMPTE_MS,
+  BR_REVEAL_ELIMINES_MS,
+  BR_REVEAL_PAS_MS,
+  BR_REVEAL_REPONSE_MS,
+  QUESTION_REPONSES_MS,
+  serverNow,
+  type BattleStandingEntry,
+  type PublicState,
+} from '../lib/gameClient';
 import { DifficultyBadge, TimerRing } from '../ui/bits';
-import { FullCenter, LobbyProjo } from './ScreenApp';
+import { FullCenter, LobbyProjo, PauseProjo } from './ScreenApp';
 import BattleRules from '../player/BattleRules';
+import { gameAudio } from './audio';
+import { fondPourSurvivants, SON_BATTLE } from './battleSounds';
+
+/**
+ * Horloge de phase : ms ecoulees depuis phaseStartedAt, rafraichies a 150 ms.
+ *
+ * TOUTE la mise en scene de la battle se compare a cette valeur, jamais a un
+ * minuteur lance au montage. Un ecran qui recharge en pleine sequence retombe
+ * au bon endroit, et une page qui ne composite pas ne fige rien : c'est la
+ * lecon des barres du reveal du quiz.
+ */
+function useEcoule(state: PublicState): number {
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 150);
+    return () => clearInterval(t);
+  }, []);
+  return maintenant - (state.phaseStartedAt ?? maintenant);
+}
+
+/**
+ * Joue un son UNE fois quand la condition devient vraie, et le rearme quand
+ * elle redevient fausse. Les seuils etant des fonctions de l'horloge, la
+ * condition reste vraie plusieurs ticks : sans cette garde, le son partirait
+ * a chaque rendu.
+ */
+function useCue(actif: boolean, jouer: () => void): void {
+  const arme = useRef(false);
+  useEffect(() => {
+    if (actif && !arme.current) {
+      arme.current = true;
+      jouer();
+    } else if (!actif) {
+      arme.current = false;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [actif]);
+}
 
 /** repli si la session ne publie pas le reglage (vieille session en cours) */
 const STANDINGS_PAGE_DEFAUT_MS = 10000;
@@ -25,6 +77,49 @@ export function BattleProjectorBody({
   remaining: number | null;
   answeredCount: number;
 }) {
+  const s = state.status;
+  const survivants = state.battle?.survivorCount ?? 0;
+
+  // LIT DE FOND ADAPTATIF. Le legacy remplacait la piste a 20, 10 puis 4
+  // survivants : la tension montait toute seule, sans que l'animateur touche a
+  // rien. La piste est choisie sur la valeur PUBLIEE par le serveur, donc un
+  // ecran qui recharge retombe sur la bonne, et le changement se fait en fondu
+  // croise (une coupure nette s'entend comme un bug).
+  useEffect(() => {
+    if (s === 'closing' || s === 'end') {
+      gameAudio.battleBed(null);
+      return;
+    }
+    // hors manche (salle d'attente, regles), le nombre de survivants vaut 0 :
+    // sans cette garde on tombait sur la piste des 4 derniers, la plus tendue
+    const enManche = survivants > 0 && s !== 'lobby' && s !== 'rules';
+    gameAudio.battleBed(enManche ? fondPourSurvivants(survivants) : SON_BATTLE.fondNormal);
+  }, [s, survivants]);
+
+  // nappe des regles, en boucle, coupee des qu'on en sort
+  useEffect(() => {
+    if (s === 'rules') gameAudio.sample(SON_BATTLE.regles, { volume: 0.45, loop: true });
+    else gameAudio.stopSample(SON_BATTLE.regles);
+    return () => gameAudio.stopSample(SON_BATTLE.regles);
+  }, [s]);
+
+  // les trois dernieres secondes du chrono : le son travaille du legacy
+  useEffect(() => {
+    if (s !== 'question' || state.phaseEndsAt === null) {
+      gameAudio.stopAnswerTimer();
+      return;
+    }
+    gameAudio.startBattleTimer(
+      state.phaseEndsAt - serverNow(),
+      String(state.phaseEndsAt),
+      SON_BATTLE.troisSecondes,
+    );
+    return () => gameAudio.stopAnswerTimer();
+  }, [s, state.phaseEndsAt]);
+
+  useCue(s === 'round_end', () => gameAudio.sample(SON_BATTLE.finManche, { volume: 0.7 }));
+  useCue(s === 'end', () => gameAudio.sample(SON_BATTLE.finPartie, { volume: 0.75 }));
+
   switch (state.status) {
     case 'lobby':
       return <LobbyProjo state={state} />;
@@ -33,7 +128,7 @@ export function BattleProjectorBody({
     case 'round_intro':
       return <RoundIntroProjo state={state} />;
     case 'announce':
-      return <BattleAnnounceProjo state={state} remaining={remaining} />;
+      return <BattleAnnounceProjo state={state} />;
     case 'question':
     case 'locked':
       return <BattleQuestionProjo state={state} remaining={remaining} answeredCount={answeredCount} />;
@@ -44,15 +139,10 @@ export function BattleProjectorBody({
     case 'round_end':
       return <RoundEndProjo state={state} />;
     case 'pause':
-      return (
-        <FullCenter>
-          <div className="anim-pop text-center">
-            <div className="mb-6 text-7xl">🍹</div>
-            <h1 className="text-6xl font-black uppercase tracking-wider">C'est la pause !</h1>
-            <p className="mt-6 text-3xl text-cyan-300">{state.config.pauseText}</p>
-          </div>
-        </FullCenter>
-      );
+      // meme ecran vivant que le quiz : pseudos qui derivent et compte a
+      // rebours. Le bloc statique d'avant ne disait pas combien de temps
+      // durait la pause, et la salle revenait au hasard.
+      return <PauseProjo state={state} remaining={remaining} />;
     case 'closing':
       return <ClosingProjo />;
     case 'end':
@@ -66,9 +156,79 @@ export function BattleProjectorBody({
 // Règles + intro de manche
 // ---------------------------------------------------------------------------
 
+/**
+ * Intro de manche, en trois temps comme le legacy : le nuage de categories,
+ * puis le nuage de pseudos, puis le numero de manche. Douze secondes qui
+ * laissent la salle se rassembler et l'animateur presenter la manche.
+ *
+ * Les positions des pseudos sont tirees d'un hachage du pseudo : elles sont
+ * donc STABLES d'un rendu a l'autre et identiques sur les deux dalles d'une
+ * table, contrairement a un Math.random() qui rebattait tout a chaque tick.
+ */
 function RoundIntroProjo({ state }: { state: PublicState }) {
   const b = state.battle;
   const isFinal = b?.isFinal ?? false;
+  const ecoule = useEcoule(state);
+  const temps = ecoule < BR_INTRO_PSEUDOS_MS ? 0 : ecoule < BR_INTRO_MANCHE_MS ? 1 : 2;
+
+  useCue(ecoule >= 200, () => gameAudio.sample(SON_BATTLE.introManche, { volume: 0.7 }));
+
+  const finalistes = (b?.generalStandings ?? []).filter((e) => e.qualifiedForFinal).slice(0, b?.finalSize ?? 10);
+  const noms = isFinal && finalistes.length > 0
+    ? finalistes.map((e) => e.pseudo)
+    : state.players.map((p) => p.pseudo);
+
+  if (temps === 0) {
+    return (
+      <FullCenter>
+        <p className="text-3xl font-black uppercase tracking-[0.35em] text-white/40">Au programme</p>
+        <div className="mt-12 flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-6">
+          {CATEGORIES_INTRO.map((c, i) => (
+            <span
+              key={c}
+              className="font-black uppercase text-cyan-300"
+              style={{
+                fontSize: `${2 + ((i * 7) % 5) * 0.55}rem`,
+                opacity: ecoule >= 400 + i * 180 ? 1 : 0,
+                transform: ecoule >= 400 + i * 180 ? 'scale(1)' : 'scale(0.7)',
+                transition: 'opacity 400ms ease, transform 480ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+              }}
+            >
+              {c}
+            </span>
+          ))}
+        </div>
+      </FullCenter>
+    );
+  }
+
+  if (temps === 1) {
+    const dans = ecoule - BR_INTRO_PSEUDOS_MS;
+    return (
+      <FullCenter>
+        <p className="text-3xl font-black uppercase tracking-[0.35em] text-white/40">
+          {isFinal ? 'Les finalistes' : 'Les combattants'}
+        </p>
+        <div className="mt-10 flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-4">
+          {noms.slice(0, 40).map((pseudo, i) => (
+            <span
+              key={pseudo}
+              className={`font-black ${isFinal ? 'text-amber-300' : 'text-white/85'}`}
+              style={{
+                fontSize: `${1.6 + (hachage(pseudo) % 4) * 0.5}rem`,
+                opacity: dans >= 150 + i * 85 ? 1 : 0,
+                transform: dans >= 150 + i * 85 ? 'translateY(0)' : 'translateY(14px)',
+                transition: 'opacity 360ms ease, transform 400ms ease',
+              }}
+            >
+              {pseudo}
+            </span>
+          ))}
+        </div>
+      </FullCenter>
+    );
+  }
+
   return (
     <FullCenter>
       <h1
@@ -78,27 +238,46 @@ function RoundIntroProjo({ state }: { state: PublicState }) {
       >
         {isFinal ? '👑 LA FINALE' : `MANCHE ${b?.roundNumber ?? 1}`}
       </h1>
-      <p className="anim-fade-up mt-10 text-4xl font-bold text-cyan-300" style={{ animationDelay: '0.5s' }}>
+      <p className="anim-fade-up mt-10 text-4xl font-bold text-cyan-300" style={{ animationDelay: '0.4s' }}>
         {b?.survivorCount} COMBATTANT{(b?.survivorCount ?? 0) > 1 ? 'S' : ''}, 1 SEUL SURVIVANT
       </p>
-      {state.players.length > 0 && (
-        <p className="anim-fade-up mt-10 max-w-5xl text-center text-xl text-white/40" style={{ animationDelay: '0.8s' }}>
-          {state.players.slice(0, 30).map((p) => p.pseudo).join(' · ')}
-          {state.players.length > 30 ? ' · ...' : ''}
-        </p>
-      )}
     </FullCenter>
   );
 }
+
+/** hachage stable d'un pseudo : meme taille sur les deux dalles d'une table */
+function hachage(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+/** les categories de la banque battle, pour le nuage d'intro */
+const CATEGORIES_INTRO = [
+  'Cinéma', 'Musique', 'Histoire', 'Géographie', 'Jeux-vidéo', 'Sport',
+  'Séries TV', 'Culture Pop', 'Montpellier', 'Célébrités', 'France', 'Actualités',
+];
 
 // ---------------------------------------------------------------------------
 // Annonce + question + verdict
 // ---------------------------------------------------------------------------
 
-function BattleAnnounceProjo({ state, remaining }: { state: PublicState; remaining: number | null }) {
+function BattleAnnounceProjo({ state }: { state: PublicState }) {
   const q = state.question;
+  const ecoule = useEcoule(state);
+  // Reste calcule sur l'HORLOGE de phase, pas sur la propriete `remaining` du
+  // conteneur : celle-ci n'existe pas dans le laboratoire, et un ecran qui
+  // recharge doit retomber sur le bon chiffre.
+  const total =
+    state.phaseEndsAt !== null && state.phaseStartedAt !== null
+      ? state.phaseEndsAt - state.phaseStartedAt
+      : state.config.announceMs;
+  const reste = Math.max(0, total - ecoule);
+  const enDecompte = reste <= BR_DECOMPTE_MS;
+  useCue(enDecompte, () => gameAudio.sample(SON_BATTLE.decompte, { volume: 0.65 }));
   if (!q) return null;
-  const progress = remaining !== null ? Math.max(0, Math.min(1, remaining / state.config.announceMs)) : 0;
+  const progress = Math.max(0, Math.min(1, reste / total));
+  const decompte = enDecompte ? Math.max(1, Math.ceil(reste / 1000)) : null;
   return (
     <FullCenter>
       <p className="text-3xl font-semibold uppercase tracking-[0.3em] text-white/40">
@@ -112,10 +291,21 @@ function BattleAnnounceProjo({ state, remaining }: { state: PublicState; remaini
           {state.battle?.survivorCount} SURVIVANT{(state.battle?.survivorCount ?? 0) > 1 ? 'S' : ''}
         </span>
       </div>
-      <p className="mt-12 text-2xl uppercase tracking-[0.3em] text-white/50">Préparez-vous...</p>
-      <div className="mt-4 h-2 w-[420px] overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-cyan-400" style={{ width: `${progress * 100}%`, transition: 'width 0.25s linear' }} />
-      </div>
+      {/* Les trois dernieres secondes deviennent un decompte, comme le legacy :
+          la salle sait EXACTEMENT quand la question tombe et personne ne rate
+          le depart du chrono. */}
+      {decompte !== null ? (
+        <p className="anim-pop mt-10 text-[9rem] font-black leading-none tabular-nums text-cyan-300">
+          {decompte}
+        </p>
+      ) : (
+        <>
+          <p className="mt-12 text-2xl uppercase tracking-[0.3em] text-white/50">Préparez-vous...</p>
+          <div className="mt-4 h-2 w-[420px] overflow-hidden rounded-full bg-white/10">
+            <div className="h-full rounded-full bg-cyan-400" style={{ width: `${progress * 100}%`, transition: 'width 0.25s linear' }} />
+          </div>
+        </>
+      )}
     </FullCenter>
   );
 }
@@ -129,10 +319,14 @@ function BattleQuestionProjo({
   remaining: number | null;
   answeredCount: number;
 }) {
+  const ecoule = useEcoule(state);
   const q = state.question;
   if (!q) return null;
   const grace = state.status === 'locked';
   const totalMs = state.phaseEndsAt && state.phaseStartedAt ? state.phaseEndsAt - state.phaseStartedAt : state.config.questionMs;
+  // meme mise en scene que le quiz : l'enonce se lit seul, les reponses
+  // arrivent en fondu, toutes ensemble. En 'locked' tout est force visible.
+  const reponsesVisibles = grace || ecoule >= QUESTION_REPONSES_MS;
 
   return (
     <div className="flex flex-1 flex-col px-12 py-8">
@@ -152,9 +346,16 @@ function BattleQuestionProjo({
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-2 content-center gap-4">
+      <div
+        className="grid flex-1 grid-cols-2 content-center gap-4"
+        style={{
+          opacity: reponsesVisibles ? 1 : 0,
+          transform: reponsesVisibles ? 'translateY(0)' : 'translateY(18px)',
+          transition: 'opacity 700ms ease, transform 700ms cubic-bezier(0.3, 1.1, 0.4, 1)',
+        }}
+      >
         {(q.answers ?? []).map((a, i) => (
-          <div key={i} className="anim-fade-up rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-3xl font-bold" style={{ animationDelay: `${i * 0.08}s` }}>
+          <div key={i} className="rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-[2.125rem] font-bold leading-snug">
             <span className="mr-3 font-black text-cyan-300">{String.fromCharCode(65 + i)}</span>
             {a}
           </div>
@@ -191,25 +392,52 @@ function VerdictProjo({ state }: { state: PublicState }) {
 // Révélation
 // ---------------------------------------------------------------------------
 
+/**
+ * Revelation, cadencee sur l'horloge SERVEUR.
+ *
+ *   [0 .. BR_REVEAL_REPONSE_MS[      l'enonce seul, la salle retient son souffle
+ *   [REPONSE .. ELIMINES[            la bonne reponse tombe
+ *   [ELIMINES .. COMPTE[             les noms des elimines, un toutes les 550 ms
+ *   [COMPTE .. PALIER[               le compteur de survivants
+ *   [PALIER .. +DUREE[               si un palier est franchi : plein cadre
+ *
+ * L'ancienne version cadencait les noms avec un setInterval lance au montage :
+ * un ecran recharge en pleine revelation repartait de zero, et une page non
+ * peinte restait figee. Les sons partent des memes seuils, dans ce composant,
+ * et non d'un setTimeout pose au changement de statut : ils suivaient sinon
+ * une horloge differente de l'image.
+ */
 function BattleRevealProjo({ state }: { state: PublicState }) {
   const q = state.question;
   const reveal = state.battle?.reveal;
-  const [revealedNames, setRevealedNames] = useState(0);
+  const ecoule = useEcoule(state);
 
-  useEffect(() => {
-    setRevealedNames(0);
-    if (!reveal || reveal.eliminated.length === 0) return;
-    const interval = setInterval(() => {
-      setRevealedNames((n) => {
-        if (n >= (reveal?.eliminated.length ?? 0)) {
-          clearInterval(interval);
-          return n;
-        }
-        return n + 1;
-      });
-    }, 550);
-    return () => clearInterval(interval);
-  }, [state.currentQuestionIndex, reveal]);
+  const elimines = reveal?.eliminated ?? [];
+  const repechage = Boolean(reveal?.repechage);
+  const palier = reveal?.milestone ?? null;
+
+  // combien de noms sont deja tombes : fonction de l'horloge, pas d'un compteur
+  const montres = Math.max(
+    0,
+    Math.min(elimines.length, Math.floor((ecoule - BR_REVEAL_ELIMINES_MS) / BR_REVEAL_PAS_MS) + 1),
+  );
+  const reponseVisible = ecoule >= BR_REVEAL_REPONSE_MS;
+  const compteVisible = ecoule >= BR_REVEAL_COMPTE_MS;
+  const palierPlein = palier !== null && ecoule >= BR_PALIER_MS && ecoule < BR_PALIER_MS + BR_PALIER_DUREE_MS;
+
+  const annule = Boolean(reveal?.cancelled);
+  useCue(!annule && reponseVisible, () => gameAudio.sample(SON_BATTLE.bonneReponse, { volume: 0.7 }));
+  useCue(!annule && repechage && ecoule >= BR_REVEAL_ELIMINES_MS, () =>
+    gameAudio.sample(SON_BATTLE.transition, { volume: 0.7 }),
+  );
+  useCue(!annule && !repechage && elimines.length > 0 && ecoule >= BR_REVEAL_ELIMINES_MS, () =>
+    gameAudio.sample(SON_BATTLE.elimination, { volume: 0.7 }),
+  );
+  useCue(!annule && compteVisible, () => gameAudio.sample(SON_BATTLE.survivants, { volume: 0.5 }));
+  useCue(palierPlein, () => gameAudio.sample(SON_BATTLE.palier, { volume: 0.7 }));
+  useCue(Boolean(reveal?.victory) && compteVisible, () =>
+    gameAudio.sample(SON_BATTLE.vainqueurManche, { volume: 0.75 }),
+  );
 
   if (!reveal) return null;
   if (reveal.cancelled) {
@@ -224,39 +452,97 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
     );
   }
 
+  // PALIER : prise d'ecran plein cadre, comme les ecrans TOP X du legacy.
+  // C'est le moment fort de la manche, il merite tout l'ecran et pas un
+  // bandeau au coin d'une liste.
+  if (palierPlein) {
+    const dans = ecoule - BR_PALIER_MS;
+    const survivants = (state.battle?.generalStandings ?? [])
+      .filter((e) => !e.isSpectator)
+      .slice(0, palier ?? 0);
+    return (
+      <FullCenter>
+        <h1
+          className="anim-stomp font-black uppercase tracking-widest text-amber-300"
+          style={{ fontSize: '11rem', lineHeight: 1 }}
+        >
+          TOP {palier}
+        </h1>
+        <p className="anim-fade-up mt-6 text-4xl font-bold uppercase tracking-[0.3em] text-white/50">
+          Il ne reste que ça
+        </p>
+        {survivants.length > 0 && (
+          <div className="mt-12 flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-4">
+            {survivants.map((e, i) => (
+              <span
+                key={e.pseudo}
+                className="text-4xl font-black text-white/85"
+                style={{
+                  opacity: dans >= 400 + i * 120 ? 1 : 0,
+                  transform: dans >= 400 + i * 120 ? 'scale(1)' : 'scale(0.8)',
+                  transition: 'opacity 340ms ease, transform 380ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+                }}
+              >
+                {e.pseudo}
+              </span>
+            ))}
+          </div>
+        )}
+      </FullCenter>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col px-12 py-10">
       {q && (
         <div className="mb-6">
           <h1 className="text-balance text-3xl font-black text-white/70">{q.question}</h1>
-          <p className="anim-pop mt-3 inline-block rounded-2xl border-2 border-emerald-400 bg-emerald-400/15 px-6 py-3 text-3xl font-black text-emerald-200">
+          <p
+            className="mt-3 inline-block rounded-2xl border-2 border-emerald-400 bg-emerald-400/15 px-6 py-3 text-3xl font-black text-emerald-200"
+            style={{
+              opacity: reponseVisible ? 1 : 0,
+              transform: reponseVisible ? 'scale(1)' : 'scale(0.9)',
+              transition: 'opacity 320ms ease, transform 380ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+            }}
+          >
             ✔ {reveal.correctAnswer}
           </p>
         </div>
       )}
 
       <div className="flex flex-1 flex-col items-center justify-center">
-        {reveal.repechage ? (
+        {repechage ? (
           <div className="anim-stomp text-center">
             <div className="mb-4 text-8xl">🛟</div>
             <h2 className="text-7xl font-black uppercase text-amber-300">ÉGALITÉ, REPÊCHAGE !</h2>
             <p className="mt-4 text-3xl text-white/70">Tout le monde reste en vie</p>
           </div>
-        ) : reveal.eliminated.length === 0 ? (
-          <div className="anim-pop text-center">
+        ) : elimines.length === 0 ? (
+          <div
+            className="text-center"
+            style={{ opacity: ecoule >= BR_REVEAL_ELIMINES_MS ? 1 : 0, transition: 'opacity 340ms ease' }}
+          >
             <div className="mb-4 text-8xl">🛡️</div>
             <h2 className="text-6xl font-black text-emerald-300">AUCUN ÉLIMINÉ !</h2>
           </div>
         ) : (
-          <div className="text-center">
-            <h2 className="anim-pop text-6xl font-black uppercase text-rose-400">
-              💀 {reveal.eliminated.length} ÉLIMINÉ{reveal.eliminated.length > 1 ? 'S' : ''}
+          <div
+            className="text-center"
+            style={{ opacity: ecoule >= BR_REVEAL_ELIMINES_MS ? 1 : 0, transition: 'opacity 340ms ease' }}
+          >
+            <h2 className="text-6xl font-black uppercase text-rose-400">
+              💀 {elimines.length} ÉLIMINÉ{elimines.length > 1 ? 'S' : ''}
             </h2>
             <div className="mt-8 flex max-w-5xl flex-wrap items-center justify-center gap-3">
-              {reveal.eliminated.slice(0, revealedNames).map((e) => (
+              {elimines.map((e, i) => (
                 <span
                   key={e.pseudo}
-                  className="anim-pop rounded-full border border-rose-400/50 bg-rose-500/15 px-5 py-2 text-2xl font-bold text-rose-200"
+                  className="rounded-full border border-rose-400/50 bg-rose-500/15 px-5 py-2 text-2xl font-bold text-rose-200"
+                  style={{
+                    opacity: i < montres ? 1 : 0,
+                    transform: i < montres ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.85)',
+                    transition: 'opacity 260ms ease, transform 320ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+                  }}
                 >
                   {e.pseudo}
                   {e.reason === 'timeout' ? ' 😴' : ''}
@@ -272,15 +558,17 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
         )}
       </div>
 
-      <div className="flex min-h-[80px] items-center justify-center gap-6">
+      <div
+        className="flex min-h-[80px] items-center justify-center gap-6"
+        style={{
+          opacity: compteVisible ? 1 : 0,
+          transform: compteVisible ? 'translateY(0)' : 'translateY(12px)',
+          transition: 'opacity 360ms ease, transform 400ms ease',
+        }}
+      >
         <span className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5 text-2xl text-white/70 tabular-nums">
           {reveal.survivorsBefore} → <span className="font-black text-cyan-300">{reveal.survivorsAfter}</span> survivant{reveal.survivorsAfter > 1 ? 's' : ''}
         </span>
-        {reveal.milestone !== null && (
-          <span className="anim-banner-in rounded-xl border-2 border-amber-400 bg-amber-400/20 px-8 py-3 text-4xl font-black uppercase text-amber-300">
-            PLUS QUE {reveal.milestone} !
-          </span>
-        )}
         {reveal.victory && (
           <span className="anim-pop rounded-xl border-2 border-amber-400 bg-amber-400/20 px-8 py-3 text-4xl font-black uppercase text-amber-300">
             👑 ET LE VAINQUEUR EST...

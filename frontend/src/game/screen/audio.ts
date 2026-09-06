@@ -1,7 +1,15 @@
 /**
- * Moteur audio du projecteur — synthétisé en WebAudio, plus UN asset hérité
- * d'invader_table : le son de suspense du reveal (answers-reveal.mp3), que la
- * salle connaît par cœur et qu'aucune synthèse ne remplace.
+ * Moteur audio du projecteur.
+ *
+ * Le QUIZ est synthétisé en WebAudio, plus un asset hérité d'invader_table :
+ * le son de suspense du reveal (answers-reveal.mp3), que la salle connaît par
+ * cœur et qu'aucune synthèse ne remplace.
+ *
+ * La BATTLE, elle, rejoue les dix-sept sons travaillés du legacy (cf.
+ * battleSounds.ts) : ils faisaient l'ambiance de la soirée et la synthèse ne
+ * les valait pas. D'où `sample()` (un fichier, une lecture, anti-doublon) et
+ * `battleBed()` (le lit de fond, qui change de piste EN FONDU CROISÉ à mesure
+ * que la salle se vide).
  *
  * 3 canaux mixés : musique de fond (HTMLAudio + gain), effets (synthèse),
  * médias de question (gérés par les éléments <audio>/<iframe> de la page).
@@ -26,6 +34,12 @@ export class GameAudio {
   private timerNodes: OscillatorNode[] = [];
   /** question deja programmee : evite de reprogrammer a chaque rafraichissement d'etat */
   private timerKey: string | null = null;
+  /** echantillons joues par `sample`, un element reutilise par URL */
+  private samples = new Map<string, HTMLAudioElement>();
+  /** piste du lit de fond en place, pour ne pas la relancer a chaque tick */
+  private bedUrl: string | null = null;
+  /** battle : minuterie du son des 3 dernieres secondes (fichier, pas synthese) */
+  private battleTimerId: ReturnType<typeof setTimeout> | null = null;
   enabled = false;
 
   /** À appeler depuis un geste utilisateur (overlay "Activer le son") */
@@ -106,6 +120,98 @@ export class GameAudio {
     this.ducked = on;
     this.duckFull = on && full;
     this.applyMusicVolume();
+  }
+
+  // -------------------------------------------------------------------------
+  // Échantillons (sons travaillés du legacy)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Joue un fichier son dans le canal effets.
+   *
+   * UN element par URL, reutilise : un second appel pendant la lecture est
+   * toujours un doublon (double-montage StrictMode en dev, sauts du
+   * laboratoire, re-rendu sur un tick d'horloge). Meme garde que
+   * `revealSuspense`, qui a servi a la debusquer.
+   */
+  sample(url: string, opts: { volume?: number; loop?: boolean } = {}): void {
+    if (!this.enabled) return;
+    try {
+      let el = this.samples.get(url);
+      if (!el) {
+        el = new Audio(url);
+        this.samples.set(url, el);
+      }
+      el.loop = opts.loop ?? false;
+      if (!el.paused) return;
+      el.volume = Math.min(1, (opts.volume ?? 0.7) * this.sfxVolume);
+      el.currentTime = 0;
+      void el.play().catch(() => undefined);
+    } catch {
+      /* asset indisponible : l'ecran reste muet, jamais bloque */
+    }
+  }
+
+  /** arrete un echantillon en boucle (la nappe des regles, par exemple) */
+  stopSample(url: string): void {
+    const el = this.samples.get(url);
+    if (el && !el.paused) {
+      el.pause();
+      el.currentTime = 0;
+    }
+  }
+
+  /**
+   * Lit de fond de la battle. MEME canal que la musique du quiz, donc soumis
+   * au mixer de l'animateur et au ducking, mais la piste change en FONDU
+   * CROISE : le legacy remplacait le fond a 20, 10 puis 4 survivants pour
+   * faire monter la tension, et une coupure nette a cet endroit s'entend
+   * comme un bug.
+   *
+   * Idempotent : appeler avec la meme URL ne relance rien, ce qui permet de
+   * l'appeler a chaque rendu sans y penser.
+   */
+  battleBed(url: string | null, fonduMs = 900): void {
+    if (this.bedUrl === url) return;
+    this.bedUrl = url;
+
+    // fondu de sortie de la piste en place, puis liberation
+    const sortant = this.musicEl;
+    const sortantGain = this.musicGain;
+    if (sortant) {
+      if (sortantGain && this.ctx) {
+        sortantGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        sortantGain.gain.setTargetAtTime(0, this.ctx.currentTime, fonduMs / 3000);
+      } else {
+        sortant.volume = 0;
+      }
+      setTimeout(() => {
+        sortant.pause();
+        sortant.remove();
+      }, fonduMs + 150);
+    }
+    this.musicEl = null;
+    this.musicGain = null;
+    if (!url) return;
+
+    const el = new Audio(url);
+    el.loop = true;
+    el.crossOrigin = 'anonymous';
+    this.musicEl = el;
+    if (this.ctx) {
+      try {
+        const src = this.ctx.createMediaElementSource(el);
+        const gain = this.ctx.createGain();
+        // depart a zero : applyMusicVolume fait la montee
+        gain.gain.value = 0;
+        src.connect(gain).connect(this.ctx.destination);
+        this.musicGain = gain;
+      } catch {
+        /* repli sur le volume de l'element */
+      }
+    }
+    this.applyMusicVolume();
+    if (this.enabled) void el.play().catch(() => undefined);
   }
 
   // -------------------------------------------------------------------------
@@ -266,7 +372,29 @@ export class GameAudio {
   }
 
   /** coupe le compte à rebours (question verrouillée, annulée, phase changée) */
+  /**
+   * Battle : les trois dernieres secondes sont un son TRAVAILLE, pas un
+   * battement synthetique. Meme cle que startAnswerTimer (la deadline de la
+   * phase), donc programme une seule fois par question.
+   *
+   * Rien n'est programme si le moment est deja passe : un ecran recharge a 2 s
+   * de la fin ne rejoue pas un compte a rebours qui a deja sonne.
+   */
+  startBattleTimer(remainingMs: number, key: string, url: string): void {
+    if (!this.enabled) return;
+    if (this.timerKey === key) return;
+    this.stopAnswerTimer();
+    this.timerKey = key;
+    const dans = remainingMs - 3000;
+    if (dans <= 0) return;
+    this.battleTimerId = setTimeout(() => this.sample(url, { volume: 0.45 }), dans);
+  }
+
   stopAnswerTimer(): void {
+    if (this.battleTimerId !== null) {
+      clearTimeout(this.battleTimerId);
+      this.battleTimerId = null;
+    }
     for (const osc of this.timerNodes) {
       try {
         osc.stop();

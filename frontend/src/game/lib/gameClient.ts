@@ -571,6 +571,37 @@ export const AUDIO_PREROLL_MS = 5000;
 export const AUDIO_REMONTEE_MS = 3500;
 
 // ---------------------------------------------------------------------------
+// Battle royale : mise en scene
+// ---------------------------------------------------------------------------
+
+/**
+ * TOUS ces seuils se comparent a `ecoule = serverNow() - phaseStartedAt`,
+ * jamais a un minuteur lance au montage : un ecran qui recharge en pleine
+ * sequence retombe au bon endroit, et une page non peinte ne fige rien. C'est
+ * la lecon des barres du reveal du quiz, ou une animation cadencee sur le
+ * montage restait bloquee sur le PC du projecteur.
+ */
+
+/** intro de manche : nuage de categories, puis de pseudos, puis le numero */
+export const BR_INTRO_PSEUDOS_MS = 4600;
+export const BR_INTRO_MANCHE_MS = 8600;
+/** duree totale de l'intro, miroir de config.roundIntroMs cote serveur */
+export const BR_INTRO_MS = 12000;
+
+/** annonce : le decompte 3-2-1 occupe les trois dernieres secondes */
+export const BR_DECOMPTE_MS = 3000;
+
+/** revelation : la reponse, les elimines un par un, le compte, puis le palier */
+export const BR_REVEAL_REPONSE_MS = 600;
+export const BR_REVEAL_ELIMINES_MS = 2200;
+/** un nom toutes les 550 ms, cadence du legacy */
+export const BR_REVEAL_PAS_MS = 550;
+export const BR_REVEAL_COMPTE_MS = 5200;
+/** prise d'ecran plein cadre du palier (TOP 20 / 10 / 5 / 3) */
+export const BR_PALIER_MS = 6800;
+export const BR_PALIER_DUREE_MS = 4200;
+
+// ---------------------------------------------------------------------------
 // Compteurs d'attente (purement indicatifs, le GM garde la main)
 // ---------------------------------------------------------------------------
 
