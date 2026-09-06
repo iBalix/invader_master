@@ -21,6 +21,8 @@ import { JOKER_TYPES, type JokerType, type PublicState, type You } from '../lib/
 import QuizRules, { NB_CHAPITRES_REGLES } from '../player/QuizRules';
 import BattleRules, { NB_CHAPITRES_BATTLE } from '../player/BattleRules';
 import { JEUX, SCENARIOS, SURFACES, type LabJeu } from './labFixtures';
+import { GM_BATTLE } from './labGmFixtures';
+import { BattleGmBody } from '../../pages/BattleLivePage';
 import '../game.css';
 
 type Gabarit = 'mini' | 'phone' | 'table' | 'projo';
@@ -46,6 +48,8 @@ export default function GameLabPage() {
   // plus rien.
   const [jeu, setJeu] = useState<LabJeu>('quiz');
   const [scenarioCle, setScenarioCle] = useState(SCENARIOS[0].cle);
+  /** surface console : scenario choisi, independant des scenarios d'ecran */
+  const [gmCle, setGmCle] = useState<string | null>(null);
   const [gabarit, setGabarit] = useState<Gabarit>('mini');
   const [runId, setRunId] = useState(0);
   /**
@@ -137,6 +141,7 @@ export default function GameLabPage() {
                 type="button"
                 onClick={() => {
                   setJeu(j.cle);
+                  setGmCle(null);
                   const premier = SCENARIOS.find((s) => s.jeu === j.cle);
                   if (premier) {
                     setScenarioCle(premier.cle);
@@ -170,6 +175,7 @@ export default function GameLabPage() {
                     key={s.cle}
                     type="button"
                     onClick={() => {
+                      setGmCle(null);
                       setScenarioCle(s.cle);
                       setSautMs(0);
                       setChapitre(null);
@@ -189,6 +195,33 @@ export default function GameLabPage() {
             </div>
             );
           })}
+
+          {/* surface console : ses scenarios ont leur propre etat (GmState), pas
+              le PublicState des ecrans */}
+          {jeu === 'battle' && (
+            <div className="mt-4">
+              <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-white/35">
+                Game Master
+              </p>
+              <div className="flex flex-col gap-1">
+                {GM_BATTLE.map((g) => (
+                  <button
+                    key={g.cle}
+                    type="button"
+                    onClick={() => setGmCle(g.cle)}
+                    className={`rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                      g.cle === gmCle
+                        ? 'bg-cyan-400/15 text-cyan-200'
+                        : 'text-white/60 hover:bg-white/5'
+                    }`}
+                  >
+                    {g.label}
+                    <span className="block text-[11px] font-normal text-white/35">{g.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </aside>
 
         {/* scene */}
@@ -302,7 +335,13 @@ export default function GameLabPage() {
             </button>
           </div>
 
-          {scenario.cle === 'roue' ? (
+          {gmCle ? (
+            <CadreConsole
+              key={gmCle}
+              etat={GM_BATTLE.find((g) => g.cle === gmCle)!.state()}
+              telephone={gabarit === 'mini' || gabarit === 'phone'}
+            />
+          ) : scenario.cle === 'roue' ? (
             <RoueEnBoucle key={runId} />
           ) : scenario.cle === 'projo-fin-animee' ? (
             <CadreLarge key={runId}>
@@ -350,6 +389,42 @@ export default function GameLabPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * Cadre de la console animateur. Deux tailles : le telephone (375 px, la vraie
+ * cible : l'animateur pilote depuis sa poche) et le bureau. Fond clair, comme
+ * le back-office dont la console herite.
+ */
+function CadreConsole({
+  etat,
+  telephone,
+}: {
+  etat: Parameters<typeof BattleGmBody>[0]['state'];
+  telephone: boolean;
+}) {
+  const corps = (
+    <BattleGmBody
+      state={etat}
+      busy={false}
+      action={async () => {}}
+      onRefresh={() => {}}
+      onClosed={() => {}}
+    />
+  );
+  if (telephone) {
+    return (
+      <div className="flex justify-center overflow-x-auto">
+        <div
+          className="w-[375px] shrink-0 overflow-y-auto rounded-[2rem] border-4 border-white/15 bg-gray-50 shadow-2xl"
+          style={{ height: 812 }}
+        >
+          {corps}
+        </div>
+      </div>
+    );
+  }
+  return <div className="rounded-xl border-2 border-white/15 bg-gray-50 shadow-2xl">{corps}</div>;
 }
 
 function SceneJoueur({

@@ -103,7 +103,6 @@ export default function App() {
                     <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
                     <Route path="utilitaires/comptabilite" element={<CashManagementPage />} />
                     <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />
-                    <Route path="evenements/battle-live" element={<BattleLivePage />} />
                     <Route path="tables-tactiles/coupons" element={<CouponsPage />} />
                     <Route path="tables-tactiles/orders" element={<OrdersPage />} />
                     <Route path="users" element={<UserManagementPage />} />
@@ -118,6 +117,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <QuizLivePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="evenements/battle-live"
+                    element={
+                      <ProtectedRoute>
+                        <BattleLivePage />
                       </ProtectedRoute>
                     }
                   />

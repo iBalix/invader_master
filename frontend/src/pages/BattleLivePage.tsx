@@ -8,9 +8,8 @@
  * salle. Rien n'est persisté avant "Afficher les résultats".
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle,
   Bot,
   ChevronDown,
   ChevronRight,
@@ -26,6 +25,7 @@ import {
   Pause,
   Play,
   Plus,
+  QrCode,
   RefreshCw,
   RotateCcw,
   ScrollText,
@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import { QrCanvas } from '../game/ui/bits';
 import { BR_REVEAL_MIN_MS, BR_REVEAL_MIN_PALIER_MS } from '../game/lib/gameClient';
 import LightsBadge from '../components/Live/LightsBadge';
 
@@ -82,7 +83,7 @@ interface BattleStanding {
   isSpectator: boolean;
 }
 
-interface GmBattle {
+export interface GmBattle {
   roundNumber: number;
   roundQuestionCount: number;
   isFinal: boolean;
@@ -122,7 +123,7 @@ interface GmBattle {
   victoryPending: boolean;
 }
 
-interface GmState {
+export interface GmState {
   id: string;
   joinCode: string;
   mode: string;
@@ -233,25 +234,16 @@ export default function BattleLivePage() {
   }
 
   return (
-    <div className="pb-10">
-      <Header state={state} onRefresh={() => void refresh()} />
-      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
-          <ControlPanel state={state} busy={busy} action={action} />
-          {state.status === 'verdict' && <VerdictPanel state={state} busy={busy} action={action} />}
-          {state.status === 'reveal' && <RevealPanel state={state} />}
-          <QuestionCard state={state} />
-          {(state.status === 'round_end' || state.status === 'end') && <StandingsCard state={state} />}
-          <QueuePanel state={state} action={action} />
-        </div>
-        <div className="space-y-6">
-          <PlayersPanel state={state} busy={busy} action={action} />
-          <LightsBadge />
-          <MixerPanel state={state} action={action} />
-          <DangerPanel action={action} onClosed={() => { setSessionId(null); setState(null); }} />
-        </div>
-      </div>
-    </div>
+    <BattleGmBody
+      state={state}
+      busy={busy}
+      action={action}
+      onRefresh={() => void refresh()}
+      onClosed={() => {
+        setSessionId(null);
+        setState(null);
+      }}
+    />
   );
 }
 
@@ -393,12 +385,89 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
   );
 }
 
+/**
+ * Corps de la console, SANS acces reseau : il ne recoit que l'etat et une
+ * fonction d'action. C'est ce qui permet au laboratoire de le monter avec des
+ * donnees factices et une action sans effet, et donc de regler la surface la
+ * moins testee du parc, celle que l'animateur tient en main toute la soiree.
+ */
+/**
+ * La console se met en page sur SA PROPRE largeur, mesuree, et non sur celle de
+ * la fenetre.
+ *
+ * Les media queries de Tailwind regardent la fenetre : montee dans le cadre
+ * telephone du laboratoire (375 px) au milieu d'un ecran large, la console
+ * gardait ses trois colonnes ecrasees et le labo mentait sur ce que
+ * l'animateur verrait vraiment. Une mesure du conteneur dit la verite partout,
+ * page reelle comprise.
+ */
+const EtroitContext = createContext(false);
+
+export function BattleGmBody({
+  state,
+  busy,
+  action,
+  onRefresh,
+  onClosed,
+}: {
+  state: GmState;
+  busy: boolean;
+  action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
+  onRefresh: () => void;
+  onClosed: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [etroit, setEtroit] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setEtroit(e.contentRect.width < 900));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <EtroitContext.Provider value={etroit}>
+    <div ref={ref} className="mx-auto max-w-[1400px] px-3 pb-10 pt-3 sm:px-5">
+      <Header state={state} onRefresh={onRefresh} action={action} onClosed={onClosed} />
+      <div className={`mt-4 grid gap-4 ${etroit ? 'grid-cols-1' : 'grid-cols-3 gap-6'}`}>
+        <div className={`space-y-4 ${etroit ? '' : 'col-span-2 space-y-6'}`}>
+          <ControlPanel state={state} busy={busy} action={action} />
+          {state.status === 'verdict' && <VerdictPanel state={state} busy={busy} action={action} />}
+          {state.status === 'reveal' && <RevealPanel state={state} />}
+          <QuestionCard state={state} />
+          {(state.status === 'round_end' || state.status === 'end') && <StandingsCard state={state} />}
+          <QueuePanel state={state} action={action} />
+        </div>
+        <div className={`space-y-4 ${etroit ? '' : 'space-y-6'}`}>
+          <PlayersPanel state={state} busy={busy} action={action} />
+          <LightsBadge />
+          <MixerPanel state={state} action={action} />
+        </div>
+      </div>
+    </div>
+    </EtroitContext.Provider>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Header + pilotage
 // ---------------------------------------------------------------------------
 
-function Header({ state, onRefresh }: { state: GmState; onRefresh: () => void }) {
+function Header({
+  state,
+  onRefresh,
+  action,
+  onClosed,
+}: {
+  state: GmState;
+  onRefresh: () => void;
+  action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
+  onClosed: () => void;
+}) {
   const b = state.gm.battle;
+  const [qrOuvert, setQrOuvert] = useState(false);
+  const urlConsole = `${window.location.origin}/evenements/battle-live`;
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div>
@@ -429,7 +498,7 @@ function Header({ state, onRefresh }: { state: GmState; onRefresh: () => void })
           <span className="font-mono font-bold text-gray-800">{state.joinCode}</span>
         </p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <a
           href={`${window.location.origin}/play/${state.joinCode}`}
           target="_blank"
@@ -454,7 +523,44 @@ function Header({ state, onRefresh }: { state: GmState; onRefresh: () => void })
         >
           <RefreshCw size={16} />
         </button>
+        {/* Ouvrir la console sur un AUTRE appareil : l'animateur passe la main,
+            ou prend son telephone en salle. */}
+        <button
+          type="button"
+          onClick={() => setQrOuvert(true)}
+          className="rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-50"
+          aria-label="QR de la console"
+        >
+          <QrCode size={16} />
+        </button>
+        {/* Arret TOUJOURS accessible : il etait enterre en bas de page, et une
+            soiree qui doit s'arreter ne laisse pas le temps de faire defiler. */}
+        <button
+          type="button"
+          onClick={async () => {
+            if (!confirm('Arrêter la battle ? Les écrans font un fondu puis reviennent à l\'accueil.')) return;
+            await action('stop');
+            onClosed();
+            toast.success('Battle terminée (fondu en cours)');
+          }}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+        >
+          <Square size={14} /> Arrêter
+        </button>
       </div>
+
+      {qrOuvert && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+          onClick={() => setQrOuvert(false)}
+        >
+          <div className="rounded-2xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 font-bold text-gray-900">Ouvrir la console ailleurs</h3>
+            <QrCanvas value={urlConsole} size={220} />
+            <p className="mt-3 break-all text-xs text-gray-400">{urlConsole}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -470,6 +576,7 @@ function Btn({
   variant?: 'primary' | 'secondary' | 'warn' | 'danger';
   children: React.ReactNode;
 }) {
+  const etroit = useContext(EtroitContext);
   const styles = {
     primary: 'bg-indigo-600 text-white hover:bg-indigo-700',
     secondary: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
@@ -481,7 +588,11 @@ function Btn({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-40 ${styles[variant]}`}
+      // Pleine largeur et 48 px de haut quand la console est etroite :
+      // l'animateur vise a une main, dans le noir, avec un micro dans l'autre.
+      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-40 ${
+        etroit ? 'min-h-[48px] w-full justify-center' : 'justify-start'
+      } ${styles[variant]}`}
     >
       {children}
     </button>
@@ -1118,7 +1229,7 @@ function PlayersPanel({
         <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-500">
           <Bot size={14} /> Bots de test {b && b.botCount > 0 && `(${b.botCount})`}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             type="number"
             min={1}
@@ -1179,8 +1290,8 @@ function MixerPanel({
       <div className="space-y-4">
         <div>
           <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 font-medium text-gray-600"><Music2 size={14} /> Musique de fond</span>
-            <span className="font-mono font-bold text-gray-800">{music}%</span>
+            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-600"><Music2 size={14} /> <span className="truncate">Musique de fond</span></span>
+            <span className="shrink-0 font-mono font-bold text-gray-800">{music}%</span>
           </div>
           <input
             type="range"
@@ -1197,8 +1308,8 @@ function MixerPanel({
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 font-medium text-gray-600"><Volume2 size={14} /> Effets sonores</span>
-            <span className="font-mono font-bold text-gray-800">{sfx}%</span>
+            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-600"><Volume2 size={14} /> <span className="truncate">Effets sonores</span></span>
+            <span className="shrink-0 font-mono font-bold text-gray-800">{sfx}%</span>
           </div>
           <input
             type="range"
@@ -1215,8 +1326,8 @@ function MixerPanel({
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 font-medium text-gray-600"><Film size={14} /> Média de la question</span>
-            <span className="font-mono font-bold text-gray-800">{media}%</span>
+            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-600"><Film size={14} /> <span className="truncate">Média de la question</span></span>
+            <span className="shrink-0 font-mono font-bold text-gray-800">{media}%</span>
           </div>
           <input
             type="range"
@@ -1238,37 +1349,6 @@ function MixerPanel({
           La musique baisse automatiquement pendant les phases de suspense et remonte à ce niveau exact.
         </p>
       </div>
-    </div>
-  );
-}
-
-function DangerPanel({
-  action,
-  onClosed,
-}: {
-  action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
-  onClosed: () => void;
-}) {
-  return (
-    <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-5">
-      <h2 className="mb-3 flex items-center gap-2 font-bold text-rose-800">
-        <AlertTriangle size={16} /> Zone sensible
-      </h2>
-      <button
-        type="button"
-        onClick={async () => {
-          if (!confirm('Arrêter la battle ? Les écrans passent en fondu puis reviennent à leur état normal.')) return;
-          await action('stop');
-          onClosed();
-          toast.success('Battle terminée (fondu en cours)');
-        }}
-        className="inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100"
-      >
-        <Square size={14} /> Arrêter la battle
-      </button>
-      <p className="mt-2 text-xs text-rose-700">
-        Les écrans font un fondu de quelques secondes puis reviennent à l'accueil.
-      </p>
     </div>
   );
 }
