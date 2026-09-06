@@ -12,10 +12,14 @@ import {
   AUDIO_PREROLL_MS,
   QUESTION_REPONSES_MS,
   serverNow,
+  type BattleRevealData,
+  type BattleStandingEntry,
   type JokerType,
+  type PublicBattle,
   type PublicState,
   type RevealData,
   type You,
+  type YouBattle,
 } from '../lib/gameClient';
 
 /**
@@ -123,23 +127,143 @@ function revealBase(): RevealData {
   };
 }
 
+/** les deux moteurs de soiree : le quiz (blindtest compris) et la battle */
+export type LabJeu = 'quiz' | 'battle';
+/** les trois surfaces d'une soiree : le telephone, l'ecran, la console */
+export type LabSurface = 'joueur' | 'projo' | 'gm';
+
+export const JEUX: Array<{ cle: LabJeu; label: string; emoji: string }> = [
+  { cle: 'quiz', label: 'Quiz & Blindtest', emoji: '🎬' },
+  { cle: 'battle', label: 'Battle Royale', emoji: '⚔️' },
+];
+
+export const SURFACES: Array<{ cle: LabSurface; label: string }> = [
+  { cle: 'joueur', label: 'Joueur' },
+  { cle: 'projo', label: 'Projecteur' },
+  { cle: 'gm', label: 'Game Master' },
+];
+
 export interface LabScenario {
   cle: string;
-  groupe: 'Joueur' | 'Projecteur';
+  jeu: LabJeu;
+  surface: LabSurface;
   label: string;
   description: string;
   state: () => PublicState;
   you?: () => You;
-  /** boutons « Aller a » dedies (ms depuis phaseStartedAt) ; sinon defauts du groupe */
+  /** boutons « Aller a » dedies (ms depuis phaseStartedAt) ; sinon defauts de la surface */
   sauts?: Array<[string, number]>;
   /** bandeau d'ejection sur l'ecran d'inscription (scenario AFK) */
   joinNotice?: string;
+  /** sequence de regles : active le selecteur de chapitre */
+  regles?: LabJeu;
 }
+
+/**
+ * Battle royale : meme moteur, autre rythme. Les fixtures posent un effectif
+ * plausible de milieu de soiree (40 inscrits, une vingtaine de survivants) :
+ * c'est la que les ecrans sont les plus charges.
+ */
+function baseBattle(over: Partial<PublicState>, battleOver: Partial<PublicBattle> = {}): PublicState {
+  const base = baseState({
+    mode: 'battle',
+    quizName: 'Battle Royale',
+    config: {
+      announceMs: 6000,
+      questionMs: 15000,
+      showScores: true,
+      wifiSsid: 'INVADER BAR',
+      wifiPassword: '',
+      pauseText: 'Le Top 3 bénéficie de -10% au bar !',
+      musicUrl: null,
+      standingsPageMs: 10000,
+    },
+    ...over,
+  });
+  return {
+    ...base,
+    battle: {
+      roundNumber: 2,
+      isFinal: false,
+      questionInRound: 5,
+      survivorCount: 18,
+      finalSize: 10,
+      verdictPending: false,
+      ...battleOver,
+    },
+  };
+}
+
+function baseYouBattle(over: Partial<You> = {}, battleOver: Partial<YouBattle> = {}): You {
+  return baseYou({
+    jokers: [],
+    jokerPlays: [],
+    score: 34,
+    ...over,
+    battle: {
+      generalRank: 7,
+      eliminatedThisRound: false,
+      roundRank: null,
+      isFinalist: false,
+      isSpectator: false,
+      isFinal: false,
+      roundNumber: 2,
+      ...battleOver,
+    },
+  });
+}
+
+/** classement general plausible : les scores cumulent points et bonus de manche */
+function standingsBattle(n = PSEUDOS.length): BattleStandingEntry[] {
+  return PSEUDOS.slice(0, n).map((pseudo, i) => ({
+    playerId: `lab-${i}`,
+    pseudo,
+    score: Math.max(1, 96 - i * 4 + (i % 3)),
+    position: i + 1,
+    positionChange: i % 5 === 0 ? 2 : i % 7 === 0 ? -1 : 0,
+    qualifiedForFinal: i < 10,
+    isSpectator: false,
+    device: i % 4 === 0 ? 'table' : 'mobile',
+  }));
+}
+
+/** une revelation battle type : quatre elimines, la salle passe de 18 a 14 */
+function revealBattle(): BattleRevealData {
+  return {
+    correctIndex: 1,
+    correctAnswer: 'Hayao Miyazaki',
+    answeredCount: 17,
+    eliminated: [
+      { pseudo: 'Nina', reason: 'wrong' },
+      { pseudo: 'Tom', reason: 'wrong' },
+      { pseudo: 'Julie', reason: 'timeout' },
+      { pseudo: 'Alex', reason: 'wrong' },
+    ],
+    repechage: false,
+    survivorsBefore: 18,
+    survivorsAfter: 14,
+    milestone: null,
+    correctPseudos: PSEUDOS.slice(0, 14),
+  };
+}
+
+const QUESTION_BATTLE = {
+  index: 12,
+  total: 12,
+  type: 'qcm' as const,
+  difficulty: 'Moyen',
+  points: 1,
+  theme: 'Cinéma',
+  question: 'Quel réalisateur a signé « Le Voyage de Chihiro » ?',
+  answers: ['Isao Takahata', 'Hayao Miyazaki', 'Mamoru Hosoda', 'Makoto Shinkai'],
+};
 
 export const SCENARIOS: LabScenario[] = [
   {
     cle: 'regles',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
+    regles: 'quiz',
     label: 'Règles (titre + 9 chapitres)',
     description: "7 s par chapitre, puis ça se fige sur l'attente.",
     state: () => baseState({ status: 'rules' }),
@@ -147,7 +271,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'annonce',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Annonce + jokers',
     description: "Seule fenêtre de jeu des jokers, avant la question.",
     state: () =>
@@ -164,7 +289,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'question',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Question QCM',
     description: "L'énoncé d'abord, les réponses en fondu à 3 s.",
     sauts: [
@@ -181,7 +307,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'question-audio',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Question audio (pré-roll)',
     description: "5 s d'extrait seul, puis question, puis réponses.",
     sauts: [
@@ -199,7 +326,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'question-estimation',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Question estimation',
     description: 'Saisie du nombre, 30 s de fenêtre.',
     sauts: [
@@ -221,7 +349,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'question-libre',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Question réponse libre',
     description: 'Champ texte, 30 s de fenêtre.',
     sauts: [
@@ -243,7 +372,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'ejection-afk',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Éjection AFK (inscription)',
     description: "L'écran que voit un joueur retiré pour inactivité.",
     state: () => baseState({ status: 'question', phaseEndsAt: serverNow() + 20000, question: QUESTION_QCM }),
@@ -251,7 +381,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'question-fifty',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Question + 50/50 armé',
     description: 'Joué à l’annonce : deux mauvaises réponses barrées.',
     state: () =>
@@ -268,7 +399,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'question-audience',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Question + avis du public',
     description: 'Répartition en direct, elle monte pendant la question.',
     state: () =>
@@ -285,7 +417,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'question-allin',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Question + All-In armé',
     description: 'Le bandeau ×3 pulse sous la question.',
     state: () =>
@@ -298,7 +431,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'seq-serie-monte',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Séquence : série qui monte',
     description: 'Verdict → série 5/5 avec +1 → jokers.',
     state: () => {
@@ -319,7 +453,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'seq-serie-casse',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Séquence : série brisée',
     description: 'Mauvaise réponse, série de 4 perdue.',
     state: () => {
@@ -334,7 +469,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'seq-joker-gagne',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Séquence : joker gagné (roue)',
     description: 'La roue tourne au temps 3 de la séquence.',
     state: () => {
@@ -354,7 +490,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'seq-allin-perdu',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Séquence : All-In perdu',
     description: 'Mauvaise réponse avec All-In armé : −2.',
     state: () => {
@@ -369,7 +506,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'roue',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Roue de tirage seule',
     description: 'Le composant JokerWheel, en boucle.',
     state: () => baseState({ status: 'lobby' }),
@@ -377,7 +515,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'pause-joueur',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Pause (joueur)',
     description: 'Invitation au bar + promo du soir.',
     state: () =>
@@ -397,7 +536,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'reprise-joueur',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Reprise après pause (joueur)',
     description: 'Le décompte qui fait relever la tête avant la question.',
     state: () =>
@@ -410,7 +550,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'classement-joueur',
-    groupe: 'Joueur',
+    jeu: 'quiz',
+    surface: 'joueur',
     label: 'Classement (joueur)',
     description: "L'écran d'attente pendant le classement.",
     state: () =>
@@ -429,14 +570,17 @@ export const SCENARIOS: LabScenario[] = [
   // --- projecteur ---
   {
     cle: 'projo-regles',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
+    regles: 'quiz',
     label: 'Règles (projo)',
     description: 'La même séquence que les joueurs, en grand.',
     state: () => baseState({ status: 'rules' }),
   },
   {
     cle: 'projo-media',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Extrait vidéo (projo)',
     description: 'La vidéo plein écran avant la question, fondu au noir à la fin.',
     state: () =>
@@ -458,7 +602,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-reprise',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Reprise après pause (projo)',
     description: 'On garde le décor de la pause, seul le bloc central décompte.',
     state: () =>
@@ -479,7 +624,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-pause',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Pause (projo)',
     description: 'Les pseudos dérivent, le message reste lisible.',
     state: () =>
@@ -498,7 +644,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'bar-permanent',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Écran bar BAR01/02',
     description: 'Page permanente des TV du bar pendant la partie.',
     state: () =>
@@ -519,7 +666,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-lobby',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: "Salle d'attente (projo)",
     description: 'Deux étapes empilées, un seul QR.',
     state: () =>
@@ -539,7 +687,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-annonce',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Annonce (projo)',
     description: 'Compte à rebours + chips jokers.',
     state: () =>
@@ -556,7 +705,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-annonce-audio',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Annonce audio (projo)',
     description: 'Le bandeau « extrait audio » qui prépare la salle.',
     state: () =>
@@ -568,7 +718,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-annonce-video',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Annonce vidéo (projo)',
     description: 'Le bandeau « vidéo », avec une question spéciale en plus.',
     state: () =>
@@ -586,7 +737,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-question',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Question QCM (projo)',
     description: "L'énoncé d'abord, les réponses en fondu à 3 s.",
     sauts: [
@@ -602,7 +754,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-question-audio',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Question audio (projo)',
     description: "Pré-roll 5 s « écoute bien », l'extrait continue ensuite.",
     sauts: [
@@ -619,7 +772,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-video',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Question vidéo (projo)',
     description: 'FullscreenVideo réel : vérifier les caches du titre YouTube.',
     state: () =>
@@ -635,14 +789,16 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-reveal',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Révélation (projo)',
     description: 'Barres → réponse → podium ⚡ → podium 🔥.',
     state: () => baseState({ status: 'reveal', question: QUESTION_QCM, reveal: revealBase() }),
   },
   {
     cle: 'projo-reveal-image',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Révélation + image (projo)',
     description: "L'image occupe la place des podiums, puis s'efface.",
     state: () => {
@@ -665,7 +821,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-reveal-estimation',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Révélation estimation (projo)',
     description: 'Pas de bonus vitesse : les séries prennent tout.',
     state: () => {
@@ -695,7 +852,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-classement-moyen',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Classement (projo) · 18 joueurs',
     description: 'Podium plein + 2 colonnes, soirée normale.',
     state: () =>
@@ -712,7 +870,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-classement',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Classement (projo) · 40 joueurs',
     description: 'Podium compact + 4 colonnes, salle pleine.',
     state: () =>
@@ -729,7 +888,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-fin-animee',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Fin de partie (projo, animée)',
     description: 'La vraie séquence aux vrais timings : cinématique, récompenses, fin. ~60 s en boucle.',
     state: () =>
@@ -747,7 +907,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-classement-final',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Classement final (projo)',
     description: 'Fin de cinématique : le classement complet, scores dévoilés.',
     state: () =>
@@ -765,7 +926,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-mentions',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Mentions spéciales (projo)',
     description: 'Les 4 mentions dévoilées, la valeur du record dans la case.',
     state: () =>
@@ -782,7 +944,8 @@ export const SCENARIOS: LabScenario[] = [
   },
   {
     cle: 'projo-fin',
-    groupe: 'Projecteur',
+    jeu: 'quiz',
+    surface: 'projo',
     label: 'Écran de fin (projo)',
     description: 'Gagnant, podium et texte de fin, confettis.',
     state: () =>
@@ -800,6 +963,345 @@ export const SCENARIOS: LabScenario[] = [
           score: Math.max(1, 46 - i * 3),
         })),
       }),
+  },
+
+  // -------------------------------------------------------------------------
+  // BATTLE ROYALE — joueur
+  // -------------------------------------------------------------------------
+  {
+    cle: 'br-lobby',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Salle d\u2019attente',
+    description: 'Inscrit, en attente du lancement de la manche 1.',
+    state: () => baseBattle({ status: 'lobby' }, { roundNumber: 0, survivorCount: 0 }),
+    you: () => baseYouBattle({ score: 0 }, { generalRank: null, roundNumber: 0 }),
+  },
+  {
+    cle: 'br-regles',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'R\u00e8gles (t\u00e9l\u00e9phone)',
+    description: 'La s\u00e9quence tutorielle battle, chapitre par chapitre.',
+    regles: 'battle',
+    state: () => baseBattle({ status: 'rules' }, { roundNumber: 0, survivorCount: 0 }),
+    you: () => baseYouBattle({ score: 0 }, { generalRank: null, roundNumber: 0 }),
+  },
+  {
+    cle: 'br-question',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Question (en vie)',
+    description: 'QCM \u00e0 15 s, le joueur est encore survivant.',
+    sauts: [
+      ['Question', 500],
+      ['R\u00e9ponses', QUESTION_REPONSES_MS + 400],
+    ],
+    state: () =>
+      baseBattle({ status: 'question', phaseEndsAt: serverNow() + 15000, question: QUESTION_BATTLE }),
+    you: () => baseYouBattle(),
+  },
+  {
+    cle: 'br-question-elimine',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Question (\u00e9limin\u00e9)',
+    description: 'Bandeau \u00ab continue pour les points bonus \u00bb.',
+    state: () =>
+      baseBattle({ status: 'question', phaseEndsAt: serverNow() + 15000, question: QUESTION_BATTLE }),
+    you: () =>
+      baseYouBattle({ status: 'eliminated' }, { eliminatedThisRound: true, roundRank: 19 }),
+  },
+  {
+    cle: 'br-verdict',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Verdict en suspens',
+    description: 'L\u2019animateur v\u00e9rifie, la salle retient son souffle.',
+    state: () =>
+      baseBattle({ status: 'verdict', question: QUESTION_BATTLE }, { verdictPending: true }),
+    you: () => baseYouBattle({ answered: true }),
+  },
+  {
+    cle: 'br-reveal-survie',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'R\u00e9v\u00e9lation : je survis',
+    description: 'Bonne r\u00e9ponse, +1 point, toujours en vie.',
+    state: () =>
+      baseBattle({ status: 'reveal', question: QUESTION_BATTLE }, { survivorCount: 14, reveal: revealBattle() }),
+    you: () => baseYouBattle({ answered: true, score: 35 }),
+  },
+  {
+    cle: 'br-reveal-elimine',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'R\u00e9v\u00e9lation : je tombe',
+    description: 'Mauvaise r\u00e9ponse, \u00e9limination et place de manche.',
+    state: () =>
+      baseBattle({ status: 'reveal', question: QUESTION_BATTLE }, { survivorCount: 14, reveal: revealBattle() }),
+    you: () =>
+      baseYouBattle({ answered: true, status: 'eliminated' }, { eliminatedThisRound: true, roundRank: 15 }),
+  },
+  {
+    cle: 'br-reveal-repechage',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'R\u00e9v\u00e9lation : rep\u00eachage',
+    description: 'Tout le monde tombait, l\u2019animateur rep\u00eache.',
+    state: () =>
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE },
+        { survivorCount: 18, reveal: { ...revealBattle(), eliminated: [], repechage: true, survivorsAfter: 18 } },
+      ),
+    you: () => baseYouBattle({ answered: true }),
+  },
+  {
+    cle: 'br-fin-manche',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Fin de manche',
+    description: 'Place de la manche, bonus et rang au g\u00e9n\u00e9ral.',
+    state: () =>
+      baseBattle(
+        { status: 'round_end' },
+        {
+          survivorCount: 1,
+          generalStandings: standingsBattle(),
+          roundResult: {
+            roundNumber: 2,
+            entries: PSEUDOS.slice(0, 20).map((pseudo, i) => ({
+              pseudo,
+              rank: i + 1,
+              bonus: [25, 20, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1][i] ?? 0,
+              survived: i === 0,
+            })),
+          },
+        },
+      ),
+    you: () => baseYouBattle({ score: 58 }, { roundRank: 4, generalRank: 4 }),
+  },
+  {
+    cle: 'br-spectateur',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Spectateur (finale)',
+    description: 'Hors top 10 : la finale se regarde.',
+    state: () =>
+      baseBattle({ status: 'question', phaseEndsAt: serverNow() + 15000, question: QUESTION_BATTLE }, { isFinal: true, survivorCount: 6, questionInRound: 3 }),
+    you: () =>
+      baseYouBattle({ status: 'spectator' }, { isSpectator: true, isFinal: true, generalRank: 14 }),
+  },
+  {
+    cle: 'br-attente-manche',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Inscrit en cours de manche',
+    description: 'Entre en jeu \u00e0 la manche suivante.',
+    state: () =>
+      baseBattle({ status: 'question', phaseEndsAt: serverNow() + 15000, question: QUESTION_BATTLE }),
+    you: () => baseYouBattle({ status: 'waiting', score: 0 }, { generalRank: null }),
+  },
+  {
+    cle: 'br-fin',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Fin de partie',
+    description: 'Le vainqueur et la place finale.',
+    state: () =>
+      baseBattle(
+        { status: 'end', endTexts: { winnerText: 'F\u00e9licitations \u00e0 Marco !', endText: '\u00c0 mercredi pour la revanche !' } },
+        { isFinal: true, survivorCount: 1, finalStandings: standingsBattle(10), winner: { playerId: 'lab-0', pseudo: 'Marco' } },
+      ),
+    you: () => baseYouBattle({ score: 118 }, { isFinal: true, isFinalist: true, generalRank: 3 }),
+  },
+
+  // -------------------------------------------------------------------------
+  // BATTLE ROYALE — projecteur
+  // -------------------------------------------------------------------------
+  {
+    cle: 'br-projo-lobby',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Salle d\u2019attente (projo)',
+    description: 'Deux \u00e9tapes, un QR, compte \u00e0 rebours.',
+    state: () => baseBattle({ status: 'lobby' }, { roundNumber: 0, survivorCount: 0 }),
+  },
+  {
+    cle: 'br-projo-regles',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'R\u00e8gles (projo)',
+    description: 'La s\u00e9quence tutorielle battle sur grand \u00e9cran.',
+    regles: 'battle',
+    state: () => baseBattle({ status: 'rules' }, { roundNumber: 0, survivorCount: 0 }),
+  },
+  {
+    cle: 'br-projo-intro',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Intro de manche',
+    description: 'Cat\u00e9gories, pseudos, num\u00e9ro de manche.',
+    sauts: [
+      ['Cat\u00e9gories', 800],
+      ['Pseudos', 5200],
+      ['Manche', 9200],
+    ],
+    state: () =>
+      baseBattle({ status: 'round_intro', phaseEndsAt: serverNow() + 12000 }, { survivorCount: 40 }),
+  },
+  {
+    cle: 'br-projo-intro-finale',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Intro de finale',
+    description: 'Les dix finalistes annonc\u00e9s.',
+    sauts: [
+      ['Cat\u00e9gories', 800],
+      ['Finalistes', 5200],
+      ['Finale', 9200],
+    ],
+    state: () =>
+      baseBattle(
+        { status: 'round_intro', phaseEndsAt: serverNow() + 12000 },
+        { isFinal: true, survivorCount: 10, roundNumber: 4, generalStandings: standingsBattle(12) },
+      ),
+  },
+  {
+    cle: 'br-projo-annonce',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Annonce + d\u00e9compte',
+    description: 'Cat\u00e9gorie, difficult\u00e9, puis 3-2-1.',
+    sauts: [
+      ['Cat\u00e9gorie', 500],
+      ['D\u00e9compte', 3200],
+    ],
+    state: () =>
+      baseBattle({ status: 'announce', phaseEndsAt: serverNow() + 6000, question: QUESTION_BATTLE }),
+  },
+  {
+    cle: 'br-projo-question',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Question (projo)',
+    description: 'Chrono 15 s, compteur de survivants.',
+    sauts: [
+      ['Question', 500],
+      ['R\u00e9ponses', QUESTION_REPONSES_MS + 400],
+    ],
+    state: () =>
+      baseBattle({ status: 'question', phaseEndsAt: serverNow() + 15000, question: QUESTION_BATTLE }),
+  },
+  {
+    cle: 'br-projo-verdict',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Verdict (projo)',
+    description: 'Suspense pendant que l\u2019animateur v\u00e9rifie.',
+    state: () =>
+      baseBattle({ status: 'verdict', question: QUESTION_BATTLE }, { verdictPending: true }),
+  },
+  {
+    cle: 'br-projo-reveal',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'R\u00e9v\u00e9lation (projo)',
+    description: 'R\u00e9ponse, \u00e9limin\u00e9s un par un, survivants.',
+    sauts: [
+      ['R\u00e9ponse', 600],
+      ['\u00c9limin\u00e9s', 2600],
+      ['Survivants', 6000],
+    ],
+    state: () =>
+      baseBattle({ status: 'reveal', question: QUESTION_BATTLE }, { survivorCount: 14, reveal: revealBattle() }),
+  },
+  {
+    cle: 'br-projo-palier',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Palier TOP 10',
+    description: 'La prise d\u2019\u00e9cran plein cadre du legacy.',
+    sauts: [
+      ['R\u00e9ponse', 600],
+      ['\u00c9limin\u00e9s', 2600],
+      ['Palier', 7000],
+    ],
+    state: () =>
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE },
+        {
+          survivorCount: 10,
+          reveal: { ...revealBattle(), milestone: 10, survivorsBefore: 13, survivorsAfter: 10 },
+          generalStandings: standingsBattle(12),
+        },
+      ),
+  },
+  {
+    cle: 'br-projo-repechage',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Rep\u00eachage (projo)',
+    description: '\u00c9galit\u00e9 : personne ne tombe.',
+    state: () =>
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE },
+        { survivorCount: 18, reveal: { ...revealBattle(), eliminated: [], repechage: true, survivorsAfter: 18 } },
+      ),
+  },
+  {
+    cle: 'br-projo-victoire',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Victoire (projo)',
+    description: 'Dernier survivant de la finale.',
+    state: () =>
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE },
+        {
+          isFinal: true,
+          survivorCount: 1,
+          reveal: { ...revealBattle(), eliminated: [{ pseudo: 'L\u00e9a', reason: 'wrong' }], survivorsBefore: 2, survivorsAfter: 1, victory: true },
+          winner: { playerId: 'lab-0', pseudo: 'Marco' },
+        },
+      ),
+  },
+  {
+    cle: 'br-projo-fin-manche',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Fin de manche (projo)',
+    description: 'Top 10 qualifi\u00e9 et peloton pagin\u00e9.',
+    state: () =>
+      baseBattle({ status: 'round_end' }, { survivorCount: 1, generalStandings: standingsBattle() }),
+  },
+  {
+    cle: 'br-projo-pause',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Pause (projo)',
+    description: 'Pseudos qui d\u00e9rivent et compte \u00e0 rebours.',
+    state: () => baseBattle({ status: 'pause' }, { survivorCount: 18 }),
+  },
+  {
+    cle: 'br-projo-fondu',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Fondu de fin',
+    description: 'Les cinq secondes avant le retour \u00e0 l\u2019accueil.',
+    state: () => baseBattle({ status: 'closing' }, { survivorCount: 1 }),
+  },
+  {
+    cle: 'br-projo-fin',
+    jeu: 'battle',
+    surface: 'projo',
+    label: '\u00c9cran de fin (projo)',
+    description: 'Vainqueur, classement final, confettis.',
+    state: () =>
+      baseBattle(
+        { status: 'end', endTexts: { winnerText: 'F\u00e9licitations \u00e0 Marco qui remporte un Cocktail signature !', endText: 'Rendez-vous mercredi pour la revanche !' } },
+        { isFinal: true, survivorCount: 1, finalStandings: standingsBattle(20), winner: { playerId: 'lab-0', pseudo: 'Marco' } },
+      ),
   },
 ];
 

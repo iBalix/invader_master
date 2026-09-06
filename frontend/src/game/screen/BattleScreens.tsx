@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import type { BattleStandingEntry, PublicState } from '../lib/gameClient';
 import { DifficultyBadge, TimerRing } from '../ui/bits';
 import { FullCenter, LobbyProjo } from './ScreenApp';
+import BattleRules from '../player/BattleRules';
 
 /** repli si la session ne publie pas le reglage (vieille session en cours) */
 const STANDINGS_PAGE_DEFAUT_MS = 10000;
@@ -28,7 +29,7 @@ export function BattleProjectorBody({
     case 'lobby':
       return <LobbyProjo state={state} />;
     case 'rules':
-      return <BattleRulesProjo />;
+      return <BattleRules phaseStartedAt={state.phaseStartedAt} embedded />;
     case 'round_intro':
       return <RoundIntroProjo state={state} />;
     case 'announce':
@@ -64,28 +65,6 @@ export function BattleProjectorBody({
 // ---------------------------------------------------------------------------
 // Règles + intro de manche
 // ---------------------------------------------------------------------------
-
-function BattleRulesProjo() {
-  const rules = [
-    { emoji: '⚔️', text: 'Mauvaise réponse ou pas de réponse = ÉLIMINÉ de la manche' },
-    { emoji: '⭐', text: 'Chaque bonne réponse rapporte 1 point, même une fois éliminé !' },
-    { emoji: '🏅', text: 'Fin de manche : ta place rapporte gros, 25 points au dernier survivant' },
-    { emoji: '👑', text: 'Le TOP 10 du classement général s\'affronte en FINALE' },
-  ];
-  return (
-    <FullCenter>
-      <h1 className="mb-12 text-6xl font-black uppercase tracking-wider">Les règles</h1>
-      <div className="flex max-w-4xl flex-col gap-6">
-        {rules.map((r, i) => (
-          <div key={i} className="anim-fade-up flex items-center gap-6 rounded-2xl border border-white/10 bg-white/5 px-8 py-5" style={{ animationDelay: `${i * 0.12}s` }}>
-            <span className="text-5xl">{r.emoji}</span>
-            <span className="text-2xl font-semibold">{r.text}</span>
-          </div>
-        ))}
-      </div>
-    </FullCenter>
-  );
-}
 
 function RoundIntroProjo({ state }: { state: PublicState }) {
   const b = state.battle;

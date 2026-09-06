@@ -11,6 +11,7 @@ import { ApiError, gameApi, questionShownAt, type PublicState, type You } from '
 import { usePhaseCountdown } from '../hooks/useGameSession';
 import { DifficultyBadge, TimerRing } from '../ui/bits';
 import { ANSWER_COLORS, BigMessage, Center, Spinner, type ScreenProps } from './PlayerApp';
+import BattleRules from './BattleRules';
 
 type BattleProps = ScreenProps & { you: You };
 
@@ -38,7 +39,7 @@ export function BattlePlayerScreen(props: BattleProps) {
       case 'lobby':
         return <BattleLobbyScreen {...props} />;
       case 'rules':
-        return <BattleRulesScreen />;
+        return <BattleRules phaseStartedAt={state.phaseStartedAt} embedded={props.embedded} />;
       case 'round_intro':
         return (
           <Center>
@@ -160,22 +161,6 @@ function BattleLobbyScreen({ state, you, sessionRef, playerToken, onLeft }: Batt
         >
           Quitter ({you.pseudo})
         </button>
-      </div>
-    </Center>
-  );
-}
-
-function BattleRulesScreen() {
-  return (
-    <Center>
-      <div className="anim-fade-up max-w-sm">
-        <h2 className="mb-5 text-center text-2xl font-black uppercase tracking-wider">Les règles</h2>
-        <ul className="space-y-3 text-white/80">
-          <li className="flex gap-3"><span>⚔️</span><span>Mauvaise réponse ou pas de réponse = ÉLIMINÉ de la manche.</span></li>
-          <li className="flex gap-3"><span>⭐</span><span>Chaque bonne réponse rapporte 1 point, même éliminé !</span></li>
-          <li className="flex gap-3"><span>🏅</span><span>En fin de manche, ta place rapporte gros : 25 points au dernier survivant.</span></li>
-          <li className="flex gap-3"><span>👑</span><span>Le top 10 du classement général s'affronte en FINALE.</span></li>
-        </ul>
       </div>
     </Center>
   );

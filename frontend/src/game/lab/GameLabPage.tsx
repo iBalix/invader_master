@@ -19,7 +19,8 @@ import { gameAudio } from '../screen/audio';
 import { BarScreen, ProjectorBody } from '../screen/ScreenApp';
 import { JOKER_TYPES, type JokerType, type PublicState, type You } from '../lib/gameClient';
 import QuizRules, { NB_CHAPITRES_REGLES } from '../player/QuizRules';
-import { SCENARIOS } from './labFixtures';
+import BattleRules, { NB_CHAPITRES_BATTLE } from '../player/BattleRules';
+import { JEUX, SCENARIOS, SURFACES, type LabJeu } from './labFixtures';
 import '../game.css';
 
 type Gabarit = 'mini' | 'phone' | 'table' | 'projo';
@@ -39,6 +40,11 @@ const GABARITS: Array<{ cle: Gabarit; label: string; note: string }> = [
 ];
 
 export default function GameLabPage() {
+  // Deux axes de navigation : QUEL JEU (quiz/blindtest ou battle), puis QUELLE
+  // SURFACE (le telephone du joueur, l'ecran de la salle, la console de
+  // l'animateur). La liste a plat depassait quarante entrees : on ne trouvait
+  // plus rien.
+  const [jeu, setJeu] = useState<LabJeu>('quiz');
   const [scenarioCle, setScenarioCle] = useState(SCENARIOS[0].cle);
   const [gabarit, setGabarit] = useState<Gabarit>('mini');
   const [runId, setRunId] = useState(0);
@@ -74,7 +80,12 @@ export default function GameLabPage() {
   }, []);
 
   const scenario = SCENARIOS.find((s) => s.cle === scenarioCle) ?? SCENARIOS[0];
-  const estRegles = scenario.cle === 'regles' || scenario.cle === 'projo-regles';
+  const estRegles = scenario.regles !== undefined;
+  // le scenario porte le jeu dont il montre les regles : le selecteur de
+  // chapitre et le composant monte suivent, sinon un scenario battle affichait
+  // les chapitres du quiz
+  const Regles = scenario.regles === 'battle' ? BattleRules : QuizRules;
+  const nbChapitres = scenario.regles === 'battle' ? NB_CHAPITRES_BATTLE : NB_CHAPITRES_REGLES;
   // regeneres a chaque "rejouer" : phaseStartedAt repart de maintenant
   const { state: stateBrut, you } = useMemo(
     () => ({ state: scenario.state(), you: scenario.you?.() ?? null }),
@@ -100,10 +111,10 @@ export default function GameLabPage() {
   // le gabarit projecteur n'a de sens que pour les scenarios projecteur, et
   // inversement : on bascule automatiquement pour eviter les etats absurdes
   useEffect(() => {
-    if (scenario.groupe === 'Projecteur' && gabarit !== 'projo') setGabarit('projo');
-    if (scenario.groupe === 'Joueur' && gabarit === 'projo') setGabarit('mini');
+    if (scenario.surface === 'projo' && gabarit !== 'projo') setGabarit('projo');
+    if (scenario.surface !== 'projo' && gabarit === 'projo') setGabarit('mini');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenario.groupe]);
+  }, [scenario.surface]);
 
   return (
     // h-dvh + overflow-hidden sur la coque : chaque colonne gere SON propre
@@ -115,15 +126,46 @@ export default function GameLabPage() {
         <aside className="shrink-0 overflow-y-auto pb-4 lg:h-full lg:w-72">
           <h1 className="font-black uppercase tracking-[0.25em] text-cyan-300">Game Lab</h1>
           <p className="mt-1 text-xs text-white/40">
-            Écrans du quiz montés avec des données factices. Aucun impact sur les vraies parties.
+            Écrans montés avec des données factices. Aucun impact sur les vraies parties.
           </p>
-          {(['Joueur', 'Projecteur'] as const).map((groupe) => (
-            <div key={groupe} className="mt-4">
+
+          {/* axe 1 : le jeu */}
+          <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 p-1">
+            {JEUX.map((j) => (
+              <button
+                key={j.cle}
+                type="button"
+                onClick={() => {
+                  setJeu(j.cle);
+                  const premier = SCENARIOS.find((s) => s.jeu === j.cle);
+                  if (premier) {
+                    setScenarioCle(premier.cle);
+                    setSautMs(0);
+                    setChapitre(null);
+                    setRunId((v) => v + 1);
+                  }
+                }}
+                className={`rounded-lg px-2 py-2 text-xs font-black uppercase tracking-wider transition ${
+                  jeu === j.cle ? 'bg-cyan-400/20 text-cyan-200' : 'text-white/40 hover:bg-white/5'
+                }`}
+              >
+                <span className="mr-1">{j.emoji}</span>
+                {j.label}
+              </button>
+            ))}
+          </div>
+
+          {/* axe 2 : la surface */}
+          {SURFACES.map((surface) => {
+            const liste = SCENARIOS.filter((s) => s.jeu === jeu && s.surface === surface.cle);
+            if (liste.length === 0) return null;
+            return (
+            <div key={surface.cle} className="mt-4">
               <p className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-white/35">
-                {groupe}
+                {surface.label}
               </p>
               <div className="flex flex-col gap-1">
-                {SCENARIOS.filter((s) => s.groupe === groupe).map((s) => (
+                {liste.map((s) => (
                   <button
                     key={s.cle}
                     type="button"
@@ -145,7 +187,8 @@ export default function GameLabPage() {
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </aside>
 
         {/* scene */}
@@ -156,8 +199,8 @@ export default function GameLabPage() {
                 key={g.cle}
                 type="button"
                 disabled={
-                  (scenario.groupe === 'Projecteur' && g.cle !== 'projo') ||
-                  (scenario.groupe === 'Joueur' && g.cle === 'projo')
+                  (scenario.surface === 'projo' && g.cle !== 'projo') ||
+                  (scenario.surface !== 'projo' && g.cle === 'projo')
                 }
                 onClick={() => setGabarit(g.cle)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-bold disabled:opacity-25 ${
@@ -181,7 +224,7 @@ export default function GameLabPage() {
                 >
                   auto
                 </button>
-                {Array.from({ length: NB_CHAPITRES_REGLES }, (_, i) => (
+                {Array.from({ length: nbChapitres }, (_, i) => (
                   <button
                     key={i}
                     type="button"
@@ -202,7 +245,7 @@ export default function GameLabPage() {
                 </span>
                 {(
                   scenario.sauts ??
-                  (scenario.groupe === 'Projecteur'
+                  (scenario.surface === 'projo'
                     ? ([
                         ['Barres', 1500],
                         ['Suspense', 4700],
@@ -269,7 +312,7 @@ export default function GameLabPage() {
             gabarit === 'phone' || gabarit === 'mini' ? (
               <CadrePhone key={`${runId}-${chapitre}`} hauteur={HAUTEURS[gabarit]}>
                 <div className="game-bg h-full w-full overflow-hidden text-white">
-                  <QuizRules phaseStartedAt={state.phaseStartedAt} chapitreForce={chapitre} />
+                  <Regles phaseStartedAt={state.phaseStartedAt} chapitreForce={chapitre} />
                 </div>
               </CadrePhone>
             ) : (
@@ -279,7 +322,7 @@ export default function GameLabPage() {
                   className="game-bg h-full w-full overflow-hidden text-white"
                   style={gabarit === 'table' ? { zoom: 1.4 } : undefined}
                 >
-                  <QuizRules phaseStartedAt={state.phaseStartedAt} embedded chapitreForce={chapitre} />
+                  <Regles phaseStartedAt={state.phaseStartedAt} embedded chapitreForce={chapitre} />
                 </div>
               </CadreLarge>
             )
@@ -291,7 +334,7 @@ export default function GameLabPage() {
             <CadreLarge key={runId}>
               {scenario.cle === 'bar-permanent' ? (
                 <BarScreen state={state} />
-              ) : scenario.groupe === 'Projecteur' ? (
+              ) : scenario.surface === 'projo' ? (
                 <div className="game-bg flex h-full w-full flex-col text-white">
                   <ProjectorBody state={state} remaining={null} answeredCount={state.reveal?.answeredCount ?? 0} />
                 </div>
