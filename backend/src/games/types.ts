@@ -30,6 +30,7 @@ export type BattleStatus =
   | 'reveal'
   | 'round_end'
   | 'pause'
+  | 'resuming'
   | 'closing'
   | 'end';
 
@@ -45,6 +46,14 @@ export type BattleStatus =
  * pouvaient plus jouer. Le contrat de statuts doit rester stable.
  */
 export type ChessSessionStatus = 'lobby' | 'playing' | 'end';
+
+/**
+ * Flappy Bar : les mêmes trois statuts que les échecs, pour la même raison
+ * (pas de 4e statut : les dalles en kiosque gardent leur bundle en cache et un
+ * statut inconnu les rendrait muettes). Le compte à rebours et la manche en
+ * cours vivent dans runtime.flappybar.round, le classement dans lastRound.
+ */
+export type FlapSessionStatus = ChessSessionStatus;
 
 /** blackjack : phases d'une manche, le détail vit dans runtime.blackjack */
 export type BlackjackStatus =
@@ -235,6 +244,19 @@ export const SPEED_BONUS = [2, 1, 1];
  * redemande un pseudo comme a un nouveau venu.
  */
 export const AFK_MISS_LIMIT = 5;
+
+/**
+ * Battle : duree minimale de la phase reveal, miroir des seuils de mise en
+ * scene cote ecran (BR_REVEAL_* dans gameClient.ts). La revelation raconte
+ * quelque chose : la bonne reponse, les elimines qui tombent un par un, le
+ * compteur de survivants. Un animateur presse la coupait au milieu.
+ *
+ * Quand un palier est franchi, la prise d'ecran plein cadre (TOP 20 / 10 /
+ * 5 / 3) vient APRES : la fenetre est plus longue, sinon on tuait justement
+ * le moment le plus fort de la manche.
+ */
+export const BR_REVEAL_MIN_MS = 7_000;
+export const BR_REVEAL_MIN_PALIER_MS = 11_500;
 
 /**
  * Question audio : l'extrait joue seul ce temps avant que la question ne

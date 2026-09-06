@@ -601,6 +601,10 @@ export const BR_REVEAL_COMPTE_MS = 5200;
 export const BR_PALIER_MS = 6800;
 export const BR_PALIER_DUREE_MS = 4200;
 
+/** miroirs du backend : le GM ne peut pas couper la revelation avant la fin */
+export const BR_REVEAL_MIN_MS = 7000;
+export const BR_REVEAL_MIN_PALIER_MS = 11500;
+
 // ---------------------------------------------------------------------------
 // Compteurs d'attente (purement indicatifs, le GM garde la main)
 // ---------------------------------------------------------------------------

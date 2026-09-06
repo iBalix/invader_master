@@ -370,7 +370,7 @@ export function BigMessage({ emoji, title, sub }: { emoji: string; title: string
  * les joueurs relèvent la tête avant que la question tombe. Sans lui, la
  * question apparaissait sur un téléphone encore posé sur la table.
  */
-function ResumingScreen({ state }: { state: PublicState }) {
+export function ResumingScreen({ state }: { state: PublicState }) {
   const remaining = usePhaseCountdown(state.phaseEndsAt);
   const secondes = Math.max(1, Math.ceil((remaining ?? 0) / 1000));
   return (

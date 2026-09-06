@@ -7,10 +7,20 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, gameApi, questionShownAt, type PublicState, type You } from '../lib/gameClient';
+import {
+  ApiError,
+  gameApi,
+  questionShownAt,
+  QUESTION_REPONSES_MS,
+  serverNow,
+  type PublicState,
+  type You,
+} from '../lib/gameClient';
+import { gameAudio } from '../screen/audio';
+import { SON_BATTLE } from '../screen/battleSounds';
 import { usePhaseCountdown } from '../hooks/useGameSession';
 import { DifficultyBadge, TimerRing } from '../ui/bits';
-import { ANSWER_COLORS, BigMessage, Center, Spinner, type ScreenProps } from './PlayerApp';
+import { ANSWER_COLORS, BigMessage, Center, ResumingScreen, Spinner, type ScreenProps } from './PlayerApp';
 import BattleRules from './BattleRules';
 
 type BattleProps = ScreenProps & { you: You };
@@ -79,6 +89,10 @@ export function BattlePlayerScreen(props: BattleProps) {
             <BigMessage emoji="🍹" title="C'est la pause !" sub={state.config.pauseText} />
           </Center>
         );
+      case 'resuming':
+        // meme decompte qu'au quiz : la salle revient du bar, il faut lui dire
+        // quand regarder son ecran
+        return <ResumingScreen state={state} />;
       case 'closing':
         return (
           <Center>
@@ -228,6 +242,12 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
 
   if (!q) return <Center><Spinner /></Center>;
 
+  // Meme mise en scene que le projecteur : l'enonce se lit seul, les reponses
+  // arrivent ensuite. Les deux ecrans partagent la constante, donc ils sont
+  // synchronises par construction. En 'locked', tout est force visible.
+  const ecoule = serverNow() - (state.phaseStartedAt ?? serverNow());
+  const reponsesVisibles = grace || ecoule >= QUESTION_REPONSES_MS;
+
   const send = async (choice: number) => {
     if (!playerToken || sendState === 'sending' || sendState === 'recorded') return;
     setSendState('sending');
@@ -282,14 +302,24 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
         </p>
       )}
 
-      <div className="grid flex-1 content-start gap-2.5">
+      <div
+        className="grid flex-1 content-start gap-2.5"
+        style={{
+          opacity: reponsesVisibles ? 1 : 0,
+          transform: reponsesVisibles ? 'translateY(0)' : 'translateY(12px)',
+          transition: 'opacity 600ms ease, transform 600ms cubic-bezier(0.3, 1.1, 0.4, 1)',
+        }}
+      >
         {(q.answers ?? []).map((a, i) => (
           <button
             key={i}
             type="button"
-            disabled={answered}
+            disabled={answered || !reponsesVisibles}
             onClick={() => {
               setSelected(i);
+              // confirmation locale, son du legacy : le joueur sait que son
+              // choix est parti sans avoir a lire l'ecran
+              gameAudio.sample(SON_BATTLE.choix, { volume: 0.5 });
               void send(i);
             }}
             className={`rounded-xl border-2 px-4 py-3.5 text-left text-base font-semibold leading-snug transition-transform active:scale-[0.98] ${

@@ -139,9 +139,11 @@ export function BattleProjectorBody({
     case 'round_end':
       return <RoundEndProjo state={state} />;
     case 'pause':
+    case 'resuming':
       // meme ecran vivant que le quiz : pseudos qui derivent et compte a
       // rebours. Le bloc statique d'avant ne disait pas combien de temps
-      // durait la pause, et la salle revenait au hasard.
+      // durait la pause, et la salle revenait au hasard. En 'resuming', le
+      // meme ecran affiche le decompte des cinq dernieres secondes.
       return <PauseProjo state={state} remaining={remaining} />;
     case 'closing':
       return <ClosingProjo />;

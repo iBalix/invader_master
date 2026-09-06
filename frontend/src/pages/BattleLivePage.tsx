@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import { BR_REVEAL_MIN_MS, BR_REVEAL_MIN_PALIER_MS } from '../game/lib/gameClient';
 import LightsBadge from '../components/Live/LightsBadge';
 
 // ---------------------------------------------------------------------------
@@ -107,6 +108,7 @@ interface GmBattle {
     repechage: boolean;
     survivorsBefore: number;
     survivorsAfter: number;
+    milestone?: number | null;
     victory?: boolean;
   } | null;
   roundResult: {
@@ -127,6 +129,7 @@ interface GmState {
   status: string;
   quizName: string;
   serverNow: number;
+  phaseStartedAt: number | null;
   phaseEndsAt: number | null;
   currentQuestionIndex: number;
   playerCount: number;
@@ -495,8 +498,25 @@ function ControlPanel({
   action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
 }) {
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [maintenant, setMaintenant] = useState(() => Date.now());
   const s = state.status;
   const b = state.gm.battle;
+
+  // Verrou de revelation : le serveur refuse « question suivante » et « fin de
+  // manche » tant que la sequence n'a pas fini de se jouer (409). Le bouton
+  // affiche le compte a rebours plutot que de renvoyer un refus muet.
+  useEffect(() => {
+    if (s !== 'reveal') return;
+    const i = setInterval(() => setMaintenant(Date.now()), 400);
+    return () => clearInterval(i);
+  }, [s]);
+  const minimumReveal =
+    b?.reveal?.milestone != null ? BR_REVEAL_MIN_PALIER_MS : BR_REVEAL_MIN_MS;
+  const verrouMs =
+    s === 'reveal' && state.phaseStartedAt !== null && !b?.victoryPending
+      ? Math.max(0, state.phaseStartedAt + minimumReveal - (maintenant + (state.serverNow - Date.now())))
+      : 0;
+  const verrou = verrouMs > 0;
 
   useEffect(() => {
     if (!state.phaseEndsAt) {
@@ -590,11 +610,14 @@ function ControlPanel({
               </span>
             ) : (
               <>
-                <Btn variant="primary" disabled={busy} onClick={() => void action('next')}>
-                  <ChevronRight size={15} /> Question suivante ({b?.nextDifficulty})
+                <Btn variant="primary" disabled={busy || verrou} onClick={() => void action('next')}>
+                  <ChevronRight size={15} />{' '}
+                  {verrou
+                    ? `Révélation en cours... ${Math.ceil(verrouMs / 1000)}s`
+                    : `Question suivante (${b?.nextDifficulty})`}
                 </Btn>
                 {!b?.isFinal && (
-                  <Btn disabled={busy} onClick={() => void action('end-round', {}, 'Terminer la manche et distribuer les bonus ?')}>
+                  <Btn disabled={busy || verrou} onClick={() => void action('end-round', {}, 'Terminer la manche et distribuer les bonus ?')}>
                     <Flag size={15} /> Fin de manche
                   </Btn>
                 )}

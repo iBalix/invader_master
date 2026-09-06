@@ -43,6 +43,8 @@ import { switchScreensToDefault } from './screens.js';
 import { broadcast } from './realtime.js';
 import { ensureQuestionStock } from '../services/battleQuestionGen.js';
 import {
+  BR_REVEAL_MIN_MS,
+  BR_REVEAL_MIN_PALIER_MS,
   DEFAULT_BATTLE_CONFIG,
   type AnswerRow,
   type BattleEliminatedEntry,
@@ -69,6 +71,13 @@ const MILESTONES = [20, 10, 5, 3];
 /** durée d'affichage du reveal de victoire avant l'écran final automatique */
 const VICTORY_REVEAL_MS = 6000;
 
+/**
+ * Décompte de reprise après la pause, comme au quiz. Sans lui, la salle
+ * revenait du bar et l'écran avait déjà repris : personne ne savait quand
+ * regarder. Cinq secondes suffisent à rassembler.
+ */
+const RESUME_COUNTDOWN_MS = 5000;
+
 /** taille cible de la file d'aperçu GM par difficulté */
 const QUEUE_TARGET = 3;
 
@@ -89,6 +98,24 @@ function currentQuestion(session: SessionRow): QuestionSnapshot | null {
 
 function httpError(message: string, status: number): Error {
   return Object.assign(new Error(message), { httpStatus: status });
+}
+
+/**
+ * La revelation doit avoir eu le temps de se jouer. Le filet cote serveur : la
+ * console affiche deja un compte a rebours sur le bouton, mais elle peut etre
+ * rechargee ou pilotee par deux personnes.
+ */
+function assertRevealDone(session: SessionRow): void {
+  if (session.status !== 'reveal' || !session.phase_started_at) return;
+  const b = battle(session);
+  // la victoire a sa propre fenetre (VICTORY_REVEAL_MS) et enchaine toute
+  // seule : ne pas la verrouiller deux fois
+  if (b.victoryPending) return;
+  const minimum = b.reveal?.milestone != null ? BR_REVEAL_MIN_PALIER_MS : BR_REVEAL_MIN_MS;
+  const debut = new Date(session.phase_started_at).getTime();
+  if (Date.now() < debut + minimum) {
+    throw Object.assign(new Error('error_reveal_sequence'), { httpStatus: 409 });
+  }
 }
 
 function assertStatus(session: SessionRow, allowed: SessionRow['status'][], action: string): void {
@@ -321,6 +348,15 @@ function battleAdvance(session: SessionRow): boolean {
       if (!b.victoryPending) return false;
       b.victoryPending = false;
       setPhase(session, 'end', null);
+      return true;
+    }
+    case 'resuming': {
+      // le decompte est ecoule : on revient a l'ecran d'avant la pause
+      const target =
+        (session.previous_status as SessionRow['status'] | null) ??
+        (b.generalStandings ? 'round_end' : 'lobby');
+      setPhase(session, target, null);
+      session.previous_status = null;
       return true;
     }
     case 'closing': {
@@ -974,6 +1010,7 @@ export async function battleGmAction(
       case 'next': {
         assertStatus(session, ['reveal'], action);
         if (b.victoryPending) throw httpError('La finale est jouée', 409);
+        assertRevealDone(session);
         await drawNextQuestion(session);
         setPhase(session, 'announce', session.config.announceMs);
         break;
@@ -1022,6 +1059,7 @@ export async function battleGmAction(
       }
       case 'end-round': {
         assertStatus(session, ['reveal'], action);
+        assertRevealDone(session);
         if (b.isFinal) throw httpError('La finale se termine à un survivant', 409);
         await applyEndRound(session);
         break;
@@ -1034,11 +1072,9 @@ export async function battleGmAction(
       }
       case 'resume': {
         assertStatus(session, ['pause'], action);
-        const target =
-          (session.previous_status as SessionRow['status'] | null) ??
-          (b.generalStandings ? 'round_end' : 'lobby');
-        setPhase(session, target, null);
-        session.previous_status = null;
+        // previous_status est CONSERVE : c'est l'advancer qui le consomme a la
+        // fin du decompte (cf. case 'resuming')
+        setPhase(session, 'resuming', RESUME_COUNTDOWN_MS);
         break;
       }
       case 'cancel-question': {

@@ -1284,12 +1284,31 @@ export const SCENARIOS: LabScenario[] = [
     state: () => baseBattle({ status: 'pause' }, { survivorCount: 18 }),
   },
   {
+    cle: 'br-reprise',
+    jeu: 'battle',
+    surface: 'joueur',
+    label: 'Reprise apr\u00e8s pause',
+    description: 'Le d\u00e9compte de cinq secondes avant que \u00e7a reparte.',
+    state: () =>
+      baseBattle({ status: 'resuming', phaseEndsAt: serverNow() + 5000 }, { survivorCount: 18 }),
+    you: () => baseYouBattle(),
+  },
+  {
     cle: 'br-projo-fondu',
     jeu: 'battle',
     surface: 'projo',
     label: 'Fondu de fin',
     description: 'Les cinq secondes avant le retour \u00e0 l\u2019accueil.',
     state: () => baseBattle({ status: 'closing' }, { survivorCount: 1 }),
+  },
+  {
+    cle: 'br-projo-reprise',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Reprise (projo)',
+    description: 'Le m\u00eame \u00e9cran de pause, avec le d\u00e9compte.',
+    state: () =>
+      baseBattle({ status: 'resuming', phaseEndsAt: serverNow() + 5000 }, { survivorCount: 18 }),
   },
   {
     cle: 'br-projo-fin',
