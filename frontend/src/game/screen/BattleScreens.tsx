@@ -12,7 +12,8 @@ import type { BattleStandingEntry, PublicState } from '../lib/gameClient';
 import { DifficultyBadge, TimerRing } from '../ui/bits';
 import { FullCenter, LobbyProjo } from './ScreenApp';
 
-const STANDINGS_PAGE_MS = 10000;
+/** repli si la session ne publie pas le reglage (vieille session en cours) */
+const STANDINGS_PAGE_DEFAUT_MS = 10000;
 
 export function BattleProjectorBody({
   state,
@@ -345,12 +346,13 @@ function RoundEndProjo({ state }: { state: PublicState }) {
   const [page, setPage] = useState(0);
 
   // rotation lente des pages hors top 10 (retour terrain : ~10 s)
+  const rotationMs = state.config.standingsPageMs ?? STANDINGS_PAGE_DEFAUT_MS;
   useEffect(() => {
     setPage(0);
     if (pageCount <= 1) return;
-    const interval = setInterval(() => setPage((p) => (p + 1) % pageCount), STANDINGS_PAGE_MS);
+    const interval = setInterval(() => setPage((p) => (p + 1) % pageCount), rotationMs);
     return () => clearInterval(interval);
-  }, [pageCount, state.status]);
+  }, [pageCount, state.status, rotationMs]);
 
   const visible = rest.slice(page * pageSize, (page + 1) * pageSize);
 

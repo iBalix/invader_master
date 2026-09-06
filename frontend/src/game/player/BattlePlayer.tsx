@@ -192,7 +192,8 @@ function BattleAnnounceScreen({ state }: { state: PublicState }) {
     <Center>
       <div className="anim-pop w-full max-w-sm text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/40">
-          Question {((state.battle?.roundNumber ?? 1) > 0 ? '' : '')}{q.index + 1}
+          {state.battle?.isFinal ? 'Finale' : `Manche ${state.battle?.roundNumber ?? 1}`} · Question{' '}
+          {state.battle?.questionInRound ?? q.index + 1}
         </p>
         <h2 className="mt-2 text-balance text-2xl font-black">{q.theme ?? 'Culture générale'}</h2>
         <div className="mt-3 flex items-center justify-center gap-2">

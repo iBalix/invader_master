@@ -72,6 +72,15 @@ interface VerdictPendingEntry {
   overturned?: 'correct' | 'revived' | null;
 }
 
+interface BattleStanding {
+  playerId: string;
+  pseudo: string;
+  score: number;
+  position: number;
+  qualifiedForFinal: boolean;
+  isSpectator: boolean;
+}
+
 interface GmBattle {
   roundNumber: number;
   roundQuestionCount: number;
@@ -104,14 +113,9 @@ interface GmBattle {
     roundNumber: number;
     entries: Array<{ pseudo: string; rank: number; bonus: number; survived: boolean }>;
   } | null;
-  generalStandings: Array<{
-    playerId: string;
-    pseudo: string;
-    score: number;
-    position: number;
-    qualifiedForFinal: boolean;
-    isSpectator: boolean;
-  }> | null;
+  generalStandings: BattleStanding[] | null;
+  /** classement de la FINALE, precalcule quand elle est jouee (ecran de fin) */
+  finalStandings: BattleStanding[] | null;
   winner: { pseudo: string } | null;
   victoryPending: boolean;
 }
@@ -232,6 +236,7 @@ export default function BattleLivePage() {
         <div className="space-y-6 xl:col-span-2">
           <ControlPanel state={state} busy={busy} action={action} />
           {state.status === 'verdict' && <VerdictPanel state={state} busy={busy} action={action} />}
+          {state.status === 'reveal' && <RevealPanel state={state} />}
           <QuestionCard state={state} />
           {(state.status === 'round_end' || state.status === 'end') && <StandingsCard state={state} />}
           <QueuePanel state={state} action={action} />
@@ -525,6 +530,9 @@ function ControlPanel({
             <Btn variant="primary" disabled={busy || state.playerCount < 2} onClick={() => void action('start-round')}>
               <Play size={15} /> Lancer la manche 1
             </Btn>
+            <Btn disabled={busy} onClick={() => void action('pause')}>
+              <Pause size={15} /> Pause
+            </Btn>
             {state.playerCount < 2 && (
               <span className="inline-flex items-center rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
                 2 joueurs minimum (ajoute des bots pour tester)
@@ -559,9 +567,19 @@ function ControlPanel({
         )}
 
         {s === 'verdict' && (
-          <span className="inline-flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700">
-            <Eye size={15} /> Vérifie les éliminations ci-dessous avant d'afficher les résultats
-          </span>
+          <>
+            <span className="inline-flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700">
+              <Eye size={15} /> Vérifie les éliminations ci-dessous avant d'afficher les résultats
+            </span>
+            {/* le backend accepte les deux ici : une question posee de travers
+                se rejoue sans devoir d'abord afficher les resultats */}
+            <Btn variant="warn" disabled={busy} onClick={() => void action('replay-question', {}, 'Rejouer cette question ? (les réponses seront effacées)')}>
+              <RotateCcw size={15} /> Rejouer
+            </Btn>
+            <Btn variant="warn" disabled={busy} onClick={() => void action('cancel-question', {}, 'Annuler cette question ?')}>
+              <X size={15} /> Annuler
+            </Btn>
+          </>
         )}
 
         {s === 'reveal' && (
@@ -587,6 +605,9 @@ function ControlPanel({
             </Btn>
             <Btn variant="warn" disabled={busy} onClick={() => void action('cancel-question', {}, 'Annuler cette question ? (éliminations et points annulés)')}>
               <X size={15} /> Annuler
+            </Btn>
+            <Btn disabled={busy} onClick={() => void action('pause')}>
+              <Pause size={15} /> Pause
             </Btn>
           </>
         )}
@@ -814,12 +835,17 @@ function QuestionCard({ state }: { state: GmState }) {
 function StandingsCard({ state }: { state: GmState }) {
   const b = state.gm.battle;
   if (!b) return null;
-  const standings = b.generalStandings ?? [];
+  // une fois la finale jouee, le general d'AVANT la finale n'est plus le
+  // classement de la soiree : c'est finalStandings qui fait foi
+  const final = b.finalStandings ?? null;
+  const standings = final ?? b.generalStandings ?? [];
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <h2 className="mb-3 flex items-center gap-2 font-bold text-gray-900">
-        <ListOrdered size={16} /> Classement général
-        {b.roundResult && <span className="text-sm font-normal text-gray-500">(après manche {b.roundResult.roundNumber})</span>}
+        <ListOrdered size={16} /> {final ? 'Classement final' : 'Classement général'}
+        {!final && b.roundResult && (
+          <span className="text-sm font-normal text-gray-500">(après manche {b.roundResult.roundNumber})</span>
+        )}
       </h2>
       <div className="max-h-96 space-y-1 overflow-y-auto">
         {standings.map((s) => (
@@ -839,6 +865,61 @@ function StandingsCard({ state }: { state: GmState }) {
         ))}
         {standings.length === 0 && <p className="text-sm text-gray-400">Pas encore de classement.</p>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Ce que la SALLE voit pendant la revelation. Le backend servait deja ce bloc,
+ * il n'etait rendu nulle part : l'animateur commentait une revelation qu'il ne
+ * voyait pas, sans la bonne reponse ni la liste des elimines effectifs.
+ */
+function RevealPanel({ state }: { state: GmState }) {
+  const r = state.gm.battle?.reveal;
+  if (!r) return null;
+  if (r.cancelled) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+        <h2 className="font-bold text-amber-800">🚫 Question annulée</h2>
+        <p className="mt-1 text-sm text-amber-700">La salle voit « elle ne compte pas, on continue ».</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 className="mb-3 flex items-center gap-2 font-bold text-gray-900">
+        <Eye size={16} /> À l'écran maintenant
+      </h2>
+      {r.correctAnswer && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+          ✔ {r.correctAnswer}
+        </p>
+      )}
+      <p className="mt-3 text-sm text-gray-600">
+        <span className="font-mono font-bold text-gray-900">{r.survivorsBefore}</span> →{' '}
+        <span className="font-mono font-bold text-indigo-600">{r.survivorsAfter}</span> survivant
+        {r.survivorsAfter > 1 ? 's' : ''}
+        {r.victory && <span className="ml-2 font-bold text-amber-600">👑 victoire</span>}
+      </p>
+      {r.repechage ? (
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+          🛟 Repêchage général : personne n'est éliminé.
+        </p>
+      ) : r.eliminated.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-500">Aucun éliminé sur cette question.</p>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {r.eliminated.map((e) => (
+            <span
+              key={e.pseudo}
+              className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+              title={e.reason === 'timeout' ? 'pas de réponse' : 'mauvaise réponse'}
+            >
+              💀 {e.pseudo}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

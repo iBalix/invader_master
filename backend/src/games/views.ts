@@ -142,6 +142,10 @@ export function buildPublicState(
       // de test. Le champ est whitelisté ici, pas déversé : ne pas remplacer ce
       // bloc par un spread de cfg, il contient des textes de pilotage.
       testMode: cfg.testMode === true,
+      // battle : cadence de rotation du classement de fin de manche sur le
+      // projecteur. Le reglage existait sans jamais etre lu (valeur en dur cote
+      // ecran) : il est desormais publie.
+      standingsPageMs: cfg.standingsPageMs ?? 10_000,
     },
     playerCount: active.length,
     // en battle, tout le monde est "eliminated" entre deux manches : l'ecran bar

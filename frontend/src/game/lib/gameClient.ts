@@ -217,6 +217,8 @@ export interface PublicState {
     musicVolume?: number;
     sfxVolume?: number;
     mediaVolume?: number;
+    /** battle : rotation du classement de fin de manche (projecteur) */
+    standingsPageMs?: number;
   };
   playerCount: number;
   /** joueurs inscrits (survivants + eliminés), pour les ecrans d'appel */

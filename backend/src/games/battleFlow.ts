@@ -38,6 +38,7 @@ import {
   validatePseudo,
   withSession,
 } from './engine.js';
+import { invalidateActiveSession } from './lights.js';
 import { switchScreensToDefault } from './screens.js';
 import { broadcast } from './realtime.js';
 import { ensureQuestionStock } from '../services/battleQuestionGen.js';
@@ -254,12 +255,18 @@ export async function createBattleSession(
   // Un seul run PROJO actif à la fois (quiz/battle s'excluent mutuellement).
   // Les jeux de tables (chess, ...) vivent en parallèle : jamais fauchés ici.
   await endActiveSessions(['quiz', 'battle']);
+  // le cache « session qui eclaire le bar » (10 s) ne doit pas jeter les
+  // premiers cues de la session qui nait (meme correctif qu'au quiz)
+  invalidateActiveSession();
 
   const session = await insertSession({
     mode: 'battle',
     status: 'lobby',
     config,
     runtime,
+    // base du compte a rebours indicatif du lobby (20 min) sur les ecrans :
+    // sans lui, le projecteur affichait un 20:00 fige
+    phaseStartedAt: new Date().toISOString(),
   });
   void ensureQuestionStock().catch(() => undefined);
   return session;
@@ -484,7 +491,12 @@ function buildGeneralStandings(session: SessionRow, players: PlayerRow[]): Battl
   const b = battle(session);
   const finalSize = session.config.finalSize ?? 10;
   const last = b.lastGeneralPositions ?? {};
-  const ranked = sortForStandings(players.filter((p) => p.status !== 'removed'));
+  // 'waiting' = inscrit pendant la manche en cours, n'a joue AUCUNE question :
+  // hors classement, sinon il figurait au general avec 0 point et pouvait meme
+  // etre qualifie pour la finale a petit effectif (start-final part d'ici).
+  const ranked = sortForStandings(
+    players.filter((p) => p.status !== 'removed' && p.status !== 'waiting'),
+  );
   let qualifiedCount = 0;
   return ranked.map((p, i) => {
     const qualified = p.status !== 'spectator' && qualifiedCount < finalSize;
