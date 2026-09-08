@@ -17,19 +17,16 @@ const CDN_BASE = `https://cdn.contentful.com/spaces/${SPACE_ID}/environments/mas
  * Phrases de pause et de fin : Contentful les livre avec le balisage de
  * l'ancien projecteur PHP (<span class="text-green">, <br>). Le moteur actuel
  * les rend en TEXTE BRUT partout (projecteur, telephones, dalles) : les
- * balises s'affichaient donc littéralement a l'ecran. On les retire a
- * l'entree, en gardant le saut de ligne que <br> portait.
+ * balises s'affichaient donc littéralement a l'ecran.
+ *
+ * On ne garde QUE le texte : pas de balise, pas de saut de ligne. Les <br>
+ * deviennent un espace, les conteneurs se chargent des retours a la ligne.
  */
 function texteSansBalises(v: unknown): string | null {
   if (typeof v !== 'string' || v.trim() === '') return null;
   const propre = v
-    .replace(/<br\s*\/?\s*>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/[ \t]+/g, ' ')
-    .split('\n')
-    .map((l) => l.trim())
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
   return propre === '' ? null : propre;
 }

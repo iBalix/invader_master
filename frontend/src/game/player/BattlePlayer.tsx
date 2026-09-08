@@ -503,7 +503,7 @@ function BattleEndScreen({ state, you }: { state: PublicState; you: You }) {
     <Center>
       <div className="anim-pop w-full max-w-sm text-center">
         <div className="mb-3 text-6xl">{isWinner ? '👑' : '🏁'}</div>
-        <h2 className="whitespace-pre-line text-balance text-2xl font-black">
+        <h2 className="text-balance text-2xl font-black">
           {isWinner ? 'VICTOIRE ROYALE !' : state.endTexts?.winnerText}
         </h2>
         {mine && (
@@ -513,7 +513,7 @@ function BattleEndScreen({ state, you }: { state: PublicState; you: You }) {
             <p className="text-lg font-bold">{mine.score} points</p>
           </div>
         )}
-        <p className="mt-6 whitespace-pre-line text-white/50">{state.endTexts?.endText}</p>
+        <p className="mt-6 text-white/50">{state.endTexts?.endText}</p>
       </div>
     </Center>
   );
