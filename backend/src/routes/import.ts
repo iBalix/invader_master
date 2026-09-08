@@ -13,6 +13,27 @@ const SPACE_ID = process.env.CONTENTFUL_SPACE_ID ?? '';
 const TOKEN = process.env.CONTENTFUL_DELIVERY_TOKEN ?? '';
 const CDN_BASE = `https://cdn.contentful.com/spaces/${SPACE_ID}/environments/master`;
 
+/**
+ * Phrases de pause et de fin : Contentful les livre avec le balisage de
+ * l'ancien projecteur PHP (<span class="text-green">, <br>). Le moteur actuel
+ * les rend en TEXTE BRUT partout (projecteur, telephones, dalles) : les
+ * balises s'affichaient donc littéralement a l'ecran. On les retire a
+ * l'entree, en gardant le saut de ligne que <br> portait.
+ */
+function texteSansBalises(v: unknown): string | null {
+  if (typeof v !== 'string' || v.trim() === '') return null;
+  const propre = v
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .split('\n')
+    .map((l) => l.trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return propre === '' ? null : propre;
+}
+
 // ---------------------------------------------------------------------------
 // Contentful helpers
 // ---------------------------------------------------------------------------
@@ -268,9 +289,9 @@ importRoutes.post('/sync-contentful-quizzes', async (req: Request, res: Response
         name: (fields.name as string) || `Import ${entryId}`,
         theme: (fields.theme as string) || '',
         background_music_url: bgMusicUrl,
-        pause_promotional_text: (fields.pausePromotionalText as string) || null,
-        end_winner_text: (fields.endWinnerText as string) || null,
-        end_text_final: (fields.endTextFinal as string) || null,
+        pause_promotional_text: texteSansBalises(fields.pausePromotionalText),
+        end_winner_text: texteSansBalises(fields.endWinnerText),
+        end_text_final: texteSansBalises(fields.endTextFinal),
       do_not_delete: (fields.doNotDelete as boolean) ?? false,
       published: false,
       contentful_id: entryId,
@@ -477,9 +498,9 @@ importRoutes.post('/contentful-quiz', async (req: Request, res: Response) => {
       name: (fields.name as string) || `Import ${entryId}`,
       theme: (fields.theme as string) || '',
       background_music_url: bgMusicUrl,
-      pause_promotional_text: (fields.pausePromotionalText as string) || null,
-      end_winner_text: (fields.endWinnerText as string) || null,
-      end_text_final: (fields.endTextFinal as string) || null,
+      pause_promotional_text: texteSansBalises(fields.pausePromotionalText),
+      end_winner_text: texteSansBalises(fields.endWinnerText),
+      end_text_final: texteSansBalises(fields.endTextFinal),
         do_not_delete: (fields.doNotDelete as boolean) ?? false,
         published: false,
         contentful_id: entryId,

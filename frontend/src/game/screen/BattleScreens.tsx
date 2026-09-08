@@ -689,14 +689,14 @@ function BattleEndProjo({ state }: { state: PublicState }) {
         <h1 className="anim-pop mt-4 text-balance text-center text-7xl font-black text-amber-300">
           {winner?.pseudo ?? '?'}
         </h1>
-        <p className="mt-4 text-balance text-center text-3xl text-white/80">{state.endTexts?.winnerText}</p>
+        <p className="mt-4 whitespace-pre-line text-balance text-center text-3xl text-white/80">{state.endTexts?.winnerText}</p>
       </div>
       <div className="mx-auto mt-10 grid w-full max-w-6xl flex-1 grid-cols-2 gap-x-12 gap-y-1.5 content-start overflow-hidden">
         {standings.slice(0, 20).map((s) => (
           <BattleStandingRow key={s.pseudo} s={{ ...s, qualifiedForFinal: false }} big={s.position <= 3} />
         ))}
       </div>
-      <p className="mt-6 text-center text-2xl text-white/50">{state.endTexts?.endText}</p>
+      <p className="mt-6 whitespace-pre-line text-center text-2xl text-white/50">{state.endTexts?.endText}</p>
     </div>
   );
 }

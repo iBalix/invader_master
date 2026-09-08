@@ -789,7 +789,7 @@ export function PauseProjo({ state, remaining }: { state: PublicState; remaining
               C'est le moment d'aller reprendre des forces au bar !
             </p>
             {state.config.pauseText && (
-              <p className="mt-5 rounded-full border border-cyan-400/40 bg-cyan-400/10 px-8 py-3 text-3xl font-bold text-cyan-300">
+              <p className="mt-5 whitespace-pre-line rounded-full border border-cyan-400/40 bg-cyan-400/10 px-8 py-3 text-3xl font-bold text-cyan-300">
                 {state.config.pauseText}
               </p>
             )}
@@ -1868,7 +1868,7 @@ function EndProjo({ state }: { state: PublicState }) {
           </span>
         ))}
       </div>
-      <h1 className="anim-pop text-balance text-center text-6xl font-black leading-tight">
+      <h1 className="anim-pop whitespace-pre-line text-balance text-center text-6xl font-black leading-tight">
         {state.endTexts?.winnerText}
       </h1>
       <div className="mt-14 flex items-end gap-8">
@@ -1876,7 +1876,7 @@ function EndProjo({ state }: { state: PublicState }) {
         {podium[0] && <PodiumBlock s={podium[0]} height="h-56" medal="👑" winner />}
         {podium[2] && <PodiumBlock s={podium[2]} height="h-32" medal="🥉" />}
       </div>
-      <p className="mt-12 text-3xl text-white/60">{state.endTexts?.endText}</p>
+      <p className="mt-12 whitespace-pre-line text-center text-3xl text-white/60">{state.endTexts?.endText}</p>
     </FullCenter>
   );
 }

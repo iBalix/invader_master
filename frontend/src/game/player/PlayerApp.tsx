@@ -360,7 +360,7 @@ export function BigMessage({ emoji, title, sub }: { emoji: string; title: string
     <div className="anim-fade-up text-center">
       <div className="mb-4 text-5xl">{emoji}</div>
       <h2 className="text-balance text-2xl font-extrabold">{title}</h2>
-      {sub && <p className="mt-2 text-white/60">{sub}</p>}
+      {sub && <p className="mt-2 whitespace-pre-line text-white/60">{sub}</p>}
     </div>
   );
 }
@@ -492,7 +492,7 @@ export function PlayerScreen(props: ScreenProps) {
               {/* le texte configure (promo du soir) vient EN PLUS, il ne
                   remplace plus l'invitation : les deux ont leur role */}
               {state.config.pauseText && (
-                <p className="anim-pop mt-5 inline-block rounded-full border border-cyan-400/40 bg-cyan-400/10 px-5 py-2 font-bold text-cyan-300">
+                <p className="anim-pop mt-5 inline-block whitespace-pre-line rounded-full border border-cyan-400/40 bg-cyan-400/10 px-5 py-2 font-bold text-cyan-300">
                   {state.config.pauseText}
                 </p>
               )}
@@ -1159,7 +1159,7 @@ function EndScreen({ state, you }: { state: PublicState; you: You }) {
     <Center>
       <div className="anim-pop w-full max-w-sm text-center">
         <div className="mb-3 text-6xl">🏁</div>
-        <h2 className="text-balance text-2xl font-black">{state.endTexts?.winnerText}</h2>
+        <h2 className="whitespace-pre-line text-balance text-2xl font-black">{state.endTexts?.winnerText}</h2>
         {mine && (
           <div className="mt-6 rounded-2xl border border-white/15 bg-white/5 px-6 py-4">
             <p className="text-sm uppercase tracking-widest text-white/40">Ton résultat</p>
@@ -1167,7 +1167,7 @@ function EndScreen({ state, you }: { state: PublicState; you: You }) {
             <p className="text-lg font-bold">{mine.score ?? you.score} points</p>
           </div>
         )}
-        <p className="mt-6 text-white/50">{state.endTexts?.endText}</p>
+        <p className="mt-6 whitespace-pre-line text-white/50">{state.endTexts?.endText}</p>
       </div>
     </Center>
   );
