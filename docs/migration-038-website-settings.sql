@@ -58,12 +58,12 @@ INSERT INTO public.website_settings (
   top_banner_override
 )
 SELECT
-  '🟢 Ouvert ce soir de 18h à 23h30',
-  '🟢 Ouvert ce soir de 18h à 23h30',
-  '🟢 Ouvert ce soir de 18h à 23h30',
-  '🟢 Ouvert ce soir de 18h à 23h30',
-  '🟢 Ouvert ce soir de 18h à 0h30',
-  '🟢 Ouvert ce soir de 18h à 0h30',
-  '🟢 Ouvert ce soir de 17h30 à 23h',
+  '🟢 Ouvert ce soir de 17h30 à 23h30',
+  '🟢 Ouvert ce soir de 17h30 à 23h30',
+  '🟢 Ouvert ce soir de 17h30 à 23h30',
+  '🟢 Ouvert ce soir de 17h30 à 23h30',
+  '🟢 Ouvert ce soir de 17h30 à 00h30',
+  '🟢 Ouvert ce soir de 17h à 00h30',
+  '🟢 Ouvert ce soir de 17h à 23h',
   NULL
 WHERE NOT EXISTS (SELECT 1 FROM public.website_settings);

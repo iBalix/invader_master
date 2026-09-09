@@ -120,7 +120,7 @@ export default function WebsiteSettingsPage() {
                 type="text"
                 value={(settings[key] as string | null) ?? ''}
                 onChange={(e) => set(key, e.target.value)}
-                placeholder="Ex : 🟢 Ouvert ce soir de 18h à 23h30"
+                placeholder="Ex : 🟢 Ouvert ce soir de 17h30 à 23h30"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
