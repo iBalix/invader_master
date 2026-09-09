@@ -310,7 +310,7 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'quiz',
     surface: 'joueur',
     label: 'Question audio (pré-roll)',
-    description: "5 s d'extrait seul, puis question, puis réponses.",
+    description: "10 s d'extrait seul, puis question, puis réponses.",
     sauts: [
       ['Extrait', 1000],
       ['Question', AUDIO_PREROLL_MS + 400],
@@ -319,7 +319,7 @@ export const SCENARIOS: LabScenario[] = [
     state: () =>
       baseState({
         status: 'question',
-        phaseEndsAt: serverNow() + 28000,
+        phaseEndsAt: serverNow() + 30000,
         question: { ...QUESTION_QCM, question: 'Quel jeu utilise ce thème musical ?', musicUrl: extraitDemoUrl },
       }),
     you: () => baseYou({ jokers: ['fifty'] }),
@@ -757,7 +757,7 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'quiz',
     surface: 'projo',
     label: 'Question audio (projo)',
-    description: "Pré-roll 5 s « écoute bien », l'extrait continue ensuite.",
+    description: "Pré-roll 10 s « écoute bien », l'extrait continue ensuite.",
     sauts: [
       ['Extrait', 1000],
       ['Question', AUDIO_PREROLL_MS + 400],
@@ -766,7 +766,7 @@ export const SCENARIOS: LabScenario[] = [
     state: () =>
       baseState({
         status: 'question',
-        phaseEndsAt: serverNow() + 28000,
+        phaseEndsAt: serverNow() + 30000,
         question: { ...QUESTION_QCM, question: 'Quel jeu utilise ce thème musical ?', musicUrl: extraitDemoUrl },
       }),
   },

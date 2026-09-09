@@ -2,7 +2,7 @@
  * Moteur de jeu — types partagés (modes quiz / battle / chess)
  */
 
-export type GameMode = 'quiz' | 'battle' | 'chess' | 'blackjack';
+export type GameMode = 'quiz' | 'battle' | 'chess' | 'blackjack' | 'flappybar';
 
 export type QuizStatus =
   | 'lobby'
@@ -264,7 +264,7 @@ export const BR_REVEAL_MIN_PALIER_MS = 11_500;
  * d'autant pour ne pas manger le temps de jeu. Miroir de AUDIO_PREROLL_MS
  * cote frontend (gameClient.ts).
  */
-export const AUDIO_PREROLL_MS = 5000;
+export const AUDIO_PREROLL_MS = 10_000;
 
 /**
  * Duree minimale de la phase reveal. Cote joueur, une sequence personnelle

@@ -562,11 +562,12 @@ export const MENTION_VALEUR_MS = 900;
 export const QUESTION_REPONSES_MS = 3000;
 /**
  * Question audio : l'extrait joue SEUL pendant ce temps (ecran « extrait en
- * cours »), puis la question apparait et l'extrait continue. Comportement
- * herite d'invader_table (10 s a l'epoque, 5 s ici). Le backend allonge la
- * fenetre de reponse d'autant.
+ * cours »), puis la question apparait et l'extrait continue. 10 s, la valeur
+ * d'invader_table : 5 s ne laissaient pas le temps de reconnaitre un morceau.
+ * Le backend allonge la fenetre de reponse d'autant, le temps de jeu est donc
+ * inchange.
  */
-export const AUDIO_PREROLL_MS = 5000;
+export const AUDIO_PREROLL_MS = 10000;
 /** legacy : l'extrait ducke au reveal remonte ce delai apres la bonne reponse */
 export const AUDIO_REMONTEE_MS = 3500;
 

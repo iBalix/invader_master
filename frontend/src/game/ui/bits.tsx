@@ -239,15 +239,33 @@ export function FullscreenVideo({
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
 
+  /**
+   * Coupe les sous-titres.
+   *
+   * `cc_load_policy=0` dans l'URL ne suffit pas : YouTube le contourne des que
+   * le spectateur a active les sous-titres dans son compte ou son navigateur,
+   * et les sous-titres AUTOMATIQUES passent outre. Sur une question video, un
+   * sous-titre donne souvent la reponse a voix haute.
+   *
+   * On decharge donc le module de sous-titres du lecteur. Deux noms selon
+   * l'implementation servie ('cc' pour le lecteur HTML5, 'captions' pour
+   * l'ancien) : on envoie les deux, celui qui n'existe pas est ignore.
+   */
+  const couperSousTitres = useCallback(() => {
+    cmd('unloadModule', ['captions']);
+    cmd('unloadModule', ['cc']);
+  }, [cmd]);
+
   const lancer = useCallback(() => {
     const v = volumeRef.current;
     if (v !== undefined) cmd('setVolume', [Math.round(Math.min(1, Math.max(0, v)) * 100)]);
     cmd('seekTo', [startRef.current, true]);
     cmd('playVideo');
+    couperSousTitres();
     // demande au lecteur d'emettre ses evenements (protocole widget YouTube) ;
     // renvoye a chaque lancement, un doublon est sans effet
     ref.current?.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1 }), '*');
-  }, [cmd]);
+  }, [cmd, couperSousTitres]);
 
   useEffect(() => {
     if (!active) {
@@ -267,13 +285,17 @@ export function FullscreenVideo({
           setFinie(true);
           onEndedRef.current?.();
         }
+        // Le module de sous-titres se charge AVEC la lecture : la coupure
+        // envoyee au lancement peut arriver trop tot. On la rejoue quand le
+        // lecteur annonce qu'il joue (1) ou qu'il met en tampon (3).
+        if (etat === 1 || etat === 3) couperSousTitres();
       } catch {
         // message non JSON d'une autre iframe : ignorer
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [active]);
+  }, [active, couperSousTitres]);
 
   // lecture / pause : uniquement quand la phase bascule
   useEffect(() => {
@@ -362,10 +384,19 @@ export function YoutubeClip({
       JSON.stringify({ event: 'command', func: playing ? 'playVideo' : 'pauseVideo', args: [] }),
       '*',
     );
+    // cf. FullscreenVideo : cc_load_policy ne tient pas, on decharge le module
+    if (playing) {
+      for (const module of ['captions', 'cc']) {
+        win.postMessage(
+          JSON.stringify({ event: 'command', func: 'unloadModule', args: [module] }),
+          '*',
+        );
+      }
+    }
   }, [playing]);
 
   if (!parsed) return null;
-  const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=1&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&enablejsapi=1${muted ? '&mute=1' : ''}`;
+  const src = `https://www.youtube.com/embed/${parsed.videoId}?autoplay=1&start=${parsed.start}&end=${parsed.end}&controls=0&disablekb=1&modestbranding=1&rel=0&iv_load_policy=3&fs=0&cc_load_policy=0&playsinline=1&enablejsapi=1${muted ? '&mute=1' : ''}`;
   return (
     <div className="aspect-video w-full overflow-hidden rounded-2xl bg-black">
       <iframe
