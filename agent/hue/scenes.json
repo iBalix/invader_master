@@ -234,23 +234,37 @@
     },
     "question_warn": {
       "priority": "normal",
-      "comment": "Trois dernieres secondes. Fondu COURT (400 ms) et non 2,5 s : le pont interpole en espace xy et la droite du cyan au rouge passe par le magenta, donc un fondu long faisait passer le bar par le violet et mangeait les trois secondes en transit.",
+      "comment": "Trois dernieres secondes : le bar TIRE vers le rouge, comme startCountdownRedTransition() du legacy et son fondu de 3 s. Le fondu passe par l'ORANGE a mi-chemin, et c'est tout l'interet : le pont interpole en espace xy, ou la droite du cyan au rouge traverse le magenta. Un fondu direct de 3 s faisait donc virer le bar au violet ; un fondu court de 400 ms l'evitait mais claquait. Deux paliers chauds de 1,5 s donnent la montee du legacy sans jamais quitter les couleurs chaudes, et le rouge plein tombe pile a zero.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
-          "color": "ROUGE",
-          "bri": 254,
-          "transition": 4,
+          "color": "ORANGE",
+          "bri": 230,
+          "transition": 15,
           "on": true
         },
         {
           "atMs": 0,
           "target": "BAR_BOTTOM",
+          "color": "ORANGE",
+          "bri": 230,
+          "transition": 15,
+          "on": true
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_TOP",
           "color": "ROUGE",
           "bri": 254,
-          "transition": 4,
-          "on": true
+          "transition": 15
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_BOTTOM",
+          "color": "ROUGE",
+          "bri": 254,
+          "transition": 15
         }
       ]
     },

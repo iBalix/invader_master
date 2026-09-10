@@ -941,7 +941,6 @@ function BattleEndProjo({ state }: { state: PublicState }) {
           <BattleStandingRow key={s.pseudo} s={{ ...s, qualifiedForFinal: false }} big={s.position <= 3} />
         ))}
       </div>
-      <p className="mt-6 text-center text-2xl text-white/50">{state.endTexts?.endText}</p>
     </div>
   );
 }
