@@ -233,6 +233,8 @@ function revealBattle(): BattleRevealData {
     correctIndex: 1,
     correctAnswer: 'Hayao Miyazaki',
     answeredCount: 17,
+    // repartition plausible : la majorite a bon, un piege attire un quart
+    percents: [24, 59, 12, 5],
     eliminated: [
       { pseudo: 'Nina', reason: 'wrong' },
       { pseudo: 'Tom', reason: 'wrong' },
@@ -1219,12 +1221,12 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'battle',
     surface: 'projo',
     label: 'R\u00e9v\u00e9lation (projo)',
-    description: 'Suspense, r\u00e9ponse, puis le compteur qui encaisse.',
+    description: 'Barres de r\u00e9partition, r\u00e9ponse, puis le compteur qui encaisse.',
     sauts: [
-      ['Suspense', 1200],
-      ['R\u00e9ponse', 3400],
-      ['Survivants', 7200],
-      ['Noms', 9600],
+      ['Barres', 1600],
+      ['R\u00e9ponse', 5400],
+      ['Survivants', 9200],
+      ['Noms', 11600],
     ],
     state: () =>
       baseBattle({ status: 'reveal', question: QUESTION_BATTLE }, { survivorCount: 14, reveal: revealBattle() }),
@@ -1236,10 +1238,10 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Palier TOP 10',
     description: 'La prise d\u2019\u00e9cran plein cadre du legacy.',
     sauts: [
-      ['R\u00e9ponse', 3400],
-      ['Survivants', 7200],
-      ['Noms', 9600],
-      ['Palier', 11200],
+      ['R\u00e9ponse', 5400],
+      ['Survivants', 9200],
+      ['Noms', 11600],
+      ['Palier', 13600],
     ],
     state: () =>
       baseBattle(
@@ -1270,8 +1272,9 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Dernier debout (manche)',
     description: 'Un seul survivant : la manche est jou\u00e9e, pas de question suivante.',
     sauts: [
-      ['R\u00e9ponse', 3400],
-      ['Manche remport\u00e9e', 7400],
+      ['Barres', 1600],
+      ['R\u00e9ponse', 5400],
+      ['Manche remport\u00e9e', 9400],
     ],
     state: () =>
       baseBattle(

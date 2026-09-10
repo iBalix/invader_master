@@ -259,8 +259,8 @@ export const AFK_MISS_LIMIT = 5;
  * 5 / 3) vient APRES : la fenetre est plus longue, sinon on tuait justement
  * le moment le plus fort de la manche.
  */
-export const BR_REVEAL_MIN_MS = 11_000;
-export const BR_REVEAL_MIN_PALIER_MS = 16_000;
+export const BR_REVEAL_MIN_MS = 13_000;
+export const BR_REVEAL_MIN_PALIER_MS = 18_000;
 
 /**
  * Question audio : l'extrait joue seul ce temps avant que la question ne
@@ -403,6 +403,12 @@ export interface BattleRevealData {
   endRoundTie?: boolean;
   survivorsBefore: number;
   survivorsAfter: number;
+  /**
+   * Répartition des réponses en %, dans l'ordre du snapshot. Même calcul que
+   * le quiz (cf. scoring.ts) : c'est ce qui permet aux barres de monter à la
+   * révélation et à la salle de voir où elle s'est trompée.
+   */
+  percents?: number[];
   /** palier franchi à cette question (20/10/5/3), pour le bandeau "PLUS QUE X !" */
   milestone: number | null;
   correctPseudos: string[];

@@ -143,6 +143,8 @@ export interface BattleRevealData {
   correctIndex?: number;
   correctAnswer?: string;
   answeredCount: number;
+  /** repartition des reponses en %, pour les barres de la revelation */
+  percents?: number[];
   eliminated: Array<{ pseudo: string; reason: 'wrong' | 'timeout' }>;
   repechage: boolean;
   endRoundTie?: boolean;
@@ -616,9 +618,15 @@ export const BR_DECOMPTE_MS = 3000;
  *                              et le compteur baisse DECOMPTE_MS apres le nom.
  *   puis, si un palier est franchi, la prise d'ecran plein cadre.
  */
-export const BR_REVEAL_SUSPENSE_MS = 2600;
-export const BR_REVEAL_SURVIVANTS_MS = 6600;
-export const BR_REVEAL_PREMIER_NOM_MS = 8200;
+/**
+ * Les barres de repartition montent d'abord, comme au quiz : la salle voit se
+ * dessiner ou tout le monde a repondu, et devine peu a peu qui s'est trompe.
+ * Toutes a la meme vitesse, chacune s'arretant a sa valeur.
+ */
+export const BR_REVEAL_BARRES_MS = 3000;
+export const BR_REVEAL_SUSPENSE_MS = 4600;
+export const BR_REVEAL_SURVIVANTS_MS = 8600;
+export const BR_REVEAL_PREMIER_NOM_MS = 10200;
 /** un nom toutes les 600 ms, cadence exacte du legacy */
 export const BR_REVEAL_PAS_MS = 600;
 /** le compteur baisse ce delai apres l'apparition du nom (legacy : 400 ms) */
@@ -637,8 +645,8 @@ export function brPalierMs(nbElimines: number): number {
  * Genereux, parce que la sequence raconte quelque chose et que le legacy
  * laissait la salle la vivre en entier.
  */
-export const BR_REVEAL_MIN_MS = 11_000;
-export const BR_REVEAL_MIN_PALIER_MS = 16_000;
+export const BR_REVEAL_MIN_MS = 13_000;
+export const BR_REVEAL_MIN_PALIER_MS = 18_000;
 
 // ---------------------------------------------------------------------------
 // Compteurs d'attente (purement indicatifs, le GM garde la main)

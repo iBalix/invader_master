@@ -301,9 +301,10 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
         )}
       </div>
 
+      {/* cf. le projecteur : la tolerance reseau reste, elle ne s'annonce pas */}
       {grace && !answered && (
-        <p className="anim-pop mb-2 text-center text-sm font-black uppercase text-amber-300">
-          ⏳ Dernière chance !
+        <p className="anim-pop mb-2 text-center text-sm font-black uppercase text-rose-300">
+          Temps écoulé !
         </p>
       )}
 

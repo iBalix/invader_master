@@ -231,11 +231,23 @@ export function computeCue(session: SessionRow): ComputedCue | null {
         isFinal: b.isFinal,
       });
 
+    // Fin de la fenetre de reponse et verification : on RESTE sur la couleur de
+    // la difficulte, comme resetLightsDefault() du legacy. Ces deux cues ne la
+    // transmettaient pas, donc les scenes retombaient sur leur teinte en dur
+    // (saumon, puis un violet fonce sur tout le bar pendant la verification).
     case 'locked':
-      return base('question_end');
+      return base(
+        'question_end',
+        { difficulty: currentDifficulty(session) },
+        `d${currentDifficulty(session) ?? ''}`,
+      );
 
     case 'verdict':
-      return base('verdict');
+      return base(
+        'verdict',
+        { difficulty: currentDifficulty(session) },
+        `d${currentDifficulty(session) ?? ''}`,
+      );
 
     case 'reveal': {
       if (mode === 'battle') {
@@ -244,11 +256,11 @@ export function computeCue(session: SessionRow): ComputedCue | null {
         if (r.milestone != null) {
           return base('milestone', { milestone: r.milestone as 3 | 5 | 10 | 20 }, `m${r.milestone}`);
         }
-        return base('reveal');
+        return base('reveal', { difficulty: currentDifficulty(session) });
       }
       const special = (runtime.reveal as { special?: string | null } | undefined)?.special;
       if (special) return base('bonus_question', {}, `s${special}`);
-      return base('reveal');
+      return base('reveal', { difficulty: currentDifficulty(session) });
     }
 
     case 'leaderboard':

@@ -13,6 +13,7 @@ import {
   BR_INTRO_ACTE_CATEGORIES,
   BR_INTRO_ACTE_COMBATTANTS,
   BR_PALIER_DUREE_MS,
+  BR_REVEAL_BARRES_MS,
   BR_REVEAL_DECOMPTE_MS,
   BR_REVEAL_PAS_MS,
   BR_REVEAL_PREMIER_NOM_MS,
@@ -423,9 +424,13 @@ function BattleQuestionProjo({
         ))}
       </div>
 
+      {/* Fenetre de reponse fermee. Le serveur garde une tolerance reseau de
+          quelques secondes (celle du legacy, qui acceptait les reponses
+          jusqu'a 4 s apres la fin), mais elle ne s'ANNONCE pas : un « derniere
+          chance » affiche donnait l'impression d'un second chrono offert. */}
       {grace && (
-        <div className="anim-pop mt-6 text-center text-4xl font-black uppercase tracking-widest text-amber-300">
-          ⏳ Dernière chance !
+        <div className="anim-pop mt-6 text-center text-4xl font-black uppercase tracking-widest text-rose-300">
+          Temps écoulé !
         </div>
       )}
     </div>
@@ -485,6 +490,10 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
 
   const reponseVisible = ecoule >= BR_REVEAL_SUSPENSE_MS;
   const survivantsVisible = ecoule >= BR_REVEAL_SURVIVANTS_MS;
+  /** progression 0..1 de la montee des barres, sur l'horloge serveur */
+  const avancement = Math.max(0, Math.min(1, ecoule / BR_REVEAL_BARRES_MS));
+  /** la plus haute barre atteint sa valeur pile a BR_REVEAL_BARRES_MS */
+  const pourcentMax = Math.max(1, ...(reveal?.percents ?? [1]));
 
   // Combien de noms sont deja tombes, et de combien le compteur a baisse. Deux
   // valeurs distinctes : le compteur suit le nom de BR_REVEAL_DECOMPTE_MS,
@@ -695,13 +704,21 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
         {q?.question}
       </h1>
 
+      {/* LES BARRES DE REPARTITION, comme au quiz.
+          La largeur est une FONCTION DE L'HORLOGE, pas une transition lancee au
+          montage : toutes montent a la meme vitesse et chacune s'arrete a sa
+          valeur, la salle voit se dessiner ou elle a repondu et devine peu a
+          peu qui s'est trompe. Le chiffre est la largeur arrondie, donc
+          solidaire par construction. */}
       <div className="mt-auto grid grid-cols-2 gap-6">
         {(q?.answers ?? []).map((a, i) => {
           const juste = i === reveal.correctIndex;
+          const pourcent = reveal.percents?.[i] ?? 0;
+          const largeur = Math.min(pourcent, pourcentMax * avancement);
           return (
             <div
               key={i}
-              className={`rounded-2xl border-2 px-8 py-6 font-bold leading-snug transition-all duration-700 ${
+              className={`relative overflow-hidden rounded-2xl border-2 px-8 py-6 font-bold leading-snug transition-all duration-700 ${
                 !reponseVisible
                   ? 'border-white/15 bg-white/5'
                   : juste
@@ -710,10 +727,23 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
               }`}
               style={{ fontSize: '2.375rem' }}
             >
-              <span className={`mr-4 font-black ${reponseVisible && juste ? 'text-emerald-300' : 'text-cyan-300'}`}>
+              {reveal.percents && (
+                <span
+                  className={`pointer-events-none absolute inset-y-0 left-0 ${
+                    reponseVisible && juste ? 'bg-emerald-400/25' : 'bg-cyan-300/15'
+                  }`}
+                  style={{ width: `${largeur}%`, transition: 'width 160ms linear' }}
+                />
+              )}
+              <span className={`relative mr-4 font-black ${reponseVisible && juste ? 'text-emerald-300' : 'text-cyan-300'}`}>
                 {String.fromCharCode(65 + i)}
               </span>
-              {a}
+              <span className="relative">{a}</span>
+              {reveal.percents && (
+                <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black tabular-nums text-white/70">
+                  {Math.round(largeur)}%
+                </span>
+              )}
             </div>
           );
         })}

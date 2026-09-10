@@ -783,10 +783,21 @@ async function applyShowResults(session: SessionRow): Promise<void> {
   const milestone = crossed.length > 0 ? Math.min(...crossed) : null;
   if (milestone !== null) b.lastMilestone = milestone;
 
+  // Repartition des reponses, meme calcul que le quiz : les barres de la
+  // revelation en ont besoin pour monter. Comptee sur les reponses RECUES,
+  // les absents ne diluent pas les pourcentages.
+  const compte = new Array(q.answers.length).fill(0);
+  for (const a of answers) {
+    const c = a.answer.choice;
+    if (typeof c === 'number' && c >= 0 && c < compte.length) compte[c] += 1;
+  }
+  const totalRepondu = answers.length || 1;
+
   b.reveal = {
     correctIndex: q.correctIndex,
     correctAnswer: q.answers[q.correctIndex],
     answeredCount: v.answeredCount,
+    percents: compte.map((n) => Math.round((n / totalRepondu) * 100)),
     eliminated: effectiveEliminated.map((p) => ({ pseudo: p.pseudo, reason: p.reason })),
     repechage: v.repechage,
     survivorsBefore: v.survivorsBefore,

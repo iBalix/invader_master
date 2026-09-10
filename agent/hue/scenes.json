@@ -255,11 +255,12 @@
     },
     "question_end": {
       "priority": "normal",
+      "comment": "Fin de la fenetre de reponse : on revient a la couleur de la DIFFICULTE, comme resetLightsDefault() du legacy. Le saumon (REPOS) est la couleur du bar hors partie, la ramener entre deux questions faisait clignoter le bar d'une teinte a l'autre a chaque question.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
-          "color": "REPOS_TOP",
+          "color": "$difficulty",
           "bri": 254,
           "transition": 12,
           "on": true
@@ -267,8 +268,8 @@
         {
           "atMs": 0,
           "target": "BAR_BOTTOM",
-          "color": "REPOS_BOTTOM",
-          "bri": 254,
+          "color": "BLANC",
+          "bri": 127,
           "transition": 12,
           "on": true
         }
@@ -278,33 +279,40 @@
       "priority": "normal",
       "loop": true,
       "loopMs": 6000,
-      "comment": "Suspense sombre pendant que l'animateur valide les eliminations, borne a trois respirations : une correction longue ne doit pas laisser le bar sous tension indefiniment.",
+      "loopMax": 3,
+      "comment": "Verification des eliminations. La tension se joue sur la LUMINOSITE, pas sur la teinte : la version precedente passait les deux rampes en SOMBRE (40,20,60), soit un violet fonce sur tout le bar, et elle y restait tant que l'animateur corrigeait.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
-          "color": "SOMBRE",
-          "bri": 90,
+          "color": "$difficulty",
+          "bri": 70,
           "transition": 30,
           "on": true
         },
         {
           "atMs": 0,
           "target": "BAR_BOTTOM",
-          "color": "SOMBRE",
-          "bri": 60,
+          "color": "BLANC",
+          "bri": 40,
           "transition": 30,
           "on": true
         },
         {
           "atMs": 3000,
           "target": "BAR_TOP",
-          "color": "SOMBRE",
-          "bri": 140,
+          "color": "$difficulty",
+          "bri": 200,
+          "transition": 30
+        },
+        {
+          "atMs": 3000,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 110,
           "transition": 30
         }
-      ],
-      "loopMax": 3
+      ]
     },
     "reveal": {
       "extends": "question_end"
