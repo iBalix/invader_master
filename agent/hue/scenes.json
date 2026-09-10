@@ -111,14 +111,14 @@
     "lobby": {
       "priority": "ambient",
       "loop": true,
-      "loopMs": 6000,
+      "loopMs": 12000,
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
           "color": "CYAN",
           "bri": 200,
-          "transition": 28,
+          "transition": 55,
           "on": true
         },
         {
@@ -126,24 +126,26 @@
           "target": "BAR_BOTTOM",
           "color": "CYAN",
           "bri": 120,
-          "transition": 28,
+          "transition": 55,
           "on": true
         },
         {
-          "atMs": 3000,
+          "atMs": 6000,
           "target": "BAR_TOP",
           "color": "CYAN",
           "bri": 110,
-          "transition": 28
+          "transition": 55
         },
         {
-          "atMs": 3000,
+          "atMs": 6000,
           "target": "BAR_BOTTOM",
           "color": "CYAN",
           "bri": 200,
-          "transition": 28
+          "transition": 55
         }
-      ]
+      ],
+      "loopMax": 0,
+      "comment": "Ambiance d'attente, respiration tres lente et sans borne (personne ne joue encore). Le quiz et la battle envoient de toute facon 'idle' sur leur lobby depuis les retours de soiree."
     },
     "pause": {
       "extends": "idle"
@@ -275,15 +277,15 @@
     "verdict": {
       "priority": "normal",
       "loop": true,
-      "loopMs": 4000,
-      "comment": "suspense sombre pendant que le GM valide les eliminations",
+      "loopMs": 6000,
+      "comment": "Suspense sombre pendant que l'animateur valide les eliminations, borne a trois respirations : une correction longue ne doit pas laisser le bar sous tension indefiniment.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
           "color": "SOMBRE",
           "bri": 90,
-          "transition": 18,
+          "transition": 30,
           "on": true
         },
         {
@@ -291,17 +293,18 @@
           "target": "BAR_BOTTOM",
           "color": "SOMBRE",
           "bri": 60,
-          "transition": 18,
+          "transition": 30,
           "on": true
         },
         {
-          "atMs": 2000,
+          "atMs": 3000,
           "target": "BAR_TOP",
           "color": "SOMBRE",
           "bri": 140,
-          "transition": 18
+          "transition": 30
         }
-      ]
+      ],
+      "loopMax": 3
     },
     "reveal": {
       "extends": "question_end"
@@ -525,15 +528,15 @@
     "round_intro": {
       "priority": "accent",
       "loop": true,
-      "loopMs": 3000,
-      "comment": "danse sur DEUX GROUPES dephases (et non 10 ampoules) : ~16 requetes sur 12 s la ou le legacy en envoyait ~130",
+      "loopMs": 6000,
+      "comment": "Deux respirations lentes sur les deux groupes dephases, puis la scene TIENT son dernier etat (loopMax). Avant : cycle de 3 s en boucle infinie, la salle voyait les lumieres bouger sans arret et le cue suivant arrivait en pleine danse.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
           "color": "JAUNE",
           "bri": 254,
-          "transition": 8,
+          "transition": 28,
           "on": true
         },
         {
@@ -541,36 +544,37 @@
           "target": "BAR_BOTTOM",
           "color": "VIOLET",
           "bri": 254,
-          "transition": 8,
+          "transition": 28,
           "on": true
         },
         {
-          "atMs": 1500,
+          "atMs": 3000,
           "target": "BAR_TOP",
           "color": "ROSE",
           "bri": 254,
-          "transition": 8
+          "transition": 28
         },
         {
-          "atMs": 1500,
+          "atMs": 3000,
           "target": "BAR_BOTTOM",
           "color": "CYAN",
           "bri": 254,
-          "transition": 8
+          "transition": 28
         }
-      ]
+      ],
+      "loopMax": 2
     },
     "round_end": {
       "priority": "accent",
       "loop": true,
-      "loopMs": 3000,
+      "loopMs": 9000,
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
           "color": "JAUNE",
           "bri": 254,
-          "transition": 8,
+          "transition": 40,
           "on": true
         },
         {
@@ -578,24 +582,26 @@
           "target": "BAR_BOTTOM",
           "color": "ORANGE",
           "bri": 200,
-          "transition": 8,
+          "transition": 40,
           "on": true
         },
         {
-          "atMs": 1500,
+          "atMs": 4500,
           "target": "BAR_TOP",
           "color": "BLANC",
           "bri": 254,
-          "transition": 8
+          "transition": 40
         },
         {
-          "atMs": 1500,
+          "atMs": 4500,
           "target": "BAR_BOTTOM",
           "color": "JAUNE",
           "bri": 200,
-          "transition": 8
+          "transition": 40
         }
-      ]
+      ],
+      "loopMax": 3,
+      "comment": "Trois respirations tres lentes puis la scene se pose : le classement reste affiche le temps que l'animateur commente, parfois une minute, et des lumieres qui pulsent tout ce temps fatiguent la salle."
     },
     "event_end": {
       "priority": "override",

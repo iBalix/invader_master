@@ -132,6 +132,12 @@ $script:SceneStart = $null
 $script:SceneName  = $null
 $script:SceneLoop  = $false
 $script:SceneLoopMs = 0
+# Boucle BORNEE : une scene qui pulse indefiniment tient la salle sous tension
+# bien apres que l'ecran soit passe a autre chose (le classement de fin de
+# manche reste affiche le temps que l'animateur commente, parfois une minute).
+# Passe ce nombre de cycles, la scene s'arrete sur son dernier etat.
+$script:SceneLoopMax = 0
+$script:SceneCycles = 0
 $script:SceneParams = @{}
 $script:WarnAtMs   = $null
 $script:WarnScene  = $null
@@ -255,6 +261,8 @@ function Start-Scene {
     $script:SceneStart  = [DateTime]::UtcNow
     $script:SceneLoop   = [bool]$def['loop']
     $script:SceneLoopMs = if ($def['loopMs']) { [int]$def['loopMs'] } else { 0 }
+    $script:SceneLoopMax = if ($def['loopMax']) { [int]$def['loopMax'] } else { 0 }
+    $script:SceneCycles = 0
     $script:Timeline    = @()
     foreach ($st in $def['steps']) { $script:Timeline += ,$st }
 
@@ -305,6 +313,15 @@ function Step-ScenePlayer {
             # ampoules n'atteignaient jamais leur cible : c'est le « ca pulse »
             # bizarre vu en salle sur lobby, pause et verdict.
             $script:SceneStart = $script:SceneStart.AddMilliseconds($script:SceneLoopMs)
+            $script:SceneCycles++
+            # Borne atteinte : on garde le dernier etat au lieu de pulser sans
+            # fin. Le bar se calme, et le cue suivant n'a plus a lutter contre
+            # une danse en cours pour se faire voir.
+            if ($script:SceneLoopMax -gt 0 -and $script:SceneCycles -ge $script:SceneLoopMax) {
+                $script:SceneLoop = $false
+                $script:Timeline = @()
+                Write-HueLog "Scene '$($script:SceneName)' : boucle arretee apres $($script:SceneCycles) cycles"
+            }
         }
     }
 }

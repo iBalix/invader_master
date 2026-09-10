@@ -51,7 +51,22 @@ const cueEpoch = Date.now();
 /** session autorisée à piloter les lumières (une seule partie éclaire le bar) */
 let activeSessionId: string | null = null;
 let activeSessionCheckedAt = 0;
-const ACTIVE_CACHE_MS = 10_000;
+/**
+ * Le cache de la session active a DEUX durées, et ce n'est pas un détail.
+ *
+ * Réponse OUI : on la garde 10 s, c'est le cas courant et ça évite une requête
+ * par sauvegarde d'état.
+ *
+ * Réponse NON : on ne la garde qu'une seconde. Une réponse négative fait JETER
+ * le cue, sans le mémoriser, donc sans le rejouer : sur une phase statique (le
+ * classement de fin de manche, qui reste tant que l'animateur commente) il n'y
+ * a pas de sauvegarde suivante pour retenter. Une réponse négative erronée —
+ * requête qui gagne la course contre la création de session, ou latence de
+ * réplication — bloquait donc les lumières sur la scène précédente pendant les
+ * dix secondes du cache. C'est le décalage observé en salle.
+ */
+const ACTIVE_CACHE_OUI_MS = 10_000;
+const ACTIVE_CACHE_NON_MS = 1_000;
 
 let enabled = true;
 
@@ -80,7 +95,9 @@ export function forgetSession(sessionId: string): void {
  */
 async function isActiveSession(sessionId: string): Promise<boolean> {
   const now = Date.now();
-  if (now - activeSessionCheckedAt > ACTIVE_CACHE_MS) {
+  const perime =
+    activeSessionId === sessionId ? ACTIVE_CACHE_OUI_MS : ACTIVE_CACHE_NON_MS;
+  if (now - activeSessionCheckedAt > perime) {
     try {
       const { data } = await supabaseAdmin
         .from('game_sessions')
