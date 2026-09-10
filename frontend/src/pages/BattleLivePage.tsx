@@ -863,7 +863,7 @@ function ControlPanel({
               <>
                 <span className="inline-flex items-center gap-2 rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-200">
                   👑 {b?.reveal?.roundWinner
-                    ? `${b.reveal.roundWinner} remporte la manche`
+                    ? `${b.reveal.roundWinner} remporte la manche · la fin de manche s'enchaîne`
                     : 'Plus de survivant'}
                 </span>
                 <Btn variant="primary" disabled={busy} onClick={() => void action('end-round', {}, 'Terminer la manche et distribuer les bonus ?')}>
@@ -1015,7 +1015,9 @@ function VerdictPanel({
 
       {v.repechage && (
         <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-400/40 bg-amber-500/15 p-3">
-          <p className="font-bold text-amber-200">🛟 REPÊCHAGE GÉNÉRAL activé : personne n'est éliminé.</p>
+          <p className="flex items-center gap-2 font-bold text-amber-200">
+            <LifeBuoy size={15} /> REPÊCHAGE GÉNÉRAL activé : personne n'est éliminé.
+          </p>
           <Btn variant="secondary" disabled={busy} onClick={() => void action('verdict-revive-group')}>
             Annuler le repêchage
           </Btn>
@@ -1041,7 +1043,7 @@ function VerdictPanel({
                 {p.elapsedMs !== null && ` · ${(p.elapsedMs / 1000).toFixed(1)}s`}
               </span>
               {p.overturned === 'correct' && <span className="ml-2 font-bold text-emerald-300">✔ compté bonne réponse (+1)</span>}
-              {p.overturned === 'revived' && <span className="ml-2 font-bold text-emerald-300">🛟 ressuscité (sans point)</span>}
+              {p.overturned === 'revived' && <span className="ml-2 font-bold text-emerald-300">ressuscité (sans point)</span>}
             </span>
             {!v.repechage && (
               <span className="flex gap-1.5">
@@ -1068,9 +1070,9 @@ function VerdictPanel({
                       type="button"
                       disabled={busy}
                       onClick={() => void action('verdict-revive', { playerId: p.playerId })}
-                      className="rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-200"
+                      className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-200"
                     >
-                      🛟 Ressusciter
+                      <LifeBuoy size={13} /> Ressusciter
                     </button>
                   </>
                 )}
@@ -1212,7 +1214,7 @@ function RevealPanel({ state }: { state: GmState }) {
       </p>
       {r.repechage ? (
         <p className="mt-2 rounded-lg bg-amber-500/15 px-3 py-2 text-sm font-bold text-amber-200">
-          🛟 Repêchage général : personne n'est éliminé.
+          Repêchage général : personne n'est éliminé.
         </p>
       ) : r.eliminated.length === 0 ? (
         <p className="mt-2 text-sm text-slate-400">Aucun éliminé sur cette question.</p>

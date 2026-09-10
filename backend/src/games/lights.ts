@@ -16,7 +16,7 @@
 
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendLightCue, type LightCue, type SceneName } from '../websocket/agent-bridge.js';
-import type { SessionRow } from './types.js';
+import { brVainqueurMs, type SessionRow } from './types.js';
 
 /** marge avant la fin de la question pour l'alerte rouge */
 const WARN_BEFORE_MS = 3000;
@@ -48,6 +48,36 @@ function nextSeq(): number {
  * numérotation ».
  */
 const cueEpoch = Date.now();
+/**
+ * Cues DIFFERES, par session.
+ *
+ * Presque toute la lumiere se declenche a un changement de phase, mais pas
+ * tout : le jaune de manche remportee doit tomber au milieu de la phase de
+ * revelation, pile quand l'ecran affiche « MANCHE REMPORTEE PAR X ». Un
+ * minuteur cote serveur est le seul endroit qui connaisse a la fois l'horloge
+ * de la phase et la topologie des scenes.
+ *
+ * Toujours annule au changement de scene suivant : une question annulee ou une
+ * fin de manche anticipee ne doit pas voir arriver un jaune en retard.
+ */
+const cuesDifferes = new Map<string, { cle: string; timer: NodeJS.Timeout }>();
+/** derniere scene differee DEJA jouee, par session : jamais deux fois */
+const differesJoues = new Map<string, string>();
+
+/**
+ * Annule le cue en attente, SAUF s'il a ete arme pour la scene qu'on est en
+ * train de (re)jouer : la meme scene peut etre reemise plusieurs fois pendant
+ * une phase (agent absent au premier envoi, sauvegarde d'etat sans changement
+ * de scene), et desarmer a chaque fois faisait perdre le jaune.
+ */
+function annuleCueDiffere(sessionId: string, cleCourante?: string): void {
+  const arme = cuesDifferes.get(sessionId);
+  if (!arme) return;
+  if (cleCourante && arme.cle === cleCourante) return;
+  clearTimeout(arme.timer);
+  cuesDifferes.delete(sessionId);
+}
+
 /** session autorisée à piloter les lumières (une seule partie éclaire le bar) */
 let activeSessionId: string | null = null;
 let activeSessionCheckedAt = 0;
@@ -85,6 +115,8 @@ export function invalidateActiveSession(): void {
 
 export function forgetSession(sessionId: string): void {
   lastCueKey.delete(sessionId);
+  differesJoues.delete(sessionId);
+  annuleCueDiffere(sessionId);
   invalidateActiveSession();
 }
 
@@ -252,12 +284,14 @@ export function computeCue(session: SessionRow): ComputedCue | null {
     case 'reveal': {
       if (mode === 'battle') {
         const r = b.reveal ?? {};
-        // Manche remportee : le legacy jouait setRoundWinnerLights() des qu'il
-        // ne restait qu'UN survivant, dans toute manche. Le portage ne le
-        // faisait qu'en finale : une manche gagnee passait sans que le bar ne
-        // celebre quoi que ce soit.
-        const gagnant = r.victory || r.roundWinner;
-        if (gagnant) return base('round_winner', {}, `w${r.roundWinner ?? 'final'}`);
+        // MANCHE REMPORTEE : le jaune de setRoundWinnerLights() ne part pas
+        // ici. Le legacy l'allumait a la fin de son animation d'elimination,
+        // au moment ou le compteur cede la place a « MANCHE REMPORTEE PAR X ».
+        // L'envoyer des le reveal, treize secondes plus tot, annonce a la
+        // salle qu'il ne reste qu'un survivant avant que l'ecran ne le
+        // raconte. Il partira en cue DIFFERE (cf. planifieCueDiffere).
+        // En finale, le legacy n'y touchait pas du tout : c'est la ceremonie
+        // qui prend la main juste apres.
         if (r.milestone != null) {
           return base('milestone', { milestone: r.milestone as 3 | 5 | 10 | 20 }, `m${r.milestone}`);
         }
@@ -289,11 +323,24 @@ export function computeCue(session: SessionRow): ComputedCue | null {
     case 'round_end':
       return base('round_end', { round: b.roundNumber }, `r${b.roundNumber}`);
 
+    // Fondu de fin : le classement a deja eu son jeu de lumiere (cf. 'end'),
+    // le bar redescend simplement sur son theme.
     case 'closing':
-      return base('event_end', { durationMs: phaseDurationMs(session) });
+      return mode === 'battle'
+        ? base('idle', {}, 'closing')
+        : base('event_end', { durationMs: phaseDurationMs(session) });
 
+    // Ceremonie : c'est ICI que le legacy lancait startLightEventEndAnimation()
+    // (danse jaune/orange/blanc, cyan, flash blanc, retour au repos), sur
+    // l'ecran du classement final et pas sur le fondu d'apres.
+    // `end` est atteint DEUX fois : d'abord la ceremonie (session encore
+    // ouverte), puis apres le fondu de fin, une fois la partie cloturee. La
+    // seconde ne doit surtout pas rejouer vingt secondes de spectacle alors
+    // que les ecrans sont deja revenus a l'accueil.
     case 'end':
-      return base('idle', {}, 'end');
+      return mode === 'battle' && !session.ended_at
+        ? base('event_end', {}, 'ceremonie')
+        : base('idle', {}, 'termine');
 
     default:
       return null;
@@ -317,6 +364,10 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
 
     if (lastCueKey.get(session.id) === computed.key) return;
 
+    // nouvelle scene : ce qui etait promis pour plus tard sur l'ancienne
+    // n'a plus lieu d'etre
+    annuleCueDiffere(session.id, computed.key);
+
     if (!(await isActiveSession(session.id))) return;
 
     const seq = nextSeq();
@@ -327,6 +378,7 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
       scene: computed.scene,
       params: computed.params,
     });
+    planifieCueDiffere(session, computed.key);
     // la cle n'est memorisee que si le cue est PARTI : un agent absent une
     // seconde au mauvais moment laissait sinon le cue marque comme joue, jamais
     // rejoue, et le bar figeait sur la scene precedente (parfois une boucle)
@@ -341,6 +393,51 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
     // jamais remonté : une panne de lumière ne casse pas une partie
     console.error('[lights] cue error', err);
   }
+}
+
+/**
+ * Arme les cues qui ne tombent pas sur un changement de phase.
+ *
+ * Un seul cas aujourd'hui : le jaune de manche remportee, qui doit arriver
+ * quand l'ecran remplace le compteur de survivants par le nom du vainqueur,
+ * soit apres que les noms des elimines sont tous tombes. La formule est
+ * partagee avec l'ecran (brVainqueurMs), donc l'image et la lumiere ne peuvent
+ * pas se desynchroniser.
+ */
+function planifieCueDiffere(session: SessionRow, cle: string): void {
+  if (session.mode !== 'battle' || session.status !== 'reveal') return;
+  if (cuesDifferes.has(session.id)) return;
+  // deja joue pour cette revelation : une reemission de la meme scene (agent
+  // qui revient, sauvegarde d'etat sans changement) ne le rejoue pas
+  if (differesJoues.get(session.id) === cle) return;
+  const b = battleOf(session);
+  const r = b.reveal;
+  // en finale, le legacy ne mettait pas le bar en jaune : la ceremonie suit
+  if (!r?.roundWinner || r.victory) return;
+  const debut = session.phase_started_at ? new Date(session.phase_started_at).getTime() : Date.now();
+  const nbElimines = (r as { eliminated?: unknown[] }).eliminated?.length ?? 0;
+  const dans = debut + brVainqueurMs(nbElimines) - Date.now();
+  const sessionId = session.id;
+  const timer = setTimeout(
+    () => {
+      cuesDifferes.delete(sessionId);
+      differesJoues.set(sessionId, cle);
+      if (!enabled) return;
+      const seq = nextSeq();
+      const sent = sendLightCue({
+        v: 1,
+        seq,
+        epoch: cueEpoch,
+        scene: 'round_winner',
+        params: {},
+      });
+      console.log(`[lights] cue=round_winner (differe) session=${sessionId.slice(0, 8)} seq=${seq} sent=${sent}`);
+    },
+    Math.max(0, dans),
+  );
+  // ne jamais retenir le process pour une lumiere
+  timer.unref?.();
+  cuesDifferes.set(sessionId, { cle, timer });
 }
 
 /** Cue ponctuel hors partie (bouton Tester, extinction manuelle) */

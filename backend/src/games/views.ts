@@ -99,6 +99,9 @@ function battleRuntimeFields(session: SessionRow): Record<string, unknown> | und
     questionInRound: b.roundQuestionCount,
     finalSize: session.config.finalSize ?? 10,
     verdictPending: session.status === 'verdict',
+    // les dix finalistes dans l'ordre de qualification : la grille de l'ecran
+    // d'elimination de la finale se dessine avec, comme en legacy
+    finalRoster: b.isFinal ? b.finalRoster : undefined,
     reveal: session.status === 'reveal' ? b.reveal : undefined,
     roundResult: session.status === 'round_end' ? b.roundResult : undefined,
     generalStandings:

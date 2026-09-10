@@ -13,13 +13,13 @@ import {
   BR_INTRO_ACTE_CATEGORIES,
   BR_INTRO_ACTE_COMBATTANTS,
   BR_PALIER_DUREE_MS,
-  BR_REVEAL_BARRES_MS,
   BR_REVEAL_DECOMPTE_MS,
   BR_REVEAL_PAS_MS,
   BR_REVEAL_PREMIER_NOM_MS,
   BR_REVEAL_SURVIVANTS_MS,
   BR_REVEAL_SUSPENSE_MS,
   brPalierMs,
+  brVainqueurMs,
   QUESTION_REPONSES_MS,
   serverNow,
   type BattleStandingEntry,
@@ -490,10 +490,14 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
 
   const reponseVisible = ecoule >= BR_REVEAL_SUSPENSE_MS;
   const survivantsVisible = ecoule >= BR_REVEAL_SURVIVANTS_MS;
-  /** progression 0..1 de la montee des barres, sur l'horloge serveur */
-  const avancement = Math.max(0, Math.min(1, ecoule / BR_REVEAL_BARRES_MS));
-  /** la plus haute barre atteint sa valeur pile a BR_REVEAL_BARRES_MS */
-  const pourcentMax = Math.max(1, ...(reveal?.percents ?? [1]));
+  /**
+   * L'instant ou le compteur cede la place a « MANCHE REMPORTEE PAR X », une
+   * fois le dernier nom tombe. Le legacy attendait la fin de son animation
+   * d'elimination pour le faire, et c'est aussi la que partent la fanfare et
+   * le jaune du bar : plus tot, ils annoncent le dernier debout avant l'ecran.
+   */
+  const vainqueurMs = brVainqueurMs(reveal?.eliminated?.length ?? 0);
+  const vainqueurVisible = ecoule >= vainqueurMs;
 
   // Combien de noms sont deja tombes, et de combien le compteur a baisse. Deux
   // valeurs distinctes : le compteur suit le nom de BR_REVEAL_DECOMPTE_MS,
@@ -532,12 +536,13 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
     gameAudio.sample(SON_BATTLE.transition, { volume: 0.7 }),
   );
   useCue(palierPlein, () => gameAudio.sample(SON_BATTLE.palier, { volume: 0.7 }));
-  // Manche remportee : le legacy jouait end_round_win.mp3 des qu'il ne restait
-  // qu'UN survivant, dans toute manche. Le cue etait conditionne a `victory`,
-  // qui n'est pose qu'en FINALE : une manche gagnee n'avait donc droit qu'aux
-  // sons d'elimination, jamais a sa fanfare.
+  // Manche remportee : le legacy jouait end_round_win.mp3 quand le compteur
+  // cedait la place au nom du vainqueur, pas a l'ouverture de l'ecran des
+  // survivants. Le jouer trop tot le faisait tomber en meme temps que
+  // waiting.mp3 et le son d'elimination : trois sons empiles.
+  // En FINALE, pas de fanfare de manche : la ceremonie prend la main (end.mp3).
   useCue(
-    Boolean(reveal?.victory || reveal?.roundWinner) && survivantsVisible,
+    !annule && Boolean(reveal?.roundWinner) && !reveal?.victory && vainqueurVisible,
     () => gameAudio.sample(SON_BATTLE.vainqueurManche, { volume: 0.75 }),
   );
 
@@ -599,96 +604,163 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
   // TEMPS 3 : les survivants. Plein ecran, le compteur est le heros.
   if (survivantsVisible) {
     const dans = ecoule - BR_REVEAL_SURVIVANTS_MS;
+    // FINALE : la grille des finalistes, pas le nuage de badges. Le legacy
+    // avait un ecran a lui (showFinalRoundEliminationScreen) ou l'on voit les
+    // dix noms rougir un par un — c'est ce qui rend la finale lisible.
+    const roster = state.battle?.finalRoster ?? [];
+    const enFinale = Boolean(state.battle?.isFinal) && roster.length > 0;
+    const dejaSortis = new Set(reveal.outBefore ?? []);
+    const chute = new Map(elimines.map((e, i) => [e.pseudo, i]));
     // DERNIER DEBOUT. Le legacy remplacait le compteur par « MANCHE REMPORTEE
-    // PAR X » des qu'il ne restait qu'un survivant, dans TOUTE manche : la
-    // manche est jouee, il n'y a plus de question a poser. Le portage ne le
-    // faisait qu'en finale.
-    const vainqueur = reveal.victory
-      ? (state.battle?.winner?.pseudo ?? reveal.roundWinner)
-      : reveal.roundWinner;
-    if (vainqueur) {
-      return (
-        <FullCenter>
-          <div className="anim-breathe" style={{ fontSize: '6rem', lineHeight: 1 }}>
-            🏆
-          </div>
-          <p className="mt-6 font-black uppercase tracking-[0.4em] text-amber-300/70" style={{ fontSize: '2rem' }}>
-            {reveal.victory ? 'Vainqueur de la battle' : 'Manche remportée par'}
-          </p>
-          <h1
-            className="anim-stomp mt-4 font-black uppercase text-amber-300"
-            style={{ fontSize: '9rem', lineHeight: 1 }}
-          >
-            {vainqueur}
-          </h1>
-          <p className="anim-fade-up mt-10 text-4xl text-white/60" style={{ animationDelay: '0.5s' }}>
-            👑 Dernier debout
-          </p>
-        </FullCenter>
-      );
-    }
+    // PAR X » une fois tous les noms tombes, dans TOUTE manche. En finale il
+    // n'affichait rien de tel : la ceremonie enchaine directement.
+    const vainqueur = reveal.roundWinner;
+    const boxVainqueur = Boolean(vainqueur) && !reveal.victory && vainqueurVisible;
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-12 py-8">
-        {/* Le cercle du legacy : 350 px de diametre, bordure cyan qui respire.
-            C'est LUI qu'on regarde pendant que les noms tombent. */}
-        <div
-          className="anim-glow flex items-center justify-center rounded-full border-4 border-cyan-400/60"
-          style={{
-            width: 340,
-            height: 340,
-            background: 'radial-gradient(circle, rgba(76,201,240,0.12) 0%, transparent 70%)',
-          }}
-        >
-          <span
-            className={`font-black tabular-nums leading-none ${dansLeCoup ? 'anim-count-down' : ''}`}
-            style={{ fontSize: '11rem' }}
+      <div className="flex flex-1 flex-col items-center justify-center px-12 py-6">
+        {enFinale && (
+          <p
+            className="mb-3 font-black uppercase tracking-[0.45em] text-amber-300"
+            style={{ fontSize: '2.5rem' }}
           >
-            {Math.max(0, compteur)}
-          </span>
-        </div>
-        <p className="mt-5 font-black uppercase tracking-[0.45em] text-cyan-300" style={{ fontSize: '2.5rem' }}>
-          Survivant{compteur > 1 ? 's' : ''}
-        </p>
+            Manche finale
+          </p>
+        )}
 
-        <div className="mt-12 flex min-h-[180px] max-w-6xl flex-wrap items-start justify-center gap-4">
-          {repechage ? (
-            <div className="anim-stomp text-center">
-              <div className="mb-4 text-8xl">🛟</div>
-              <h2 className="font-black uppercase text-amber-300" style={{ fontSize: '5rem', lineHeight: 1 }}>
-                Égalité, repêchage !
-              </h2>
-              <p className="mt-4 text-4xl text-white/70">Tout le monde reste en vie</p>
+        {boxVainqueur ? (
+          <div className="anim-stomp flex flex-col items-center">
+            <div className="anim-breathe" style={{ fontSize: '5rem', lineHeight: 1 }}>
+              🏆
             </div>
-          ) : elimines.length === 0 ? (
-            <div
-              className="text-center"
-              style={{ opacity: dans >= 300 ? 1 : 0, transition: 'opacity 360ms ease' }}
+            <p
+              className="mt-3 font-black uppercase tracking-[0.4em] text-amber-300/70"
+              style={{ fontSize: '1.9rem' }}
             >
-              <h2 className="font-black uppercase text-emerald-300" style={{ fontSize: '5rem', lineHeight: 1 }}>
-                Aucun éliminé
-              </h2>
-            </div>
-          ) : (
-            elimines.map((e, i) => (
+              Manche remportée par
+            </p>
+            <h1
+              className="mt-2 font-black uppercase text-amber-300"
+              style={{ fontSize: '7.5rem', lineHeight: 1 }}
+            >
+              {vainqueur}
+            </h1>
+          </div>
+        ) : (
+          <>
+            {/* Le cercle du legacy : bordure cyan qui respire, 340 px. C'est LUI
+                qu'on regarde pendant que les noms tombent. En finale il est
+                jaune, comme le compteur de finalistes du legacy. */}
+            <div
+              className={`anim-glow flex items-center justify-center rounded-full border-4 ${
+                enFinale ? 'border-amber-300/70' : 'border-cyan-400/60'
+              }`}
+              style={{
+                width: 340,
+                height: 340,
+                background: enFinale
+                  ? 'radial-gradient(circle, rgba(255,200,0,0.12) 0%, transparent 70%)'
+                  : 'radial-gradient(circle, rgba(76,201,240,0.12) 0%, transparent 70%)',
+              }}
+            >
               <span
-                key={e.pseudo}
-                className="rounded-2xl border-2 border-rose-400/50 bg-rose-500/15 px-8 py-4 font-black text-rose-200"
-                style={{
-                  fontSize: '2.75rem',
-                  lineHeight: 1,
-                  opacity: i < tombes ? 1 : 0,
-                  transform: i < tombes ? 'translateY(0) scale(1)' : 'translateY(24px) scale(0.8)',
-                  transition: 'opacity 280ms ease, transform 360ms cubic-bezier(0.3, 1.3, 0.4, 1)',
-                }}
+                className={`font-black tabular-nums leading-none ${dansLeCoup ? 'anim-count-down' : ''} ${
+                  enFinale ? 'text-amber-300' : ''
+                }`}
+                style={{ fontSize: '11rem' }}
               >
-                💀 {e.pseudo}
+                {Math.max(0, compteur)}
               </span>
-            ))
-          )}
-        </div>
+            </div>
+            <p
+              className={`mt-5 font-black uppercase tracking-[0.45em] ${
+                enFinale ? 'text-amber-300' : 'text-cyan-300'
+              }`}
+              style={{ fontSize: enFinale ? '2.1rem' : '2.5rem' }}
+            >
+              {enFinale ? 'Finalistes restants' : `Survivant${compteur > 1 ? 's' : ''}`}
+            </p>
+          </>
+        )}
+
+        {enFinale ? (
+          <>
+            <div className="mt-8 flex max-w-[1700px] flex-wrap items-stretch justify-center gap-5">
+              {roster.map((pseudo) => {
+                const rang = chute.get(pseudo);
+                const tombeMaintenant = rang !== undefined && !repechage && rang < tombes;
+                const grise = dejaSortis.has(pseudo);
+                return (
+                  <div
+                    key={pseudo}
+                    className={`flex min-w-[240px] items-center justify-center rounded-2xl border-[3px] px-8 py-5 font-black uppercase ${
+                      tombeMaintenant
+                        ? 'anim-stomp border-rose-400 bg-rose-500/20 text-rose-200'
+                        : grise
+                          ? 'border-white/20 bg-white/5 text-white/35'
+                          : 'border-amber-300/70 bg-amber-400/10 text-white'
+                    }`}
+                    style={{
+                      fontSize: '2.5rem',
+                      lineHeight: 1,
+                      transition: 'background-color 420ms ease, border-color 420ms ease, color 420ms ease',
+                    }}
+                  >
+                    {pseudo}
+                  </div>
+                );
+              })}
+            </div>
+            {vainqueurVisible && (repechage || elimines.length === 0) && (
+              <p
+                className={`anim-fade-up mt-8 font-black uppercase ${
+                  repechage ? 'text-amber-300' : 'text-emerald-300'
+                }`}
+                style={{ fontSize: '3.5rem' }}
+              >
+                {repechage ? 'Égalité, repêchage !' : 'Aucun éliminé'}
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="mt-12 flex min-h-[180px] max-w-6xl flex-wrap items-start justify-center gap-4">
+            {repechage ? (
+              <div className="anim-stomp text-center">
+                <h2 className="font-black uppercase text-amber-300" style={{ fontSize: '5rem', lineHeight: 1 }}>
+                  Égalité, repêchage !
+                </h2>
+                <p className="mt-4 text-4xl text-white/70">Tout le monde reste en vie</p>
+              </div>
+            ) : elimines.length === 0 ? (
+              <div
+                className="text-center"
+                style={{ opacity: dans >= 300 ? 1 : 0, transition: 'opacity 360ms ease' }}
+              >
+                <h2 className="font-black uppercase text-emerald-300" style={{ fontSize: '5rem', lineHeight: 1 }}>
+                  Aucun éliminé
+                </h2>
+              </div>
+            ) : (
+              elimines.map((e, i) => (
+                <span
+                  key={e.pseudo}
+                  className="rounded-2xl border-2 border-rose-400/50 bg-rose-500/15 px-8 py-4 font-black text-rose-200"
+                  style={{
+                    fontSize: '2.75rem',
+                    lineHeight: 1,
+                    opacity: i < tombes ? 1 : 0,
+                    transform: i < tombes ? 'translateY(0) scale(1)' : 'translateY(24px) scale(0.8)',
+                    transition: 'opacity 280ms ease, transform 360ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+                  }}
+                >
+                  💀 {e.pseudo}
+                </span>
+              ))
+            )}
+          </div>
+        )}
 
         {reveal.endRoundTie && (
-          <p className="anim-fade-up mt-10 text-4xl font-bold text-amber-300">
+          <p className="anim-fade-up mt-8 text-4xl font-bold text-amber-300">
             Tous à égalité : la manche s'arrête, rang 1 partagé !
           </p>
         )}
@@ -708,17 +780,14 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
         {q?.question}
       </h1>
 
-      {/* LES BARRES DE REPARTITION, comme au quiz.
-          La largeur est une FONCTION DE L'HORLOGE, pas une transition lancee au
-          montage : toutes montent a la meme vitesse et chacune s'arrete a sa
-          valeur, la salle voit se dessiner ou elle a repondu et devine peu a
-          peu qui s'est trompe. Le chiffre est la largeur arrondie, donc
-          solidaire par construction. */}
+      {/* LES QUATRE REPONSES, neutres, puis la bonne qui s'allume.
+          AUCUNE repartition en %, contrairement au quiz : la barre de la bonne
+          reponse dirait combien de monde survit avant que la sequence ne le
+          raconte, et c'est tout son sujet. Le legacy se contentait d'allumer
+          la bonne reponse en vert. */}
       <div className="mt-auto grid grid-cols-2 gap-6">
         {(q?.answers ?? []).map((a, i) => {
           const juste = i === reveal.correctIndex;
-          const pourcent = reveal.percents?.[i] ?? 0;
-          const largeur = Math.min(pourcent, pourcentMax * avancement);
           return (
             <div
               key={i}
@@ -731,23 +800,10 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
               }`}
               style={{ fontSize: '2.375rem' }}
             >
-              {reveal.percents && (
-                <span
-                  className={`pointer-events-none absolute inset-y-0 left-0 ${
-                    reponseVisible && juste ? 'bg-emerald-400/25' : 'bg-cyan-300/15'
-                  }`}
-                  style={{ width: `${largeur}%`, transition: 'width 160ms linear' }}
-                />
-              )}
               <span className={`relative mr-4 font-black ${reponseVisible && juste ? 'text-emerald-300' : 'text-cyan-300'}`}>
                 {String.fromCharCode(65 + i)}
               </span>
               <span className="relative">{a}</span>
-              {reveal.percents && (
-                <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black tabular-nums text-white/70">
-                  {Math.round(largeur)}%
-                </span>
-              )}
             </div>
           );
         })}

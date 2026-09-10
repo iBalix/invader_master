@@ -45,6 +45,8 @@ import { BATTLE_DIFFICULTIES, ensureQuestionStock } from '../services/battleQues
 import {
   BR_REVEAL_MIN_MS,
   BR_REVEAL_MIN_PALIER_MS,
+  BR_VAINQUEUR_DUREE_MS,
+  brVainqueurMs,
   DEFAULT_BATTLE_CONFIG,
   type AnswerRow,
   type BattleEliminatedEntry,
@@ -68,8 +70,12 @@ export const ROUND_BONUS = [25, 20, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7,
 /** paliers d'animation "PLUS QUE X !" */
 const MILESTONES = [20, 10, 5, 3];
 
-/** durée d'affichage du reveal de victoire avant l'écran final automatique */
-const VICTORY_REVEAL_MS = 6000;
+/**
+ * Battement entre la fin de la grille d'élimination de la finale et la
+ * cérémonie : le legacy attendait une seconde après son animation avant
+ * d'appeler showEventEnd().
+ */
+const VICTORY_APRES_GRILLE_MS = 1200;
 
 /**
  * Décompte de reprise après la pause, comme au quiz. Sans lui, la salle
@@ -108,9 +114,9 @@ function httpError(message: string, status: number): Error {
 function assertRevealDone(session: SessionRow): void {
   if (session.status !== 'reveal' || !session.phase_started_at) return;
   const b = battle(session);
-  // la victoire a sa propre fenetre (VICTORY_REVEAL_MS) et enchaine toute
-  // seule : ne pas la verrouiller deux fois
-  if (b.victoryPending) return;
+  // victoire de finale et manche remportee ont leur propre fenetre et
+  // s'enchainent toutes seules : ne pas les verrouiller deux fois
+  if (b.victoryPending || b.roundWonPending) return;
   const minimum = b.reveal?.milestone != null ? BR_REVEAL_MIN_PALIER_MS : BR_REVEAL_MIN_MS;
   const debut = new Date(session.phase_started_at).getTime();
   if (Date.now() < debut + minimum) {
@@ -354,11 +360,24 @@ function battleAdvance(session: SessionRow): boolean {
       return true;
     }
     case 'reveal': {
-      // victoire de finale : le reveal expire tout seul vers l'écran final
-      if (!b.victoryPending) return false;
-      b.victoryPending = false;
-      setPhase(session, 'end', null);
-      return true;
+      // victoire de finale : le reveal expire tout seul vers la cérémonie
+      if (b.victoryPending) {
+        b.victoryPending = false;
+        setPhase(session, 'end', null);
+        return true;
+      }
+      // manche remportée : la fin de manche s'enchaîne. Elle écrit en base
+      // (bonus, classement) donc elle ne peut pas se faire ici, où l'on est
+      // synchrone et déjà sous le verrou de session : on la met en file, comme
+      // le verdict.
+      if (b.roundWonPending) {
+        b.roundWonPending = false;
+        session.phase_ends_at = null;
+        markDirty(session);
+        queueAutoEndRound(session.id, b.roundNumber);
+        return true;
+      }
+      return false;
     }
     case 'resuming': {
       // le decompte est ecoule : on revient a l'ecran d'avant la pause
@@ -383,6 +402,31 @@ function battleAdvance(session: SessionRow): boolean {
 }
 
 registerAdvancer('battle', battleAdvance);
+
+/**
+ * Fin de manche automatique après une manche remportée.
+ *
+ * Même motif que queueVerdict : on repasse par withSession dans un tour de
+ * boucle suivant, donc hors du verrou courant, et on revérifie tout avant
+ * d'agir (l'animateur a pu annuler la question, arrêter la partie, ou avoir
+ * déjà terminé la manche à la main entre-temps).
+ */
+function queueAutoEndRound(sessionId: string, roundNumber: number): void {
+  setTimeout(async () => {
+    try {
+      await withSession(sessionId, async (session) => {
+        const b = session.runtime.battle;
+        if (!b || session.ended_at) return;
+        if (session.status !== 'reveal') return;
+        if (b.roundNumber !== roundNumber) return;
+        if (!b.reveal?.roundWinner) return;
+        await applyEndRound(session);
+      });
+    } catch (err) {
+      console.error('[battle] fin de manche auto impossible', err);
+    }
+  }, 50);
+}
 
 // ---------------------------------------------------------------------------
 // Verdict provisoire (job async, pattern queueJudging)
@@ -755,6 +799,13 @@ async function applyShowResults(session: SessionRow): Promise<void> {
     );
   }
 
+  // FINALE : qui etait deja sorti AVANT cette question. Calcule ICI, avant que
+  // le groupe de la question ne soit empile, sinon les elimines du moment
+  // seraient deja grises alors que la grille doit les faire rougir un par un.
+  const outBefore = b.isFinal
+    ? b.eliminationGroups.flatMap((g) => g.map((e) => e.pseudo))
+    : undefined;
+
   // éliminations
   const survivorsAfter = v.survivorsBefore - effectiveEliminated.length;
   const groupRank = survivorsAfter + 1;
@@ -776,34 +827,37 @@ async function applyShowResults(session: SessionRow): Promise<void> {
   const failed = results.find((r) => (r as { error: unknown }).error);
   if (failed && (failed as { error: unknown }).error) throw (failed as { error: Error }).error;
 
-  // palier franchi (le plus bas atteint, jamais rejoué)
-  const crossed = MILESTONES.filter(
-    (t) => v.survivorsBefore > t && survivorsAfter <= t && b.lastMilestone !== t,
-  );
+  // Palier franchi (le plus bas atteint, jamais rejoué).
+  //
+  // Deux cas ou il n'a rien a dire, et ou il volait l'ecran a plus important :
+  //   - la manche est JOUEE (un seul debout, ou zero) : c'est « MANCHE
+  //     REMPORTEE PAR X » qui doit prendre le cadre, pas un « TOP 3 » ;
+  //   - la FINALE : le legacy y montrait la grille des dix finalistes et rien
+  //     d'autre, et a dix joueurs les paliers 10/5/3 tomberaient sans arret.
+  const paliersPertinents = survivorsAfter > 1 && !b.isFinal;
+  const crossed = paliersPertinents
+    ? MILESTONES.filter(
+        (t) => v.survivorsBefore > t && survivorsAfter <= t && b.lastMilestone !== t,
+      )
+    : [];
   const milestone = crossed.length > 0 ? Math.min(...crossed) : null;
   if (milestone !== null) b.lastMilestone = milestone;
 
-  // Repartition des reponses, meme calcul que le quiz : les barres de la
-  // revelation en ont besoin pour monter. Comptee sur les reponses RECUES,
-  // les absents ne diluent pas les pourcentages.
-  const compte = new Array(q.answers.length).fill(0);
-  for (const a of answers) {
-    const c = a.answer.choice;
-    if (typeof c === 'number' && c >= 0 && c < compte.length) compte[c] += 1;
-  }
-  const totalRepondu = answers.length || 1;
+  // PAS de repartition des reponses en battle, contrairement au quiz : une
+  // barre a 59 % sur la bonne reponse annonce le nombre de survivants avant
+  // que l'ecran ne le raconte. Le legacy ne montrait que la bonne reponse.
 
   b.reveal = {
     correctIndex: q.correctIndex,
     correctAnswer: q.answers[q.correctIndex],
     answeredCount: v.answeredCount,
-    percents: compte.map((n) => Math.round((n / totalRepondu) * 100)),
     eliminated: effectiveEliminated.map((p) => ({ pseudo: p.pseudo, reason: p.reason })),
     repechage: v.repechage,
     survivorsBefore: v.survivorsBefore,
     survivorsAfter,
     milestone,
     correctPseudos: players.filter((p) => correctIds.has(p.id)).map((p) => p.pseudo),
+    outBefore,
   };
 
   // Dernier debout : le legacy remplacait le compteur par « MANCHE REMPORTEE
@@ -815,6 +869,13 @@ async function applyShowResults(session: SessionRow): Promise<void> {
     if (survivant) b.reveal.roundWinner = survivant.pseudo;
   }
   b.verdict = undefined;
+
+  /**
+   * Le temps que la sequence a besoin de raconter : les noms tombent un par un
+   * (600 ms chacun) et le compteur les encaisse. Sert de fenetre aux deux
+   * enchainements automatiques ci-dessous.
+   */
+  const sequenceMs = brVainqueurMs(effectiveEliminated.length);
 
   // finale jouée : classement final précalculé, l'advancer enchaînera sur end
   if (b.isFinal && survivorsAfter <= 1) {
@@ -829,7 +890,16 @@ async function applyShowResults(session: SessionRow): Promise<void> {
       winnerText: session.config.endWinnerText.replace(/#winner#|#pseudo_top1#/g, winner?.pseudo ?? '?'),
       endText: session.config.endTextFinal,
     };
-    setPhase(session, 'reveal', VICTORY_REVEAL_MS);
+    // La grille des dix finalistes doit avoir fini de rougir avant la
+    // ceremonie : le legacy attendait la fin de son animation puis une seconde
+    // (showFinalRoundEliminationScreen, autoFinishEvent).
+    setPhase(session, 'reveal', sequenceMs + VICTORY_APRES_GRILLE_MS);
+  } else if (b.reveal.roundWinner) {
+    // MANCHE REMPORTEE : plus rien a jouer, la manche est finie. Le legacy ne
+    // laissait plus que « Afficher fin manche » a l'animateur ; ici elle
+    // s'enchaine toute seule, ecran de classement et battle_end.mp3 compris.
+    b.roundWonPending = true;
+    setPhase(session, 'reveal', sequenceMs + BR_VAINQUEUR_DUREE_MS);
   } else {
     setPhase(session, 'reveal', null);
   }
@@ -890,6 +960,7 @@ async function applyEndRound(session: SessionRow): Promise<void> {
   b.generalStandings = standings;
   b.lastGeneralPositions = Object.fromEntries(standings.map((s) => [s.pseudo, s.position]));
   b.reveal = undefined;
+  b.roundWonPending = false;
   setPhase(session, 'round_end', null);
 }
 
@@ -921,6 +992,8 @@ async function rollbackQuestion(session: SessionRow, forgetQuestion: boolean): P
         .update({ status: 'active' })
         .in('id', lastGroup.map((e) => e.playerId));
     }
+    // la manche n'est plus jouée : pas de fin de manche automatique
+    b.roundWonPending = false;
     // annule une éventuelle victoire de finale
     if (b.victoryPending || b.finalStandings) {
       b.victoryPending = false;
@@ -977,6 +1050,7 @@ function resetRoundState(session: SessionRow): void {
   b.verdict = undefined;
   b.reveal = undefined;
   b.roundResult = undefined;
+  b.roundWonPending = false;
   markDirty(session);
 }
 
@@ -1021,6 +1095,9 @@ export async function battleGmAction(
         }
         const finalists = contenders.slice(0, finalSize).map((s) => s.playerId);
         const others = contenders.slice(finalSize).map((s) => s.playerId);
+        // l'ordre de qualification, garde pour la grille des dix de l'ecran
+        // d'elimination de la finale (finalRoundStartOrder du legacy)
+        b.finalRoster = contenders.slice(0, finalSize).map((s) => s.pseudo);
         await supabaseAdmin
           .from('game_players')
           .update({ status: 'active' })

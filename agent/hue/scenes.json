@@ -589,100 +589,285 @@
     },
     "event_end": {
       "priority": "override",
-      "comment": "sequence de fin : danse, puis cyan, flash blanc, retour repos en fondu",
+      "comment": "Ceremonie de fin, sequence du legacy (startLightEventEndAnimation) : danse jaune/orange/blanc jusqu'a 11,5 s, bascule cyan en 3 s, maintien, flash blanc a 17 s, retour au theme du bar a 18,6 s en 2 s. Jouee sur l'ECRAN DU CLASSEMENT FINAL, pas sur le fondu d'apres. La danse passe par les deux groupes (une requete chacun) toutes les 1,5 s : le legacy pilotait les 24 ampoules une a une chaque seconde et saturait le bridge.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
-          "color": "OR",
+          "color": "JAUNE",
           "bri": 254,
-          "transition": 8,
+          "transition": 3,
           "on": true
         },
         {
           "atMs": 0,
           "target": "BAR_BOTTOM",
-          "color": "VIOLET",
+          "color": "ORANGE",
           "bri": 254,
+          "transition": 3,
+          "on": true
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_TOP",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 1500,
+          "target": "BAR_BOTTOM",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 3000,
+          "target": "BAR_TOP",
+          "color": "ORANGE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 3000,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 4500,
+          "target": "BAR_TOP",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 4500,
+          "target": "BAR_BOTTOM",
+          "color": "ORANGE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 6000,
+          "target": "BAR_TOP",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 6000,
+          "target": "BAR_BOTTOM",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 7500,
+          "target": "BAR_TOP",
+          "color": "ORANGE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 7500,
+          "target": "BAR_BOTTOM",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 9000,
+          "target": "BAR_TOP",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 9000,
+          "target": "BAR_BOTTOM",
+          "color": "ORANGE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 10500,
+          "target": "BAR_TOP",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 10500,
+          "target": "BAR_BOTTOM",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 0,
+          "target": "FRONT",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3,
+          "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "BACK",
+          "color": "ORANGE",
+          "bri": 254,
+          "transition": 3,
+          "on": true
+        },
+        {
+          "atMs": 3000,
+          "target": "FRONT",
+          "color": "ORANGE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 3000,
+          "target": "BACK",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 6000,
+          "target": "FRONT",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 6000,
+          "target": "BACK",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 9000,
+          "target": "FRONT",
+          "color": "JAUNE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 9000,
+          "target": "BACK",
+          "color": "ORANGE",
+          "bri": 254,
+          "transition": 3
+        },
+        {
+          "atMs": 0,
+          "target": "SALON",
+          "color": "ORANGE",
+          "bri": 200,
           "transition": 8,
           "on": true
         },
         {
-          "atMs": 1600,
-          "target": "BAR_TOP",
-          "color": "ROSE",
-          "bri": 254,
-          "transition": 8
-        },
-        {
-          "atMs": 1600,
-          "target": "BAR_BOTTOM",
-          "color": "CYAN",
-          "bri": 254,
-          "transition": 8
-        },
-        {
-          "atMs": 3200,
+          "atMs": 11500,
           "target": "BAR_TOP",
           "color": "CYAN",
           "bri": 254,
           "transition": 30
         },
         {
-          "atMs": 3200,
+          "atMs": 11500,
           "target": "BAR_BOTTOM",
           "color": "CYAN",
           "bri": 254,
           "transition": 30
         },
         {
-          "atMs": 6500,
+          "atMs": 11500,
+          "target": "FRONT",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 30
+        },
+        {
+          "atMs": 11500,
+          "target": "BACK",
+          "color": "CYAN",
+          "bri": 254,
+          "transition": 30
+        },
+        {
+          "atMs": 11500,
+          "target": "SALON",
+          "color": "CYAN",
+          "bri": 200,
+          "transition": 30
+        },
+        {
+          "atMs": 17000,
           "target": "BAR_TOP",
           "color": "BLANC",
           "bri": 254,
           "transition": 0
         },
         {
-          "atMs": 6500,
+          "atMs": 17000,
           "target": "BAR_BOTTOM",
           "color": "BLANC",
           "bri": 254,
           "transition": 0
         },
         {
-          "atMs": 8000,
+          "atMs": 17000,
+          "target": "FRONT",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 17000,
+          "target": "BACK",
+          "color": "BLANC",
+          "bri": 254,
+          "transition": 0
+        },
+        {
+          "atMs": 18600,
           "target": "BAR_TOP",
           "color": "REPOS_TOP",
           "bri": 254,
-          "transition": 40
+          "transition": 20
         },
         {
-          "atMs": 8000,
+          "atMs": 18600,
           "target": "BAR_BOTTOM",
           "color": "REPOS_BOTTOM",
           "bri": 254,
-          "transition": 40
+          "transition": 20
         },
         {
-          "atMs": 8000,
+          "atMs": 18600,
           "target": "FRONT",
           "color": "REPOS_TOP",
           "bri": 254,
-          "transition": 40
+          "transition": 20
         },
         {
-          "atMs": 8000,
+          "atMs": 18600,
           "target": "BACK",
           "color": "REPOS_BOTTOM",
           "bri": 254,
-          "transition": 40
+          "transition": 20
         },
         {
-          "atMs": 8000,
+          "atMs": 18600,
           "target": "SALON",
           "color": "REPOS_BOTTOM",
           "bri": 200,
-          "transition": 40
+          "transition": 20
         }
       ]
     },

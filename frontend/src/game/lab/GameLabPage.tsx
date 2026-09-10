@@ -295,19 +295,33 @@ export default function GameLabPage() {
                 </span>
                 {(
                   scenario.sauts ??
-                  (scenario.surface === 'projo'
-                    ? ([
-                        ['Barres', 1500],
-                        ['Suspense', 4700],
-                        ['Réponse', 6300],
-                        ['Podium ⚡', 8600],
-                        ['Séries 🔥', 11900],
-                      ] as Array<[string, number]>)
-                    : ([
-                        ['Verdict', 7200],
-                        ['Série', 10800],
-                        ['Jokers', 13600],
-                      ] as Array<[string, number]>))
+                  // Defauts par SURFACE et par JEU : la battle n'a ni barres de
+                  // repartition, ni podium de rapidite, ni series.
+                  (scenario.jeu === 'battle'
+                    ? scenario.surface === 'projo'
+                      ? ([
+                          ['Suspense', 1600],
+                          ['Réponse', 5400],
+                          ['Survivants', 8800],
+                          ['Noms', 11000],
+                        ] as Array<[string, number]>)
+                      : ([
+                          ['Verdict', 4800],
+                          ['Résultat', 9000],
+                        ] as Array<[string, number]>)
+                    : scenario.surface === 'projo'
+                      ? ([
+                          ['Barres', 1500],
+                          ['Suspense', 4700],
+                          ['Réponse', 6300],
+                          ['Podium ⚡', 8600],
+                          ['Séries 🔥', 11900],
+                        ] as Array<[string, number]>)
+                      : ([
+                          ['Verdict', 7200],
+                          ['Série', 10800],
+                          ['Jokers', 13600],
+                        ] as Array<[string, number]>))
                 ).map(([lbl, ms]) => (
                   <button
                     key={lbl}

@@ -420,7 +420,8 @@ function BattleRevealScreen({ state, you }: { state: PublicState; you: You }) {
         <div className="anim-pop w-full max-w-sm text-center">
           {reveal.repechage ? (
             <>
-              <div className="mb-3 text-6xl">🛟</div>
+              {/* pas d'emoji bouee ici : U+1F6DF (2021) n'est dans aucune
+                  police du parc, il s'affichait en carre vide */}
               <h2 className="text-3xl font-black text-amber-300">ÉGALITÉ, REPÊCHAGE !</h2>
               <p className="mt-2 text-white/70">Tout le monde reste en vie pour cette fois...</p>
             </>

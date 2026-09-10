@@ -263,6 +263,29 @@ export const BR_REVEAL_MIN_MS = 13_000;
 export const BR_REVEAL_MIN_PALIER_MS = 18_000;
 
 /**
+ * Seuils de la sequence d'elimination, miroir de gameClient.ts. Le serveur en
+ * a besoin pour deux choses que l'ecran ne peut pas decider seul :
+ *   - la fenetre du reveal quand la manche est REMPORTEE (elle s'enchaine
+ *     toute seule sur la fin de manche, comme le legacy qui n'offrait plus que
+ *     « Afficher fin manche ») ;
+ *   - l'instant ou le bar passe au jaune, qui doit tomber pile sur l'ecran
+ *     « MANCHE REMPORTEE PAR », pas 13 s avant (sinon il spoile).
+ */
+export const BR_REVEAL_PREMIER_NOM_MS = 10_200;
+export const BR_REVEAL_PAS_MS = 600;
+export const BR_VAINQUEUR_APRES_MS = 1_400;
+/** instant ou le compteur cede la place au vainqueur de manche */
+export function brVainqueurMs(nbElimines: number): number {
+  return (
+    BR_REVEAL_PREMIER_NOM_MS +
+    Math.max(0, nbElimines - 1) * BR_REVEAL_PAS_MS +
+    BR_VAINQUEUR_APRES_MS
+  );
+}
+/** temps de lecture de l'ecran vainqueur avant l'enchainement automatique */
+export const BR_VAINQUEUR_DUREE_MS = 5_000;
+
+/**
  * Question audio : l'extrait joue seul ce temps avant que la question ne
  * s'affiche (mise en scene cote ecrans). La fenetre de reponse est allongee
  * d'autant pour ne pas manger le temps de jeu. Miroir de AUDIO_PREROLL_MS
@@ -403,15 +426,16 @@ export interface BattleRevealData {
   endRoundTie?: boolean;
   survivorsBefore: number;
   survivorsAfter: number;
-  /**
-   * Répartition des réponses en %, dans l'ordre du snapshot. Même calcul que
-   * le quiz (cf. scoring.ts) : c'est ce qui permet aux barres de monter à la
-   * révélation et à la salle de voir où elle s'est trompée.
-   */
-  percents?: number[];
   /** palier franchi à cette question (20/10/5/3), pour le bandeau "PLUS QUE X !" */
   milestone: number | null;
   correctPseudos: string[];
+  /**
+   * FINALE : les finalistes déjà éliminés AVANT cette question. L'écran de la
+   * manche finale du legacy affichait la grille des dix, cartes grisées pour
+   * les sortis des questions précédentes, et passait au rouge une par une
+   * celles de la question en cours.
+   */
+  outBefore?: string[];
   /**
    * Manche remportée : le dernier debout, quelle que soit la manche. Le legacy
    * remplaçait le compteur par « MANCHE REMPORTÉE PAR X » dès qu'il ne restait
@@ -469,6 +493,18 @@ export interface BattleRuntime {
   winner?: { playerId: string; pseudo: string } | null;
   /** posé par show-results quand la finale est jouée : reveal → end automatique */
   victoryPending?: boolean;
+  /**
+   * Posé par show-results quand un joueur remporte la manche : le reveal
+   * expire vers la fin de manche tout seul. Le legacy n'offrait plus que
+   * « Afficher fin manche » dans ce cas, il n'y a rien d'autre à faire.
+   */
+  roundWonPending?: boolean;
+  /**
+   * FINALE : les finalistes dans l'ordre de qualification (le
+   * `finalRoundStartOrder` du legacy). Sert la grille des dix de l'écran
+   * d'élimination de la manche finale.
+   */
+  finalRoster?: string[];
 }
 
 /** runtime jsonb de game_sessions */

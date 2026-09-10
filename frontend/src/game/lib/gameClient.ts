@@ -143,8 +143,6 @@ export interface BattleRevealData {
   correctIndex?: number;
   correctAnswer?: string;
   answeredCount: number;
-  /** repartition des reponses en %, pour les barres de la revelation */
-  percents?: number[];
   eliminated: Array<{ pseudo: string; reason: 'wrong' | 'timeout' }>;
   repechage: boolean;
   endRoundTie?: boolean;
@@ -152,6 +150,8 @@ export interface BattleRevealData {
   survivorsAfter: number;
   milestone: number | null;
   correctPseudos: string[];
+  /** FINALE : finalistes deja sortis AVANT cette question (cartes grisees) */
+  outBefore?: string[];
   /** dernier debout de la manche, quelle que soit la manche */
   roundWinner?: string;
   victory?: boolean;
@@ -180,6 +180,8 @@ export interface PublicBattle {
   questionInRound?: number;
   survivorCount: number;
   finalSize: number;
+  /** FINALE : les finalistes dans l'ordre de qualification, pour la grille */
+  finalRoster?: string[];
   verdictPending: boolean;
   reveal?: BattleRevealData;
   roundResult?: BattleRoundResult;
@@ -619,11 +621,13 @@ export const BR_DECOMPTE_MS = 3000;
  *   puis, si un palier est franchi, la prise d'ecran plein cadre.
  */
 /**
- * Les barres de repartition montent d'abord, comme au quiz : la salle voit se
- * dessiner ou tout le monde a repondu, et devine peu a peu qui s'est trompe.
- * Toutes a la meme vitesse, chacune s'arretant a sa valeur.
+ * Le suspense d'abord : l'enonce et les quatre reponses, rien de devoile.
+ *
+ * PAS de barres de repartition ici, contrairement au quiz : une barre a 59 %
+ * sur la bonne reponse annonce combien de monde survit avant que l'ecran ne le
+ * raconte, et c'est justement ce que la sequence a a dire. Le legacy ne
+ * montrait que la bonne reponse.
  */
-export const BR_REVEAL_BARRES_MS = 3000;
 export const BR_REVEAL_SUSPENSE_MS = 4600;
 export const BR_REVEAL_SURVIVANTS_MS = 8600;
 export const BR_REVEAL_PREMIER_NOM_MS = 10200;
@@ -639,6 +643,16 @@ export const BR_PALIER_DUREE_MS = 4200;
 export function brPalierMs(nbElimines: number): number {
   return BR_REVEAL_PREMIER_NOM_MS + Math.max(0, nbElimines - 1) * BR_REVEAL_PAS_MS + BR_PALIER_APRES_MS;
 }
+
+/**
+ * Instant ou le compteur cede la place a « MANCHE REMPORTEE PAR X », apres que
+ * le dernier nom est tombe. Meme formule que le palier, et miroir exact de
+ * brVainqueurMs du backend : la fanfare, le jaune du bar et la fin de manche
+ * automatique sont cales dessus.
+ */
+export const brVainqueurMs = brPalierMs;
+/** duree de lecture de l'ecran vainqueur avant la fin de manche automatique */
+export const BR_VAINQUEUR_DUREE_MS = 5000;
 
 /**
  * Miroirs du backend : le GM ne peut pas couper la revelation avant la fin.

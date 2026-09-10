@@ -233,8 +233,6 @@ function revealBattle(): BattleRevealData {
     correctIndex: 1,
     correctAnswer: 'Hayao Miyazaki',
     answeredCount: 17,
-    // repartition plausible : la majorite a bon, un piege attire un quart
-    percents: [24, 59, 12, 5],
     eliminated: [
       { pseudo: 'Nina', reason: 'wrong' },
       { pseudo: 'Tom', reason: 'wrong' },
@@ -1221,9 +1219,9 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'battle',
     surface: 'projo',
     label: 'R\u00e9v\u00e9lation (projo)',
-    description: 'Barres de r\u00e9partition, r\u00e9ponse, puis le compteur qui encaisse.',
+    description: 'Suspense, la bonne réponse, puis le compteur qui encaisse.',
     sauts: [
-      ['Barres', 1600],
+      ['Suspense', 1600],
       ['R\u00e9ponse', 5400],
       ['Survivants', 9200],
       ['Noms', 11600],
@@ -1272,9 +1270,10 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Dernier debout (manche)',
     description: 'Un seul survivant : la manche est jou\u00e9e, pas de question suivante.',
     sauts: [
-      ['Barres', 1600],
-      ['R\u00e9ponse', 5400],
-      ['Manche remport\u00e9e', 9400],
+      ['Suspense', 1600],
+      ['Réponse', 5400],
+      ['Survivants', 8800],
+      ['Manche remportée', 12600],
     ],
     state: () =>
       baseBattle(
@@ -1291,6 +1290,72 @@ export const SCENARIOS: LabScenario[] = [
             survivorsAfter: 1,
             roundWinner: 'Marco',
           },
+        },
+      ),
+  },
+  {
+    cle: 'br-projo-finale-grille',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Finale : grille des dix',
+    description: 'Les finalistes rougissent un par un, deux etaient deja sortis.',
+    sauts: [
+      ['Suspense', 1600],
+      ['Réponse', 5400],
+      ['Grille', 8800],
+      ['Fin de grille', 12400],
+    ],
+    state: () =>
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE },
+        {
+          isFinal: true,
+          roundNumber: 4,
+          survivorCount: 8,
+          finalRoster: PSEUDOS.slice(0, 10),
+          reveal: {
+            ...revealBattle(),
+            eliminated: [
+              { pseudo: 'Nina', reason: 'wrong' },
+              { pseudo: 'Hugo', reason: 'timeout' },
+            ],
+            outBefore: ['Zoé', 'Alex'],
+            survivorsBefore: 8,
+            survivorsAfter: 6,
+            milestone: null,
+          },
+        },
+      ),
+  },
+  {
+    cle: 'br-projo-finale-grille-fin',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Finale : dernier finaliste',
+    description: 'La grille se vide, la ceremonie enchaine toute seule apres.',
+    sauts: [
+      ['Réponse', 5400],
+      ['Grille', 8800],
+      ['Fin de grille', 12200],
+    ],
+    state: () =>
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE, phaseEndsAt: serverNow() + 13000 },
+        {
+          isFinal: true,
+          roundNumber: 4,
+          survivorCount: 1,
+          finalRoster: PSEUDOS.slice(0, 10),
+          reveal: {
+            ...revealBattle(),
+            eliminated: [{ pseudo: 'Léa', reason: 'wrong' }],
+            outBefore: ['Nina', 'Hugo', 'Zoé', 'Alex', 'Sam', 'Emma', 'Tom', 'Julie'],
+            survivorsBefore: 2,
+            survivorsAfter: 1,
+            milestone: null,
+            victory: true,
+          },
+          winner: { playerId: 'lab-0', pseudo: 'Marco' },
         },
       ),
   },
