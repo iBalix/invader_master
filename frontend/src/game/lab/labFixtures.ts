@@ -1039,7 +1039,19 @@ export const SCENARIOS: LabScenario[] = [
     label: 'R\u00e9v\u00e9lation : je tombe',
     description: 'Mauvaise r\u00e9ponse, \u00e9limination et place de manche.',
     state: () =>
-      baseBattle({ status: 'reveal', question: QUESTION_BATTLE }, { survivorCount: 14, reveal: revealBattle() }),
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE },
+        {
+          survivorCount: 14,
+          // « Toi » doit figurer parmi les elimines, sinon le scenario montrait
+          // « Rate ! » au lieu de l'ecran d'elimination qu'il est cense regler
+          reveal: {
+            ...revealBattle(),
+            eliminated: [...revealBattle().eliminated, { pseudo: 'Toi', reason: 'wrong' }],
+            survivorsAfter: 13,
+          },
+        },
+      ),
     you: () =>
       baseYouBattle({ answered: true, status: 'eliminated' }, { eliminatedThisRound: true, roundRank: 15 }),
   },

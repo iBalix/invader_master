@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ApiError,
+  BR_REVEAL_SUSPENSE_MS,
   gameApi,
   questionShownAt,
   QUESTION_REPONSES_MS,
@@ -107,7 +108,11 @@ export function BattlePlayerScreen(props: BattleProps) {
   })();
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    // h-full et non min-h-dvh : min-h-dvh forcait la hauteur de la FENETRE au
+    // lieu de celle du parent, donc l'ecran debordait de tout conteneur plus
+    // petit (le cadre telephone du laboratoire, une dalle zoomee). Sur un vrai
+    // telephone les deux valent pareil, ce qui masquait le defaut.
+    <div className="flex h-full min-h-0 flex-col">
       <BattleStatusBar state={state} you={you} />
       {you.status === 'eliminated' && !yb?.isFinal && state.status !== 'end' && (
         <div className="anim-bg-pulse-red border-b border-rose-500/30 px-4 py-1.5 text-center text-xs font-bold text-rose-200">
@@ -353,6 +358,17 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
 
 function BattleRevealScreen({ state, you }: { state: PublicState; you: You }) {
   const reveal = state.battle?.reveal;
+  // ANTI-SPOILER. Le projecteur tient son suspense jusqu'a
+  // BR_REVEAL_SUSPENSE_MS ; sans cette garde, quarante telephones annoncaient
+  // le verdict AVANT lui et la salle apprenait le resultat par ses voisins.
+  // Meme mecanique que le reveal du quiz.
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 200);
+    return () => clearInterval(t);
+  }, []);
+  const ecoule = maintenant - (state.phaseStartedAt ?? maintenant);
+
   if (!reveal) return <Center><Spinner /></Center>;
   if (reveal.cancelled) {
     return (
@@ -362,12 +378,43 @@ function BattleRevealScreen({ state, you }: { state: PublicState; you: You }) {
     );
   }
 
+  if (ecoule < BR_REVEAL_SUSPENSE_MS) {
+    return (
+      <Center>
+        <div className="text-center">
+          <div className="anim-suspense text-7xl">🔎</div>
+          <h2 className="mt-6 text-2xl font-black uppercase tracking-widest">Verdict...</h2>
+          <p className="mt-2 text-white/50">Regarde l'écran !</p>
+        </div>
+      </Center>
+    );
+  }
+
   const correct = reveal.correctPseudos.includes(you.pseudo);
   const eliminatedNow = reveal.eliminated.some((e) => e.pseudo === you.pseudo);
   const wasAlreadyEliminated = you.status === 'eliminated' && !eliminatedNow;
+  /** nappe plein ecran du legacy : verte si on a bon, rouge si on tombe */
+  const nappe = eliminatedNow
+    ? 'radial-gradient(circle, rgba(255,0,60,0.35) 0%, transparent 70%)'
+    : correct
+      ? 'radial-gradient(circle, rgba(0,255,120,0.32) 0%, transparent 70%)'
+      : null;
+  const nappeVisible = nappe !== null && ecoule < BR_REVEAL_SUSPENSE_MS + 2400;
 
   return (
-    <div className={`flex flex-1 flex-col ${eliminatedNow ? 'anim-bg-pulse-red' : ''}`}>
+    <div className={`relative flex flex-1 flex-col ${eliminatedNow ? 'anim-bg-pulse-red' : ''}`}>
+      {/* Le flash plein ecran du legacy, 2,4 s : on sait ce qui nous arrive
+          sans avoir a lire. */}
+      {nappe && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10"
+          style={{
+            background: nappe,
+            opacity: nappeVisible ? 1 : 0,
+            transition: 'opacity 400ms ease',
+          }}
+        />
+      )}
       <Center>
         <div className="anim-pop w-full max-w-sm text-center">
           {reveal.repechage ? (
@@ -381,7 +428,7 @@ function BattleRevealScreen({ state, you }: { state: PublicState; you: You }) {
               <div className="mb-3 text-6xl">💀</div>
               <h2 className="text-3xl font-black text-rose-400">ÉLIMINÉ !</h2>
               {you.battle?.roundRank && (
-                <p className="mt-2 text-xl font-bold">
+                <p className="mt-3 text-3xl font-black text-orange-300">
                   {you.battle.roundRank}
                   {you.battle.roundRank === 1 ? 'er' : 'e'} de la manche
                 </p>
