@@ -117,6 +117,9 @@ function assertRevealDone(session: SessionRow): void {
   // victoire de finale et manche remportee ont leur propre fenetre et
   // s'enchainent toutes seules : ne pas les verrouiller deux fois
   if (b.victoryPending || b.roundWonPending) return;
+  // question annulee : l'ecran dit « question annulee » et c'est tout, il n'y a
+  // aucune sequence a laisser se derouler
+  if (b.reveal?.cancelled) return;
   const minimum = b.reveal?.milestone != null ? BR_REVEAL_MIN_PALIER_MS : BR_REVEAL_MIN_MS;
   const debut = new Date(session.phase_started_at).getTime();
   if (Date.now() < debut + minimum) {
@@ -1040,6 +1043,25 @@ export interface BattleActionParams {
   to?: number;
 }
 
+/**
+ * Lance une manche : tout le monde remis en jeu, compteurs a zero, une
+ * question tiree, et l'intro de manche a l'ecran.
+ *
+ * Partage par « manche suivante » et par la REPRISE APRES PAUSE : ce qui suit
+ * la pause du bar est toujours la manche suivante.
+ */
+async function demarrerManche(session: SessionRow): Promise<void> {
+  session.started_at = session.started_at ?? new Date().toISOString();
+  await supabaseAdmin
+    .from('game_players')
+    .update({ status: 'active' })
+    .eq('session_id', session.id)
+    .in('status', ['eliminated', 'waiting']);
+  resetRoundState(session);
+  await drawNextQuestion(session);
+  setPhase(session, 'round_intro', session.config.roundIntroMs ?? 5000);
+}
+
 /** remet en jeu les éliminés + intègre les waiting, reset les compteurs de manche */
 function resetRoundState(session: SessionRow): void {
   const b = battle(session);
@@ -1073,15 +1095,7 @@ export async function battleGmAction(
       case 'start-round': {
         assertStatus(session, ['lobby', 'rules', 'round_end'], action);
         if (b.isFinal) throw httpError('La finale est en cours, plus de manche normale', 409);
-        session.started_at = session.started_at ?? new Date().toISOString();
-        await supabaseAdmin
-          .from('game_players')
-          .update({ status: 'active' })
-          .eq('session_id', session.id)
-          .in('status', ['eliminated', 'waiting']);
-        resetRoundState(session);
-        await drawNextQuestion(session);
-        setPhase(session, 'round_intro', session.config.roundIntroMs ?? 5000);
+        await demarrerManche(session);
         break;
       }
       case 'start-final': {
@@ -1121,7 +1135,11 @@ export async function battleGmAction(
         // une question des qu'il ne restait qu'un survivant (« round_finished »).
         // Poser une question a une seule personne n'a aucun sens, la manche est
         // jouee. La console retire le bouton dans ce cas, ceci est le filet.
-        const restants = b.reveal?.survivorsAfter;
+        // Une question ANNULEE remet un reveal a zero survivant (elle ne
+        // compte pas), ce qui n'a rien a voir avec une manche jouee : sans
+        // cette exception, annuler une question interdisait de servir la
+        // suivante et il ne restait plus qu'a terminer la manche.
+        const restants = b.reveal?.cancelled ? undefined : b.reveal?.survivorsAfter;
         if (restants !== undefined && restants <= 1) {
           throw httpError(
             restants === 1
@@ -1131,6 +1149,9 @@ export async function battleGmAction(
           );
         }
         assertRevealDone(session);
+        // la revelation precedente est jouee : elle ne doit plus trainer dans
+        // le runtime, ni pour la console ni pour un rollback
+        b.reveal = undefined;
         await drawNextQuestion(session, params.difficulty);
         setPhase(session, 'announce', session.config.announceMs);
         break;
@@ -1192,6 +1213,20 @@ export async function battleGmAction(
       }
       case 'resume': {
         assertStatus(session, ['pause'], action);
+        // PAUSE PRISE ENTRE DEUX MANCHES : ce qui suit la pause du bar est
+        // toujours la manche suivante, jamais le classement d'avant. On la
+        // lance donc directement : son intro (titre de manche, categories,
+        // combattants) EST le rassemblement, elle fait le meme office que le
+        // decompte de reprise et raconte davantage.
+        //
+        // Les autres pauses (salle d'attente, regles, ou en pleine manche
+        // apres une revelation) gardent le decompte et rendent l'ecran d'avant
+        // : demarrer une manche la effacerait celle en cours.
+        if (session.previous_status === 'round_end' && !b.isFinal) {
+          session.previous_status = null;
+          await demarrerManche(session);
+          break;
+        }
         // previous_status est CONSERVE : c'est l'advancer qui le consomme a la
         // fin du decompte (cf. case 'resuming')
         setPhase(session, 'resuming', RESUME_COUNTDOWN_MS);

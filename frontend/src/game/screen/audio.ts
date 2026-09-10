@@ -27,6 +27,14 @@ export class GameAudio {
   private musicVolume = 0.35;
   private sfxVolume = 0.8;
   private ducked = false;
+  /**
+   * L'echantillon en cours. UN SEUL a la fois : le legacy n'avait qu'un
+   * element <audio> pour tous ses sons de battle (`battleGeneralAudio`), donc
+   * un nouveau son coupait net le precedent. Les laisser cohabiter empilait la
+   * fanfare de manche sur le son des elimines et sur celui des survivants,
+   * trois pistes de huit secondes en meme temps.
+   */
+  private sampleCourant: string | null = null;
   /** vrai = coupure totale de la musique (extrait video plein ecran), pas un simple ducking */
   private duckFull = false;
   private drumrollTimer: ReturnType<typeof setInterval> | null = null;
@@ -137,16 +145,39 @@ export class GameAudio {
   sample(url: string, opts: { volume?: number; loop?: boolean } = {}): void {
     if (!this.enabled) return;
     try {
+      // un nouveau son coupe le precedent (cf. sampleCourant)
+      if (this.sampleCourant && this.sampleCourant !== url) {
+        const avant = this.samples.get(this.sampleCourant);
+        if (avant && !avant.paused) {
+          avant.pause();
+          avant.currentTime = 0;
+        }
+      }
       let el = this.samples.get(url);
       if (!el) {
         el = new Audio(url);
         this.samples.set(url, el);
+        // Le legacy baissait le lit de fond a 4 % pendant CHAQUE son ponctuel
+        // et le remontait a la fin (duckBackgroundMusic / restore, appeles
+        // depuis playSound). Sans ca, les sons travailles de la battle passent
+        // sous une piste a plein volume et perdent la moitie de leur effet.
+        el.addEventListener('ended', () => {
+          if (this.sampleCourant !== url) return;
+          this.sampleCourant = null;
+          this.duck(false);
+        });
       }
       el.loop = opts.loop ?? false;
       if (!el.paused) return;
       el.volume = Math.min(1, (opts.volume ?? 0.7) * this.sfxVolume);
       el.currentTime = 0;
-      void el.play().catch(() => undefined);
+      this.sampleCourant = url;
+      this.duck(true);
+      void el.play().catch(() => {
+        if (this.sampleCourant !== url) return;
+        this.sampleCourant = null;
+        this.duck(false);
+      });
     } catch {
       /* asset indisponible : l'ecran reste muet, jamais bloque */
     }
@@ -158,6 +189,12 @@ export class GameAudio {
     if (el && !el.paused) {
       el.pause();
       el.currentTime = 0;
+    }
+    // une nappe en boucle n'emet jamais 'ended' : c'est ici qu'on rend le
+    // volume au lit de fond
+    if (this.sampleCourant === url) {
+      this.sampleCourant = null;
+      this.duck(false);
     }
   }
 

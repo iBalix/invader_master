@@ -201,6 +201,27 @@ export const GM_BATTLE: LabGmScenario[] = [
       ),
   },
   {
+    cle: 'gm-br-annulee',
+    label: 'Question annulée',
+    description: 'Le pilotage doit garder « question suivante ».',
+    state: () =>
+      base(
+        { status: 'reveal', phaseStartedAt: Date.now() },
+        {
+          reveal: {
+            cancelled: true,
+            answeredCount: 0,
+            eliminated: [],
+            repechage: false,
+            survivorsBefore: 0,
+            survivorsAfter: 0,
+            milestone: null,
+            correctPseudos: [],
+          },
+        },
+      ),
+  },
+  {
     cle: 'gm-br-dernier-debout',
     label: 'Manche jouée (1 survivant)',
     description: 'Plus de « question suivante », seulement la fin de manche.',

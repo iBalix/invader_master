@@ -152,6 +152,8 @@ export interface GmState {
       helpAnimator: string | null;
     } | null;
     players: GmPlayer[];
+    /** statut d'avant la pause : dit si la reprise enchaine sur une manche */
+    previousStatus?: string | null;
     battle: GmBattle | null;
   };
 }
@@ -767,13 +769,22 @@ function ControlPanel({
   const minimumReveal =
     b?.reveal?.milestone != null ? BR_REVEAL_MIN_PALIER_MS : BR_REVEAL_MIN_MS;
   const verrouMs =
-    s === 'reveal' && state.phaseStartedAt !== null && !b?.victoryPending
+    s === 'reveal' && state.phaseStartedAt !== null && !b?.victoryPending && !b?.reveal?.cancelled
       ? Math.max(0, state.phaseStartedAt + minimumReveal - (maintenant + (state.serverNow - Date.now())))
       : 0;
   const verrou = verrouMs > 0;
-  /** manche jouee : un survivant ou moins, il n'y a plus de question a poser */
+  /**
+   * Manche jouee : un survivant ou moins, il n'y a plus de question a poser.
+   *
+   * Une question ANNULEE publie un reveal a zero survivant (elle ne compte
+   * pas) : la prendre pour une manche jouee retirait « question suivante » et
+   * l'animateur se retrouvait coince avec la seule fin de manche.
+   */
   const manchejouee =
-    s === 'reveal' && !b?.isFinal && (b?.reveal?.survivorsAfter ?? 2) <= 1;
+    s === 'reveal' &&
+    !b?.isFinal &&
+    !b?.reveal?.cancelled &&
+    (b?.reveal?.survivorsAfter ?? 2) <= 1;
 
   useEffect(() => {
     if (!state.phaseEndsAt) {
@@ -946,8 +957,14 @@ function ControlPanel({
         )}
 
         {s === 'pause' && (
+          /* La reprise d'une pause prise entre deux manches enchaine
+             directement sur la manche suivante et son intro : le bouton le
+             dit, sinon l'animateur ne sait pas ce qu'il declenche. */
           <Btn variant="primary" disabled={busy} onClick={() => void action('resume')}>
-            <Play size={15} /> Reprendre
+            <Play size={15} />{' '}
+            {state.gm.previousStatus === 'round_end' && !b?.isFinal
+              ? 'Reprendre : manche suivante'
+              : 'Reprendre'}
           </Btn>
         )}
 
