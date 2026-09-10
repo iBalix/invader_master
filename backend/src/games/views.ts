@@ -7,7 +7,13 @@
 
 import { nextDifficultyFor } from './battleFlow.js';
 import { registerSyncPayload } from './engine.js';
-import type { JokerType, PlayerRow, QuestionSnapshot, SessionRow } from './types.js';
+import {
+  BR_REVEAL_SURVIVANTS_MS,
+  type JokerType,
+  type PlayerRow,
+  type QuestionSnapshot,
+  type SessionRow,
+} from './types.js';
 
 function ms(iso: string | null): number | null {
   return iso ? new Date(iso).getTime() : null;
@@ -117,9 +123,23 @@ function battleRuntimeFields(session: SessionRow): Record<string, unknown> | und
 function publicBattle(session: SessionRow, players: PlayerRow[]): Record<string, unknown> | undefined {
   const champs = battleRuntimeFields(session);
   if (!champs) return undefined;
+  const b = session.runtime.battle;
   // le compteur public de survivants est DÉRIVÉ des statuts persistés en DB :
   // pendant le verdict, la salle voit le compte d'avant validation GM
-  const survivorCount = players.filter((p) => p.status === 'active').length;
+  const reel = players.filter((p) => p.status === 'active').length;
+  // ... et pendant la PREMIÈRE PARTIE de la révélation, elle voit encore le
+  // compte d'avant la question. Les éliminations sont écrites en base dès que
+  // l'animateur valide, donc tous les bandeaux (« 14 en vie » en haut du
+  // téléphone, la piste de fond qui suit le nombre de survivants) annonçaient
+  // la baisse huit secondes avant l'écran qui la raconte. Le legacy masquait
+  // ces compteurs à la révélation de la réponse et ne les remettait, à la
+  // nouvelle valeur, qu'après l'animation d'élimination.
+  const debut = session.phase_started_at ? new Date(session.phase_started_at).getTime() : 0;
+  const avantEcranSurvivants =
+    session.status === 'reveal' &&
+    b?.reveal !== undefined &&
+    Date.now() - debut < BR_REVEAL_SURVIVANTS_MS;
+  const survivorCount = avantEcranSurvivants ? b?.reveal?.survivorsBefore ?? reel : reel;
   return { ...champs, survivorCount };
 }
 

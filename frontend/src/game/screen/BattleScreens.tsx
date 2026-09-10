@@ -400,8 +400,13 @@ function BattleQuestionProjo({
           <h1 className="mt-2 text-balance text-5xl font-black leading-tight">{q.question}</h1>
         </div>
         <div className="flex shrink-0 flex-col items-center gap-2">
+          {/* ZERO, et il y reste. La phase de grace dure quelques secondes
+              (tolerance reseau du legacy) et son phaseEndsAt est dans le
+              futur : afficher son decompte relancait un chrono a l'ecran, ce
+              qui donnait a la salle l'impression d'un second temps de reponse
+              offert. Le chrono se fige a zero, comme au quiz. */}
           {remaining !== null ? (
-            <TimerRing remainingMs={remaining} totalMs={totalMs} size={110} />
+            <TimerRing remainingMs={grace ? 0 : remaining} totalMs={totalMs} size={110} />
           ) : (
             <span className="rounded-full bg-rose-500/20 px-5 py-2 text-2xl font-black text-rose-300">STOP</span>
           )}

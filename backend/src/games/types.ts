@@ -271,6 +271,8 @@ export const BR_REVEAL_MIN_PALIER_MS = 18_000;
  *   - l'instant ou le bar passe au jaune, qui doit tomber pile sur l'ecran
  *     « MANCHE REMPORTEE PAR », pas 13 s avant (sinon il spoile).
  */
+/** instant ou l'ecran des survivants prend le cadre (compteur + noms) */
+export const BR_REVEAL_SURVIVANTS_MS = 8_600;
 export const BR_REVEAL_PREMIER_NOM_MS = 10_200;
 export const BR_REVEAL_PAS_MS = 600;
 export const BR_VAINQUEUR_APRES_MS = 1_400;

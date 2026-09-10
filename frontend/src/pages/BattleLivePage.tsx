@@ -490,7 +490,17 @@ export function BattleGmBody({
   onClosed: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [etroit, setEtroit] = useState(false);
+  // La VALEUR DE DEPART vient de la fenetre, pas de la mesure : un
+  // ResizeObserver ne livre rien tant que la page n'est pas peinte (onglet en
+  // arriere-plan, telephone verrouille, console ouverte depuis un QR puis
+  // laissee de cote). La console partait donc en mise en page LARGE sur un
+  // telephone, et l'en-tete a quatre libelles debordait de l'ecran : il
+  // fallait scroller de cote. La mesure ne fait plus qu'affiner ensuite, ce
+  // qui reste indispensable pour le laboratoire, ou un cadre de 375 px vit au
+  // milieu d'un ecran large.
+  const [etroit, setEtroit] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 900,
+  );
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
