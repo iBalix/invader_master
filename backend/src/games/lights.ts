@@ -125,7 +125,7 @@ interface BattleRuntimeLike {
   roundNumber?: number;
   isFinal?: boolean;
   roundQuestionCount?: number;
-  reveal?: { milestone?: number | null; victory?: boolean; repechage?: boolean };
+  reveal?: { milestone?: number | null; victory?: boolean; repechage?: boolean; roundWinner?: string };
 }
 
 function battleOf(session: SessionRow): BattleRuntimeLike {
@@ -252,7 +252,12 @@ export function computeCue(session: SessionRow): ComputedCue | null {
     case 'reveal': {
       if (mode === 'battle') {
         const r = b.reveal ?? {};
-        if (r.victory) return base('round_winner', {}, 'victory');
+        // Manche remportee : le legacy jouait setRoundWinnerLights() des qu'il
+        // ne restait qu'UN survivant, dans toute manche. Le portage ne le
+        // faisait qu'en finale : une manche gagnee passait sans que le bar ne
+        // celebre quoi que ce soit.
+        const gagnant = r.victory || r.roundWinner;
+        if (gagnant) return base('round_winner', {}, `w${r.roundWinner ?? 'final'}`);
         if (r.milestone != null) {
           return base('milestone', { milestone: r.milestone as 3 | 5 | 10 | 20 }, `m${r.milestone}`);
         }

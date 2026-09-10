@@ -532,8 +532,13 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
     gameAudio.sample(SON_BATTLE.transition, { volume: 0.7 }),
   );
   useCue(palierPlein, () => gameAudio.sample(SON_BATTLE.palier, { volume: 0.7 }));
-  useCue(Boolean(reveal?.victory) && survivantsVisible, () =>
-    gameAudio.sample(SON_BATTLE.vainqueurManche, { volume: 0.75 }),
+  // Manche remportee : le legacy jouait end_round_win.mp3 des qu'il ne restait
+  // qu'UN survivant, dans toute manche. Le cue etait conditionne a `victory`,
+  // qui n'est pose qu'en FINALE : une manche gagnee n'avait donc droit qu'aux
+  // sons d'elimination, jamais a sa fanfare.
+  useCue(
+    Boolean(reveal?.victory || reveal?.roundWinner) && survivantsVisible,
+    () => gameAudio.sample(SON_BATTLE.vainqueurManche, { volume: 0.75 }),
   );
 
   if (!reveal) return null;
@@ -677,7 +682,6 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
                 }}
               >
                 💀 {e.pseudo}
-                {e.reason === 'timeout' ? ' 😴' : ''}
               </span>
             ))
           )}

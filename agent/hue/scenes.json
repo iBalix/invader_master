@@ -233,14 +233,15 @@
       "warnScene": "question_warn"
     },
     "question_warn": {
-      "priority": "accent",
+      "priority": "normal",
+      "comment": "Trois dernieres secondes. Fondu COURT (400 ms) et non 2,5 s : le pont interpole en espace xy et la droite du cyan au rouge passe par le magenta, donc un fondu long faisait passer le bar par le violet et mangeait les trois secondes en transit.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
           "color": "ROUGE",
           "bri": 254,
-          "transition": 25,
+          "transition": 4,
           "on": true
         },
         {
@@ -248,21 +249,21 @@
           "target": "BAR_BOTTOM",
           "color": "ROUGE",
           "bri": 254,
-          "transition": 25,
+          "transition": 4,
           "on": true
         }
       ]
     },
     "question_end": {
       "priority": "normal",
-      "comment": "Fin de la fenetre de reponse : on revient a la couleur de la DIFFICULTE, comme resetLightsDefault() du legacy. Le saumon (REPOS) est la couleur du bar hors partie, la ramener entre deux questions faisait clignoter le bar d'une teinte a l'autre a chaque question.",
+      "comment": "Fin de la fenetre de reponse : retour a la couleur de la DIFFICULTE, comme resetLightsDefault() du legacy. Fondu court, pour la meme raison que question_warn.",
       "steps": [
         {
           "atMs": 0,
           "target": "BAR_TOP",
           "color": "$difficulty",
           "bri": 254,
-          "transition": 12,
+          "transition": 6,
           "on": true
         },
         {
@@ -270,49 +271,15 @@
           "target": "BAR_BOTTOM",
           "color": "BLANC",
           "bri": 127,
-          "transition": 12,
+          "transition": 6,
           "on": true
         }
       ]
     },
     "verdict": {
       "priority": "normal",
-      "loop": true,
-      "loopMs": 6000,
-      "loopMax": 3,
-      "comment": "Verification des eliminations. La tension se joue sur la LUMINOSITE, pas sur la teinte : la version precedente passait les deux rampes en SOMBRE (40,20,60), soit un violet fonce sur tout le bar, et elle y restait tant que l'animateur corrigeait.",
-      "steps": [
-        {
-          "atMs": 0,
-          "target": "BAR_TOP",
-          "color": "$difficulty",
-          "bri": 70,
-          "transition": 30,
-          "on": true
-        },
-        {
-          "atMs": 0,
-          "target": "BAR_BOTTOM",
-          "color": "BLANC",
-          "bri": 40,
-          "transition": 30,
-          "on": true
-        },
-        {
-          "atMs": 3000,
-          "target": "BAR_TOP",
-          "color": "$difficulty",
-          "bri": 200,
-          "transition": 30
-        },
-        {
-          "atMs": 3000,
-          "target": "BAR_BOTTOM",
-          "color": "BLANC",
-          "bri": 110,
-          "transition": 30
-        }
-      ]
+      "extends": "question_end",
+      "comment": "Verification des eliminations : on RESTE sur les lumieres de la question, sans pulsation ni baisse d'intensite. L'animateur peut mettre une minute, le bar n'a pas a le signaler."
     },
     "reveal": {
       "extends": "question_end"
@@ -434,8 +401,17 @@
           "bri": 254,
           "transition": 10,
           "on": true
+        },
+        {
+          "atMs": 0,
+          "target": "SALON",
+          "color": "JAUNE",
+          "bri": 200,
+          "transition": 10,
+          "on": true
         }
-      ]
+      ],
+      "comment": "Manche remportee : tout le bar en jaune, comme setRoundWinnerLights() du legacy. Envoyee des qu'il ne reste qu'un survivant, dans TOUTE manche et pas seulement en finale."
     },
     "leaderboard_reveal": {
       "priority": "normal",

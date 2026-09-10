@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import { useConfirmation } from '../game/hooks/useConfirmation';
 import { Link } from 'react-router-dom';
 import { QrCanvas } from '../game/ui/bits';
 import { BR_REVEAL_MIN_MS, BR_REVEAL_MIN_PALIER_MS } from '../game/lib/gameClient';
@@ -185,6 +186,7 @@ export default function BattleLivePage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [state, setState] = useState<GmState | null>(null);
   const [busy, setBusy] = useState(false);
+  const { demander, dialogue } = useConfirmation();
 
   // découverte de la session battle active
   useEffect(() => {
@@ -220,7 +222,7 @@ export default function BattleLivePage() {
   const action = useCallback(
     async (name: string, params: Record<string, unknown> = {}, confirmMsg?: string) => {
       if (!sessionId || busy) return;
-      if (confirmMsg && !confirm(confirmMsg)) return;
+      if (confirmMsg && !(await demander(confirmMsg))) return;
       setBusy(true);
       try {
         const { data } = await api.post(`/api/game/${sessionId}/action`, { action: name, params });
@@ -232,7 +234,7 @@ export default function BattleLivePage() {
         setBusy(false);
       }
     },
-    [sessionId, busy],
+    [sessionId, busy, demander],
   );
 
   if (!sessionId || !state) {
@@ -245,6 +247,7 @@ export default function BattleLivePage() {
 
   return (
     <Coque>
+      {dialogue}
         <BattleGmBody
         state={state}
         busy={busy}
@@ -267,6 +270,7 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
   const [stats, setStats] = useState<BattleStats | null>(null);
   const [launching, setLaunching] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const { demander, dialogue } = useConfirmation();
 
   const loadStats = useCallback(async () => {
     try {
@@ -303,7 +307,7 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
   };
 
   const resetUsage = async () => {
-    if (!confirm('Remettre TOUTES les questions déjà posées en circulation ?')) return;
+    if (!(await demander('Remettre TOUTES les questions déjà posées en circulation ?'))) return;
     setResetting(true);
     try {
       const { data } = await api.post('/api/battle-questions/reset-usage');
@@ -320,6 +324,7 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
+      {dialogue}
       <h1 className="text-2xl font-black">Battle Royale live</h1>
       <p className="mt-1 text-sm text-slate-400">
         Lance une battle : le projecteur et les écrans du bar basculent automatiquement. Une
@@ -542,6 +547,7 @@ function Header({
   onClosed: () => void;
 }) {
   const etroit = useContext(EtroitContext);
+  const { demander, dialogue } = useConfirmation();
   const b = state.gm.battle;
   const [qrOuvert, setQrOuvert] = useState(false);
   const urlConsole = `${window.location.origin}/evenements/battle-live`;
@@ -553,6 +559,7 @@ function Header({
 
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-slate-950/95 px-3 py-2.5 backdrop-blur sm:-mx-5 sm:px-5">
+      {dialogue}
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -635,7 +642,7 @@ function Header({
           <button
             type="button"
             onClick={async () => {
-              if (!confirm('Arrêter la battle ? Les écrans font un fondu puis reviennent à l\'accueil.')) return;
+              if (!(await demander('Arrêter la battle ? Les écrans font un fondu puis reviennent à l\'accueil.'))) return;
               await action('stop');
               onClosed();
               toast.success('Battle terminée (fondu en cours)');
@@ -1029,7 +1036,7 @@ function VerdictPanel({
               <span className="font-bold">{p.pseudo}</span>
               <span className="text-slate-300">
                 {p.reason === 'timeout'
-                  ? ' · pas de réponse 😴'
+                  ? ' · pas de réponse'
                   : ` · réponse ${p.choice !== null ? String.fromCharCode(65 + p.choice) : '?'}`}
                 {p.elapsedMs !== null && ` · ${(p.elapsedMs / 1000).toFixed(1)}s`}
               </span>

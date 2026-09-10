@@ -79,20 +79,24 @@ function publicStandings(session: SessionRow): unknown {
   }));
 }
 
-/** bloc battle de la vue publique : jamais de verdict provisoire ni de bonne réponse */
-function publicBattle(session: SessionRow, players: PlayerRow[]): Record<string, unknown> | undefined {
+/**
+ * Bloc battle SANS le compteur de survivants : tout ce qui se lit dans le
+ * runtime, donc sans requête joueurs.
+ *
+ * C'est ce que le signal 'sync' agrafe, pour que la bascule de phase et le
+ * NUMÉRO DE MANCHE arrivent ensemble. Sans ça, l'écran passait en 'round_intro'
+ * avec le numéro d'AVANT (« Manche 0 » au lancement) jusqu'au GET /state
+ * suivant, volontairement étalé de 150 à 1000 ms pour éviter la ruée.
+ */
+function battleRuntimeFields(session: SessionRow): Record<string, unknown> | undefined {
   const b = session.runtime.battle;
   if (session.mode !== 'battle' || !b) return undefined;
-  // le compteur public de survivants est DÉRIVÉ des statuts persistés en DB :
-  // pendant le verdict, la salle voit le compte d'avant validation GM
-  const survivorCount = players.filter((p) => p.status === 'active').length;
   return {
     roundNumber: b.roundNumber,
     isFinal: b.isFinal,
     // numero de la question DANS la manche (les ecrans ne doivent jamais
     // afficher l'index global : la finale repart a 1)
     questionInRound: b.roundQuestionCount,
-    survivorCount,
     finalSize: session.config.finalSize ?? 10,
     verdictPending: session.status === 'verdict',
     reveal: session.status === 'reveal' ? b.reveal : undefined,
@@ -104,6 +108,16 @@ function publicBattle(session: SessionRow, players: PlayerRow[]): Record<string,
     finalStandings: session.status === 'end' ? b.finalStandings : undefined,
     winner: session.status === 'end' ? b.winner ?? null : undefined,
   };
+}
+
+/** bloc battle de la vue publique : jamais de verdict provisoire ni de bonne réponse */
+function publicBattle(session: SessionRow, players: PlayerRow[]): Record<string, unknown> | undefined {
+  const champs = battleRuntimeFields(session);
+  if (!champs) return undefined;
+  // le compteur public de survivants est DÉRIVÉ des statuts persistés en DB :
+  // pendant le verdict, la salle voit le compte d'avant validation GM
+  const survivorCount = players.filter((p) => p.status === 'active').length;
+  return { ...champs, survivorCount };
 }
 
 export function buildPublicState(
@@ -381,4 +395,12 @@ function syncPatch(session: SessionRow): Record<string, unknown> {
 }
 
 registerSyncPayload('quiz', syncPatch);
-registerSyncPayload('battle', syncPatch);
+// battle : le bloc battle voyage À CÔTÉ du patch principal, car le client le
+// fusionne champ par champ (le patch, lui, remplace les clés qu'il porte).
+// Fusionner et non remplacer préserve `survivorCount`, seul champ du bloc qui
+// vient de la DB et non du runtime.
+registerSyncPayload('battle', (session) => {
+  const patch = syncPatch(session);
+  const battlePatch = battleRuntimeFields(session);
+  return battlePatch ? { ...patch, battlePatch } : patch;
+});

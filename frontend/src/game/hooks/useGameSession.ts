@@ -121,13 +121,28 @@ export function useGameSession(idOrCode: string | null, options: UseGameSessionO
         const v = (e.payload.v as number) ?? 0;
         if (v <= versionRef.current) return;
         const patch = e.payload.patch as Partial<PublicState> | undefined;
+        // Le bloc battle voyage a part : il se fusionne CHAMP PAR CHAMP, la ou
+        // le patch principal remplace les cles qu'il porte. C'est ce qui fait
+        // arriver la bascule de phase et le NUMERO DE MANCHE ensemble (sinon
+        // l'ecran peignait « Manche 0 » au lancement), sans perdre au passage
+        // `survivorCount`, seul champ du bloc qui vient de la DB.
+        const battlePatch = e.payload.battlePatch as Partial<
+          NonNullable<PublicState['battle']>
+        > | undefined;
         if (patch) {
           // BASCULE IMMEDIATE. Le serveur embarque de quoi changer de phase sans
           // aller-retour : c'est ce qui fait qu'une borne ouvre sa fenetre de
           // bonus a l'heure au lieu d'attendre son tour dans la ruee de GET
           // /state que declenchait chaque transition.
           versionRef.current = v;
-          setState((prev) => (prev ? { ...prev, ...patch, v } : prev));
+          setState((prev) => {
+            if (!prev) return prev;
+            const suivant = { ...prev, ...patch, v };
+            if (battlePatch && prev.battle) {
+              suivant.battle = { ...prev.battle, ...battlePatch };
+            }
+            return suivant;
+          });
         }
         // Reconciliation quand meme, pour ce que le correctif ne porte pas
         // (scores, `you`, bloc reveal). Etalee au hasard : sans ce delai, les

@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import { useConfirmation } from '../game/hooks/useConfirmation';
 import LightsBadge from '../components/Live/LightsBadge';
 import { JOKER_DEFS, REVEAL_MIN_MS, type JokerType } from '../game/lib/gameClient';
 import { QrCanvas } from '../game/ui/bits';
@@ -204,6 +205,9 @@ export default function QuizLivePage() {
   const [state, setState] = useState<GmState | null>(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>('pilotage');
+  // confirmation DANS la page : `confirm()` finissait supprime par le
+  // navigateur au bout de quelques dialogues et l'action devenait inerte
+  const { demander, dialogue } = useConfirmation();
   // décalage horloge serveur, réévalué à chaque refresh
   const clockOffset = useRef(0);
 
@@ -250,7 +254,7 @@ export default function QuizLivePage() {
   const action = useCallback(
     async (name: string, params: Record<string, unknown> = {}, confirmMsg?: string) => {
       if (!sessionId || busy) return;
-      if (confirmMsg && !confirm(confirmMsg)) return;
+      if (confirmMsg && !(await demander(confirmMsg))) return;
       setBusy(true);
       try {
         const { data } = await api.post(`/api/game/${sessionId}/action`, { action: name, params });
@@ -266,7 +270,7 @@ export default function QuizLivePage() {
         setBusy(false);
       }
     },
-    [sessionId, busy],
+    [sessionId, busy, demander],
   );
 
   if (!sessionId || !state) {
@@ -279,10 +283,11 @@ export default function QuizLivePage() {
 
   return (
     <Coque>
+      {dialogue}
       <HeaderBar
         state={state}
         onStop={async () => {
-          if (!confirm('Arrêter la partie ? Les écrans reviennent à leur état normal.')) return;
+          if (!(await demander('Arrêter la partie ? Les écrans reviennent à leur état normal.'))) return;
           await action('stop');
           setSessionId(null);
           setState(null);
@@ -1136,8 +1141,10 @@ function SettingsPanel({
   action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
   onClosed: () => void;
 }) {
+  const { demander, dialogue } = useConfirmation();
   return (
     <div className="space-y-3">
+      {dialogue}
       <MixerPanel state={state} action={action} />
       <LightsBadge />
       <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 p-4">
@@ -1147,7 +1154,7 @@ function SettingsPanel({
         <button
           type="button"
           onClick={async () => {
-            if (!confirm('Arrêter la partie ? Les écrans reviennent à leur état normal.')) return;
+            if (!(await demander('Arrêter la partie ? Les écrans reviennent à leur état normal.'))) return;
             await action('stop');
             onClosed();
             toast.success('Session terminée');
