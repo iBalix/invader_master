@@ -1207,11 +1207,12 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'battle',
     surface: 'projo',
     label: 'R\u00e9v\u00e9lation (projo)',
-    description: 'R\u00e9ponse, \u00e9limin\u00e9s un par un, survivants.',
+    description: 'Suspense, r\u00e9ponse, puis le compteur qui encaisse.',
     sauts: [
-      ['R\u00e9ponse', 600],
-      ['\u00c9limin\u00e9s', 2600],
-      ['Survivants', 6000],
+      ['Suspense', 1200],
+      ['R\u00e9ponse', 3400],
+      ['Survivants', 7200],
+      ['Noms', 9600],
     ],
     state: () =>
       baseBattle({ status: 'reveal', question: QUESTION_BATTLE }, { survivorCount: 14, reveal: revealBattle() }),
@@ -1223,9 +1224,10 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Palier TOP 10',
     description: 'La prise d\u2019\u00e9cran plein cadre du legacy.',
     sauts: [
-      ['R\u00e9ponse', 600],
-      ['\u00c9limin\u00e9s', 2600],
-      ['Palier', 7000],
+      ['R\u00e9ponse', 3400],
+      ['Survivants', 7200],
+      ['Noms', 9600],
+      ['Palier', 11200],
     ],
     state: () =>
       baseBattle(

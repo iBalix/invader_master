@@ -104,3 +104,19 @@
     animation: none;
   }
 }
+
+/* battle : la bonne reponse qui s'allume, comme le `shine` du legacy */
+@keyframes battle-shine {
+  0% { box-shadow: 0 0 0 rgba(94, 217, 161, 0); }
+  35% { box-shadow: 0 0 60px rgba(94, 217, 161, 0.75); }
+  100% { box-shadow: 0 0 24px rgba(94, 217, 161, 0.35); }
+}
+.anim-shine { animation: battle-shine 1.2s ease-out both; }
+
+/* battle : le compteur de survivants qui encaisse une elimination */
+@keyframes battle-count-down {
+  0% { transform: scale(1); color: rgb(255 255 255); }
+  30% { transform: scale(1.22); color: rgb(251 113 133); }
+  100% { transform: scale(1); color: rgb(255 255 255); }
+}
+.anim-count-down { animation: battle-count-down 0.5s ease-out both; }

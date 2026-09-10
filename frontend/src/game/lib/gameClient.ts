@@ -599,19 +599,44 @@ export const BR_INTRO_ACTE_COMBATTANTS = 0.66;
 /** annonce : le decompte 3-2-1 occupe les trois dernieres secondes */
 export const BR_DECOMPTE_MS = 3000;
 
-/** revelation : la reponse, les elimines un par un, le compte, puis le palier */
-export const BR_REVEAL_REPONSE_MS = 600;
-export const BR_REVEAL_ELIMINES_MS = 2200;
-/** un nom toutes les 550 ms, cadence du legacy */
-export const BR_REVEAL_PAS_MS = 550;
-export const BR_REVEAL_COMPTE_MS = 5200;
-/** prise d'ecran plein cadre du palier (TOP 20 / 10 / 5 / 3) */
-export const BR_PALIER_MS = 6800;
+/**
+ * Revelation, au tempo du legacy, qui prenait son temps :
+ *
+ *   [0 .. SUSPENSE[            l'enonce et les quatre reponses, rien de devoile.
+ *                              Le compteur de survivants est CACHE, comme dans
+ *                              le legacy : il trahissait le resultat avant
+ *                              l'heure.
+ *   [SUSPENSE .. SURVIVANTS[   la bonne reponse s'allume, les autres tombent.
+ *                              Quatre secondes pour la laisser respirer : le
+ *                              legacy en laissait six.
+ *   [SURVIVANTS .. PREMIER_NOM[ l'ecran des survivants, compteur au complet.
+ *   [PREMIER_NOM .. [           les noms tombent un par un, PAS_MS entre chacun,
+ *                              et le compteur baisse DECOMPTE_MS apres le nom.
+ *   puis, si un palier est franchi, la prise d'ecran plein cadre.
+ */
+export const BR_REVEAL_SUSPENSE_MS = 2600;
+export const BR_REVEAL_SURVIVANTS_MS = 6600;
+export const BR_REVEAL_PREMIER_NOM_MS = 8200;
+/** un nom toutes les 600 ms, cadence exacte du legacy */
+export const BR_REVEAL_PAS_MS = 600;
+/** le compteur baisse ce delai apres l'apparition du nom (legacy : 400 ms) */
+export const BR_REVEAL_DECOMPTE_MS = 400;
+/** le palier arrive ce delai apres le dernier nom */
+export const BR_PALIER_APRES_MS = 1400;
 export const BR_PALIER_DUREE_MS = 4200;
 
-/** miroirs du backend : le GM ne peut pas couper la revelation avant la fin */
-export const BR_REVEAL_MIN_MS = 7000;
-export const BR_REVEAL_MIN_PALIER_MS = 11500;
+/** instant du palier, une fois connu le nombre d'elimines */
+export function brPalierMs(nbElimines: number): number {
+  return BR_REVEAL_PREMIER_NOM_MS + Math.max(0, nbElimines - 1) * BR_REVEAL_PAS_MS + BR_PALIER_APRES_MS;
+}
+
+/**
+ * Miroirs du backend : le GM ne peut pas couper la revelation avant la fin.
+ * Genereux, parce que la sequence raconte quelque chose et que le legacy
+ * laissait la salle la vivre en entier.
+ */
+export const BR_REVEAL_MIN_MS = 11_000;
+export const BR_REVEAL_MIN_PALIER_MS = 16_000;
 
 // ---------------------------------------------------------------------------
 // Compteurs d'attente (purement indicatifs, le GM garde la main)

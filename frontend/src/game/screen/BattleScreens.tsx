@@ -13,11 +13,12 @@ import {
   BR_INTRO_ACTE_CATEGORIES,
   BR_INTRO_ACTE_COMBATTANTS,
   BR_PALIER_DUREE_MS,
-  BR_PALIER_MS,
-  BR_REVEAL_COMPTE_MS,
-  BR_REVEAL_ELIMINES_MS,
+  BR_REVEAL_DECOMPTE_MS,
   BR_REVEAL_PAS_MS,
-  BR_REVEAL_REPONSE_MS,
+  BR_REVEAL_PREMIER_NOM_MS,
+  BR_REVEAL_SURVIVANTS_MS,
+  BR_REVEAL_SUSPENSE_MS,
+  brPalierMs,
   QUESTION_REPONSES_MS,
   serverNow,
   type BattleStandingEntry,
@@ -392,7 +393,7 @@ function BattleQuestionProjo({
     <div className="flex flex-1 flex-col px-12 py-8">
       <div className="mb-6 flex items-start justify-between gap-8">
         <div className="min-w-0">
-          <p className="text-xl uppercase tracking-widest text-white/40">
+          <p className="text-2xl font-bold uppercase tracking-widest text-white/50">
             {q.difficulty} · {state.battle?.survivorCount} survivant{(state.battle?.survivorCount ?? 0) > 1 ? 's' : ''} · {answeredCount} réponse{answeredCount > 1 ? 's' : ''}
           </p>
           <h1 className="mt-2 text-balance text-5xl font-black leading-tight">{q.question}</h1>
@@ -438,10 +439,10 @@ function VerdictProjo({ state }: { state: PublicState }) {
         <div className="mb-8 text-8xl">🔎</div>
         <h1 className="text-6xl font-black uppercase tracking-widest">Vérification...</h1>
       </div>
-      <p className="mt-10 text-3xl text-white/50">
+      <p className="mt-12 text-4xl text-white/60">
         {state.battle?.survivorCount} survivant{(state.battle?.survivorCount ?? 0) > 1 ? 's' : ''} avant le verdict
       </p>
-      <p className="mt-4 animate-pulse text-2xl uppercase tracking-[0.3em] text-rose-300">
+      <p className="mt-6 animate-pulse text-3xl font-bold uppercase tracking-[0.3em] text-rose-300">
         Qui tombe au combat ?
       </p>
     </FullCenter>
@@ -453,19 +454,24 @@ function VerdictProjo({ state }: { state: PublicState }) {
 // ---------------------------------------------------------------------------
 
 /**
- * Revelation, cadencee sur l'horloge SERVEUR.
+ * Revelation, au tempo du legacy, cadencee sur l'horloge SERVEUR.
  *
- *   [0 .. BR_REVEAL_REPONSE_MS[      l'enonce seul, la salle retient son souffle
- *   [REPONSE .. ELIMINES[            la bonne reponse tombe
- *   [ELIMINES .. COMPTE[             les noms des elimines, un toutes les 550 ms
- *   [COMPTE .. PALIER[               le compteur de survivants
- *   [PALIER .. +DUREE[               si un palier est franchi : plein cadre
+ * Le portage enchainait tout en cinq secondes : la reponse a 600 ms, les
+ * elimines a 2,2 s. La salle n'avait pas le temps de comprendre ce qui lui
+ * arrivait. Le legacy prenait six secondes entre la reponse et l'ecran des
+ * survivants, puis deux de plus avant le premier nom : c'est ce souffle qui
+ * fait la tension.
  *
- * L'ancienne version cadencait les noms avec un setInterval lance au montage :
- * un ecran recharge en pleine revelation repartait de zero, et une page non
- * peinte restait figee. Les sons partent des memes seuils, dans ce composant,
- * et non d'un setTimeout pose au changement de statut : ils suivaient sinon
- * une horloge differente de l'image.
+ * Trois temps, tous en seuils sur phaseStartedAt (jamais un minuteur lance au
+ * montage : un ecran qui recharge en pleine revelation retombe au bon endroit,
+ * et une page qui ne composite pas ne fige rien) :
+ *
+ *   1. SUSPENSE — l'enonce et les quatre reponses, rien de devoile, le
+ *      compteur de survivants CACHE. Le legacy le masquait des la reception de
+ *      la reponse, parce qu'il trahissait le resultat.
+ *   2. LA REPONSE — elle s'allume en vert, les autres s'eteignent.
+ *   3. LES SURVIVANTS — le grand compteur, puis les noms qui tombent un par
+ *      un, et le compteur qui encaisse chaque elimination.
  */
 function BattleRevealProjo({ state }: { state: PublicState }) {
   const q = state.question;
@@ -475,27 +481,49 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
   const elimines = reveal?.eliminated ?? [];
   const repechage = Boolean(reveal?.repechage);
   const palier = reveal?.milestone ?? null;
-
-  // combien de noms sont deja tombes : fonction de l'horloge, pas d'un compteur
-  const montres = Math.max(
-    0,
-    Math.min(elimines.length, Math.floor((ecoule - BR_REVEAL_ELIMINES_MS) / BR_REVEAL_PAS_MS) + 1),
-  );
-  const reponseVisible = ecoule >= BR_REVEAL_REPONSE_MS;
-  const compteVisible = ecoule >= BR_REVEAL_COMPTE_MS;
-  const palierPlein = palier !== null && ecoule >= BR_PALIER_MS && ecoule < BR_PALIER_MS + BR_PALIER_DUREE_MS;
-
   const annule = Boolean(reveal?.cancelled);
-  useCue(!annule && reponseVisible, () => gameAudio.sample(SON_BATTLE.bonneReponse, { volume: 0.7 }));
-  useCue(!annule && repechage && ecoule >= BR_REVEAL_ELIMINES_MS, () =>
-    gameAudio.sample(SON_BATTLE.transition, { volume: 0.7 }),
+
+  const reponseVisible = ecoule >= BR_REVEAL_SUSPENSE_MS;
+  const survivantsVisible = ecoule >= BR_REVEAL_SURVIVANTS_MS;
+
+  // Combien de noms sont deja tombes, et de combien le compteur a baisse. Deux
+  // valeurs distinctes : le compteur suit le nom de BR_REVEAL_DECOMPTE_MS,
+  // exactement comme le legacy.
+  const tombes = Math.max(
+    0,
+    Math.min(elimines.length, Math.floor((ecoule - BR_REVEAL_PREMIER_NOM_MS) / BR_REVEAL_PAS_MS) + 1),
   );
-  useCue(!annule && !repechage && elimines.length > 0 && ecoule >= BR_REVEAL_ELIMINES_MS, () =>
+  const decomptes = repechage
+    ? 0
+    : Math.max(
+        0,
+        Math.min(
+          elimines.length,
+          Math.floor((ecoule - BR_REVEAL_PREMIER_NOM_MS - BR_REVEAL_DECOMPTE_MS) / BR_REVEAL_PAS_MS) + 1,
+        ),
+      );
+  const compteur = (reveal?.survivorsBefore ?? 0) - decomptes;
+  /** vrai pendant la demi-seconde qui suit une baisse : le chiffre encaisse */
+  const dansLeCoup = (() => {
+    if (decomptes === 0) return false;
+    const t = BR_REVEAL_PREMIER_NOM_MS + BR_REVEAL_DECOMPTE_MS + (decomptes - 1) * BR_REVEAL_PAS_MS;
+    return ecoule >= t && ecoule < t + 500;
+  })();
+
+  const palierMs = brPalierMs(elimines.length);
+  const palierPlein = palier !== null && ecoule >= palierMs && ecoule < palierMs + BR_PALIER_DUREE_MS;
+
+  // Sons du legacy, aux memes instants que l'image.
+  useCue(!annule && reponseVisible, () => gameAudio.sample(SON_BATTLE.bonneReponse, { volume: 0.7 }));
+  useCue(!annule && survivantsVisible, () => gameAudio.sample(SON_BATTLE.survivants, { volume: 0.5 }));
+  useCue(!annule && !repechage && elimines.length > 0 && tombes >= 1, () =>
     gameAudio.sample(SON_BATTLE.elimination, { volume: 0.7 }),
   );
-  useCue(!annule && compteVisible, () => gameAudio.sample(SON_BATTLE.survivants, { volume: 0.5 }));
+  useCue(!annule && repechage && survivantsVisible, () =>
+    gameAudio.sample(SON_BATTLE.transition, { volume: 0.7 }),
+  );
   useCue(palierPlein, () => gameAudio.sample(SON_BATTLE.palier, { volume: 0.7 }));
-  useCue(Boolean(reveal?.victory) && compteVisible, () =>
+  useCue(Boolean(reveal?.victory) && survivantsVisible, () =>
     gameAudio.sample(SON_BATTLE.vainqueurManche, { volume: 0.75 }),
   );
 
@@ -504,19 +532,19 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
     return (
       <FullCenter>
         <div className="anim-pop text-center">
-          <div className="mb-6 text-8xl">🚫</div>
-          <h1 className="text-5xl font-black">Question annulée</h1>
-          <p className="mt-4 text-2xl text-white/60">Elle ne compte pas, on continue !</p>
+          <div className="mb-6 text-9xl">🚫</div>
+          <h1 className="font-black" style={{ fontSize: '6rem', lineHeight: 1 }}>
+            Question annulée
+          </h1>
+          <p className="mt-6 text-4xl text-white/60">Elle ne compte pas, on continue !</p>
         </div>
       </FullCenter>
     );
   }
 
-  // PALIER : prise d'ecran plein cadre, comme les ecrans TOP X du legacy.
-  // C'est le moment fort de la manche, il merite tout l'ecran et pas un
-  // bandeau au coin d'une liste.
+  // PALIER : prise d'ecran plein cadre, les ecrans TOP X du legacy.
   if (palierPlein) {
-    const dans = ecoule - BR_PALIER_MS;
+    const dans = ecoule - palierMs;
     const survivants = (state.battle?.generalStandings ?? [])
       .filter((e) => !e.isSpectator)
       .slice(0, palier ?? 0);
@@ -524,23 +552,25 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
       <FullCenter>
         <h1
           className="anim-stomp font-black uppercase tracking-widest text-amber-300"
-          style={{ fontSize: '11rem', lineHeight: 1 }}
+          style={{ fontSize: '13rem', lineHeight: 1 }}
         >
           TOP {palier}
         </h1>
-        <p className="anim-fade-up mt-6 text-4xl font-bold uppercase tracking-[0.3em] text-white/50">
+        <p className="anim-fade-up mt-8 font-black uppercase tracking-[0.3em] text-white/50" style={{ fontSize: '2.75rem' }}>
           Il ne reste que ça
         </p>
         {survivants.length > 0 && (
-          <div className="mt-12 flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-4">
+          <div className="mt-14 flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-6">
             {survivants.map((e, i) => (
               <span
                 key={e.pseudo}
-                className="text-4xl font-black text-white/85"
+                className="font-black text-white/90"
                 style={{
-                  opacity: dans >= 400 + i * 120 ? 1 : 0,
-                  transform: dans >= 400 + i * 120 ? 'scale(1)' : 'scale(0.8)',
-                  transition: 'opacity 340ms ease, transform 380ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+                  fontSize: '3.25rem',
+                  lineHeight: 1,
+                  opacity: dans >= 400 + i * 140 ? 1 : 0,
+                  transform: dans >= 400 + i * 140 ? 'scale(1)' : 'scale(0.75)',
+                  transition: 'opacity 340ms ease, transform 400ms cubic-bezier(0.3, 1.3, 0.4, 1)',
                 }}
               >
                 {e.pseudo}
@@ -552,87 +582,145 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
     );
   }
 
-  return (
-    <div className="flex flex-1 flex-col px-12 py-10">
-      {q && (
-        <div className="mb-6">
-          <h1 className="text-balance text-3xl font-black text-white/70">{q.question}</h1>
-          <p
-            className="mt-3 inline-block rounded-2xl border-2 border-emerald-400 bg-emerald-400/15 px-6 py-3 text-3xl font-black text-emerald-200"
-            style={{
-              opacity: reponseVisible ? 1 : 0,
-              transform: reponseVisible ? 'scale(1)' : 'scale(0.9)',
-              transition: 'opacity 320ms ease, transform 380ms cubic-bezier(0.3, 1.3, 0.4, 1)',
-            }}
-          >
-            ✔ {reveal.correctAnswer}
+  // TEMPS 3 : les survivants. Plein ecran, le compteur est le heros.
+  if (survivantsVisible) {
+    const dans = ecoule - BR_REVEAL_SURVIVANTS_MS;
+    if (reveal.victory) {
+      return (
+        <FullCenter>
+          <div className="anim-breathe" style={{ fontSize: '6rem', lineHeight: 1 }}>
+            🏆
+          </div>
+          <p className="mt-6 font-black uppercase tracking-[0.4em] text-amber-300/70" style={{ fontSize: '2rem' }}>
+            Manche remportée par
           </p>
+          <h1
+            className="anim-stomp mt-4 font-black uppercase text-amber-300"
+            style={{ fontSize: '9rem', lineHeight: 1 }}
+          >
+            {state.battle?.winner?.pseudo ?? '?'}
+          </h1>
+          <p className="anim-fade-up mt-10 text-4xl text-white/60" style={{ animationDelay: '0.5s' }}>
+            👑 Dernier debout
+          </p>
+        </FullCenter>
+      );
+    }
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center px-12 py-8">
+        {/* Le cercle du legacy : 350 px de diametre, bordure cyan qui respire.
+            C'est LUI qu'on regarde pendant que les noms tombent. */}
+        <div
+          className="anim-glow flex items-center justify-center rounded-full border-4 border-cyan-400/60"
+          style={{
+            width: 340,
+            height: 340,
+            background: 'radial-gradient(circle, rgba(76,201,240,0.12) 0%, transparent 70%)',
+          }}
+        >
+          <span
+            className={`font-black tabular-nums leading-none ${dansLeCoup ? 'anim-count-down' : ''}`}
+            style={{ fontSize: '11rem' }}
+          >
+            {Math.max(0, compteur)}
+          </span>
         </div>
-      )}
+        <p className="mt-5 font-black uppercase tracking-[0.45em] text-cyan-300" style={{ fontSize: '2.5rem' }}>
+          Survivant{compteur > 1 ? 's' : ''}
+        </p>
 
-      <div className="flex flex-1 flex-col items-center justify-center">
-        {repechage ? (
-          <div className="anim-stomp text-center">
-            <div className="mb-4 text-8xl">🛟</div>
-            <h2 className="text-7xl font-black uppercase text-amber-300">ÉGALITÉ, REPÊCHAGE !</h2>
-            <p className="mt-4 text-3xl text-white/70">Tout le monde reste en vie</p>
-          </div>
-        ) : elimines.length === 0 ? (
-          <div
-            className="text-center"
-            style={{ opacity: ecoule >= BR_REVEAL_ELIMINES_MS ? 1 : 0, transition: 'opacity 340ms ease' }}
-          >
-            <div className="mb-4 text-8xl">🛡️</div>
-            <h2 className="text-6xl font-black text-emerald-300">AUCUN ÉLIMINÉ !</h2>
-          </div>
-        ) : (
-          <div
-            className="text-center"
-            style={{ opacity: ecoule >= BR_REVEAL_ELIMINES_MS ? 1 : 0, transition: 'opacity 340ms ease' }}
-          >
-            <h2 className="text-6xl font-black uppercase text-rose-400">
-              💀 {elimines.length} ÉLIMINÉ{elimines.length > 1 ? 'S' : ''}
-            </h2>
-            <div className="mt-8 flex max-w-5xl flex-wrap items-center justify-center gap-3">
-              {elimines.map((e, i) => (
-                <span
-                  key={e.pseudo}
-                  className="rounded-full border border-rose-400/50 bg-rose-500/15 px-5 py-2 text-2xl font-bold text-rose-200"
-                  style={{
-                    opacity: i < montres ? 1 : 0,
-                    transform: i < montres ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.85)',
-                    transition: 'opacity 260ms ease, transform 320ms cubic-bezier(0.3, 1.3, 0.4, 1)',
-                  }}
-                >
-                  {e.pseudo}
-                  {e.reason === 'timeout' ? ' 😴' : ''}
-                </span>
-              ))}
+        <div className="mt-12 flex min-h-[180px] max-w-6xl flex-wrap items-start justify-center gap-4">
+          {repechage ? (
+            <div className="anim-stomp text-center">
+              <div className="mb-4 text-8xl">🛟</div>
+              <h2 className="font-black uppercase text-amber-300" style={{ fontSize: '5rem', lineHeight: 1 }}>
+                Égalité, repêchage !
+              </h2>
+              <p className="mt-4 text-4xl text-white/70">Tout le monde reste en vie</p>
             </div>
-          </div>
-        )}
+          ) : elimines.length === 0 ? (
+            <div
+              className="text-center"
+              style={{ opacity: dans >= 300 ? 1 : 0, transition: 'opacity 360ms ease' }}
+            >
+              <h2 className="font-black uppercase text-emerald-300" style={{ fontSize: '5rem', lineHeight: 1 }}>
+                Aucun éliminé
+              </h2>
+            </div>
+          ) : (
+            elimines.map((e, i) => (
+              <span
+                key={e.pseudo}
+                className="rounded-2xl border-2 border-rose-400/50 bg-rose-500/15 px-8 py-4 font-black text-rose-200"
+                style={{
+                  fontSize: '2.75rem',
+                  lineHeight: 1,
+                  opacity: i < tombes ? 1 : 0,
+                  transform: i < tombes ? 'translateY(0) scale(1)' : 'translateY(24px) scale(0.8)',
+                  transition: 'opacity 280ms ease, transform 360ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+                }}
+              >
+                💀 {e.pseudo}
+                {e.reason === 'timeout' ? ' 😴' : ''}
+              </span>
+            ))
+          )}
+        </div>
+
         {reveal.endRoundTie && (
-          <p className="anim-fade-up mt-8 text-3xl font-bold text-amber-300">
+          <p className="anim-fade-up mt-10 text-4xl font-bold text-amber-300">
             Tous à égalité : la manche s'arrête, rang 1 partagé !
           </p>
         )}
       </div>
+    );
+  }
 
-      <div
-        className="flex min-h-[80px] items-center justify-center gap-6"
-        style={{
-          opacity: compteVisible ? 1 : 0,
-          transform: compteVisible ? 'translateY(0)' : 'translateY(12px)',
-          transition: 'opacity 360ms ease, transform 400ms ease',
-        }}
-      >
-        <span className="rounded-full border border-white/15 bg-white/5 px-6 py-2.5 text-2xl text-white/70 tabular-nums">
-          {reveal.survivorsBefore} → <span className="font-black text-cyan-300">{reveal.survivorsAfter}</span> survivant{reveal.survivorsAfter > 1 ? 's' : ''}
-        </span>
-        {reveal.victory && (
-          <span className="anim-pop rounded-xl border-2 border-amber-400 bg-amber-400/20 px-8 py-3 text-4xl font-black uppercase text-amber-300">
-            👑 ET LE VAINQUEUR EST...
-          </span>
+  // TEMPS 1 et 2 : le suspense, puis la reponse. Le compteur de survivants
+  // n'apparait pas : il dirait combien tombent avant qu'on le raconte.
+  return (
+    <div className="flex flex-1 flex-col px-16 py-12">
+      <p className="text-3xl font-black uppercase tracking-[0.35em] text-white/40">
+        {state.battle?.isFinal ? 'Finale' : `Manche ${state.battle?.roundNumber}`} · Question{' '}
+        {state.battle?.questionInRound ?? ''}
+      </p>
+      <h1 className="mt-4 text-balance font-black leading-tight" style={{ fontSize: '4rem' }}>
+        {q?.question}
+      </h1>
+
+      <div className="mt-auto grid grid-cols-2 gap-6">
+        {(q?.answers ?? []).map((a, i) => {
+          const juste = i === reveal.correctIndex;
+          return (
+            <div
+              key={i}
+              className={`rounded-2xl border-2 px-8 py-6 font-bold leading-snug transition-all duration-700 ${
+                !reponseVisible
+                  ? 'border-white/15 bg-white/5'
+                  : juste
+                    ? 'anim-shine border-emerald-400 bg-emerald-400/20 text-emerald-200'
+                    : 'border-white/10 bg-white/5 opacity-30'
+              }`}
+              style={{ fontSize: '2.375rem' }}
+            >
+              <span className={`mr-4 font-black ${reponseVisible && juste ? 'text-emerald-300' : 'text-cyan-300'}`}>
+                {String.fromCharCode(65 + i)}
+              </span>
+              {a}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-10 flex min-h-[80px] items-center justify-center">
+        {reponseVisible ? (
+          <p className="anim-pop font-black uppercase tracking-[0.3em] text-emerald-300" style={{ fontSize: '3rem' }}>
+            ✔ {reveal.correctAnswer}
+          </p>
+        ) : (
+          <p className="anim-suspense font-black uppercase tracking-[0.4em] text-white/50" style={{ fontSize: '2.5rem' }}>
+            Qui a bon ?
+          </p>
         )}
       </div>
     </div>
@@ -649,7 +737,7 @@ function BattleStandingRow({ s, big = false }: { s: BattleStandingEntry; big?: b
     <div
       className={`flex items-center gap-4 rounded-xl border px-5 ${
         s.qualifiedForFinal ? 'border-amber-400/40 bg-amber-400/10' : 'border-white/10 bg-white/5'
-      } ${big ? 'py-3 text-2xl' : 'py-1.5 text-lg'} ${s.isSpectator ? 'opacity-50' : ''}`}
+      } ${big ? 'py-3 text-3xl' : 'py-2 text-2xl'} ${s.isSpectator ? 'opacity-50' : ''}`}
     >
       <span className={`w-10 shrink-0 text-center font-black tabular-nums ${s.position <= 3 ? 'text-amber-300' : 'text-white/40'}`}>
         {medal ?? s.position}
@@ -684,14 +772,16 @@ function RoundEndProjo({ state }: { state: PublicState }) {
   const visible = rest.slice(page * pageSize, (page + 1) * pageSize);
 
   return (
-    <div className="flex flex-1 flex-col px-14 py-10">
-      <h1 className="mb-2 text-center text-5xl font-black uppercase tracking-widest">
+    <div className="flex flex-1 flex-col overflow-hidden px-14 py-8">
+      <h1 className="mb-2 text-center font-black uppercase tracking-widest" style={{ fontSize: '5.5rem', lineHeight: 1 }}>
         Fin de la manche {b?.roundResult?.roundNumber}
       </h1>
-      <p className="mb-8 text-center text-2xl text-white/50">Classement général</p>
+      <p className="mb-6 text-center font-black uppercase tracking-[0.3em] text-white/50" style={{ fontSize: '2rem' }}>
+        Classement général
+      </p>
       <div className="grid flex-1 grid-cols-2 gap-12">
         <div className="flex flex-col gap-2">
-          <p className="anim-glow mb-1 rounded-lg border border-amber-400/50 bg-amber-400/10 px-4 py-1.5 text-center text-xl font-black uppercase tracking-widest text-amber-300">
+          <p className="anim-glow mb-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-4 py-2 text-center text-3xl font-black uppercase tracking-widest text-amber-300">
             👑 En route pour la finale
           </p>
           {top.map((s) => <BattleStandingRow key={s.pseudo} s={s} big />)}
@@ -717,7 +807,7 @@ function ClosingProjo() {
   return (
     <div className="anim-fade-to-black flex flex-1 flex-col items-center justify-center">
       <h1 className="anim-title-glow text-7xl font-black tracking-[0.3em]">INVADER</h1>
-      <p className="mt-6 text-3xl text-white/50">Merci d'avoir combattu !</p>
+      <p className="mt-8 text-4xl text-white/50">Merci d'avoir combattu !</p>
     </div>
   );
 }

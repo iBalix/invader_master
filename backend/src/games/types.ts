@@ -259,8 +259,8 @@ export const AFK_MISS_LIMIT = 5;
  * 5 / 3) vient APRES : la fenetre est plus longue, sinon on tuait justement
  * le moment le plus fort de la manche.
  */
-export const BR_REVEAL_MIN_MS = 7_000;
-export const BR_REVEAL_MIN_PALIER_MS = 11_500;
+export const BR_REVEAL_MIN_MS = 11_000;
+export const BR_REVEAL_MIN_PALIER_MS = 16_000;
 
 /**
  * Question audio : l'extrait joue seul ce temps avant que la question ne
