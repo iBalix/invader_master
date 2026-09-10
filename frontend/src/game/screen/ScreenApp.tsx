@@ -641,7 +641,7 @@ export function EtapesConnexion({ state }: { state: PublicState }) {
         <div className="min-w-0 flex-1 text-left">
           <h2 className="text-3xl font-bold">Scanne pour jouer</h2>
           <p className="mt-2 text-2xl text-white/70">
-            Choisis ton pseudo d'équipe et c'est parti !
+            Choisis ton pseudo et c'est parti !
           </p>
         </div>
         <div className="shrink-0">

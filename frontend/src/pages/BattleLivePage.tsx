@@ -10,6 +10,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   Bot,
   ChevronDown,
   ChevronRight,
@@ -38,6 +39,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
+import { Link } from 'react-router-dom';
 import { QrCanvas } from '../game/ui/bits';
 import { BR_REVEAL_MIN_MS, BR_REVEAL_MIN_PALIER_MS } from '../game/lib/gameClient';
 import LightsBadge from '../components/Live/LightsBadge';
@@ -230,20 +232,26 @@ export default function BattleLivePage() {
   );
 
   if (!sessionId || !state) {
-    return <BattleLauncher onLaunched={(id) => setSessionId(id)} />;
+    return (
+      <Coque>
+        <BattleLauncher onLaunched={(id) => setSessionId(id)} />
+      </Coque>
+    );
   }
 
   return (
-    <BattleGmBody
-      state={state}
-      busy={busy}
-      action={action}
-      onRefresh={() => void refresh()}
-      onClosed={() => {
-        setSessionId(null);
-        setState(null);
-      }}
-    />
+    <Coque>
+        <BattleGmBody
+        state={state}
+        busy={busy}
+        action={action}
+        onRefresh={() => void refresh()}
+        onClosed={() => {
+          setSessionId(null);
+          setState(null);
+        }}
+      />
+    </Coque>
   );
 }
 
@@ -304,17 +312,44 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
     }
   };
 
+  const urlConsole = `${window.location.origin}/evenements/battle-live`;
+
   return (
-    <div>
-      <h1 className="text-2xl font-bold">Battle Royale live</h1>
-      <p className="mt-1 text-gray-500">
-        Lance une battle : le projecteur et les écrans du bar basculent automatiquement.
-        Une question posée ne ressort jamais (l'IA maintient le stock).
+    <div className="mx-auto w-full max-w-3xl px-4 py-6">
+      <h1 className="text-2xl font-black">Battle Royale live</h1>
+      <p className="mt-1 text-sm text-slate-400">
+        Lance une battle : le projecteur et les écrans du bar basculent automatiquement. Une
+        question posée ne ressort jamais, l'IA maintient le stock.
       </p>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="font-bold text-gray-900">Stock de questions</h2>
+      {/* La console est faite pour le telephone, encore faut-il y arriver :
+          l'animateur scanne et atterrit dessus. Le QR pointe sur la console
+          elle-meme, l'authentification back-office reste requise. */}
+      <div className="mt-5 flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <QrCanvas value={urlConsole} size={116} />
+        <div className="min-w-0">
+          <p className="font-bold">Ouvrir la console sur ton téléphone</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Scanne ce code : tu arrives directement ici. Connexion back-office demandée si tu
+            n'es pas déjà identifié sur l'appareil.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(urlConsole);
+              toast.success('Lien copié');
+            }}
+            className="mt-2 flex w-full max-w-full items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-left text-xs font-semibold text-slate-300 hover:bg-white/5"
+          >
+            <span className="min-w-0 flex-1 truncate">{urlConsole}</span>
+            <span className="shrink-0 text-slate-400">copier</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <h2 className="font-bold">Stock de questions</h2>
           {stats ? (
             <div className="mt-3 space-y-2">
               {DIFFICULTIES.map((d) => {
@@ -322,65 +357,94 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
                 const used = stats.used?.[d] ?? 0;
                 return (
                   <div key={d} className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-gray-600">{d}</span>
+                    <span className="font-medium text-slate-300">{d}</span>
                     <span>
-                      <span className={`font-bold ${available < 5 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      <span className={`font-bold ${available < 5 ? 'text-rose-300' : 'text-emerald-300'}`}>
                         {available} disponible{available > 1 ? 's' : ''}
                       </span>
-                      <span className="ml-2 text-gray-400">· {used} consommée{used > 1 ? 's' : ''}</span>
+                      <span className="ml-2 text-slate-500">· {used} consommée{used > 1 ? 's' : ''}</span>
                     </span>
                   </div>
                 );
               })}
-              <p className="pt-1 text-xs text-gray-400">
+              <p className="pt-1 text-xs text-slate-500">
                 Une question posée est retirée du stock pour de bon. Sous 5 disponibles par
                 difficulté, l'IA en regénère automatiquement pendant la partie. Une battle de test
                 ne consomme rien.
               </p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-gray-400">Chargement...</p>
+            <p className="mt-3 text-sm text-slate-500">Chargement...</p>
           )}
           <button
             type="button"
             disabled={resetting}
             onClick={() => void resetUsage()}
-            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold text-slate-300 hover:bg-white/10 disabled:opacity-40"
           >
-            <RotateCcw size={14} /> Réinitialiser les questions utilisées
+            <RotateCcw size={14} /> Remettre les questions en circulation
           </button>
         </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="font-bold text-gray-900">Nouvelle battle</h2>
-          <ul className="mt-3 space-y-1.5 text-sm text-gray-600">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <h2 className="font-bold">Nouvelle battle</h2>
+          <ul className="mt-3 space-y-1.5 text-sm text-slate-300">
             <li>⚔️ Élimination à chaque question, +1 point par bonne réponse</li>
             <li>🏅 Bonus de fin de manche : 25 / 20 / 18... jusqu'au 20e</li>
             <li>👑 Le top 10 du général s'affronte en finale</li>
             <li>🤖 Ajoute des bots depuis la console pour tester</li>
           </ul>
-          <button
-            type="button"
-            disabled={launching}
-            onClick={() => void launch()}
-            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-40"
-          >
-            <Swords size={15} /> {launching ? 'Lancement...' : 'Lancer la battle'}
-          </button>
-          <button
-            type="button"
-            disabled={launching}
-            onClick={() => void launch(true)}
-            className="mt-5 ml-2 inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-40"
-          >
-            <FlaskConical size={15} /> Lancer une battle de test
-          </button>
-          <p className="mt-2 text-xs text-gray-400">
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={launching}
+              onClick={() => void launch()}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-400 disabled:opacity-40"
+            >
+              <Swords size={15} /> {launching ? 'Lancement...' : 'Lancer la battle'}
+            </button>
+            <button
+              type="button"
+              disabled={launching}
+              onClick={() => void launch(true)}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-2 text-sm font-bold text-amber-200 hover:bg-amber-500/25 disabled:opacity-40"
+            >
+              <FlaskConical size={15} /> Battle de test
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
             La battle de test se joue normalement, mais aucune question n'est consommée : elles
             restent toutes disponibles pour les vraies soirées.
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Coque plein ecran de la console, jumelle de celle du quiz.
+ *
+ * La page vit HORS du gabarit back-office (la barre laterale de 256 px rendait
+ * la console inutilisable au telephone) : sans coque, elle se retrouvait sur un
+ * fond nu, sans fond ni retour en arriere. Le fond sombre est aussi celui de la
+ * salle : l'animateur a l'ecran en pleine figure toute la soiree.
+ */
+function Coque({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-dvh flex-col bg-slate-950 text-slate-100">
+      <div className="flex items-center justify-between border-b border-white/5 px-3 py-2 lg:px-6">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200"
+        >
+          <ArrowLeft size={13} /> Back-office
+        </Link>
+        <span className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">
+          Console battle
+        </span>
+      </div>
+      {children}
     </div>
   );
 }
@@ -469,17 +533,17 @@ function Header({
   const [qrOuvert, setQrOuvert] = useState(false);
   const urlConsole = `${window.location.origin}/evenements/battle-live`;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
       <div>
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold">{state.quizName}</h1>
           <span className={`rounded-full px-3 py-0.5 text-sm font-bold ${
-            state.status === 'verdict' ? 'bg-rose-100 text-rose-700' : 'bg-indigo-100 text-indigo-700'
+            state.status === 'verdict' ? 'bg-rose-500/20 text-rose-300' : 'bg-indigo-500/20 text-indigo-300'
           }`}>
             {STATUS_LABELS[state.status] ?? state.status}
           </span>
           {b?.isFinal && (
-            <span className="rounded-full bg-amber-100 px-3 py-0.5 text-sm font-bold text-amber-700">
+            <span className="rounded-full bg-amber-500/20 px-3 py-0.5 text-sm font-bold text-amber-300">
               👑 FINALE
             </span>
           )}
@@ -489,13 +553,13 @@ function Header({
             </span>
           )}
         </div>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-slate-400">
           {b && b.roundNumber > 0 && `Manche ${b.roundNumber} · question ${b.roundQuestionCount} · `}
           {state.playerCount} en vie · {b?.eliminatedCount ?? 0} éliminé{(b?.eliminatedCount ?? 0) > 1 ? 's' : ''}
           {(b?.waitingCount ?? 0) > 0 && ` · ${b?.waitingCount} en attente`}
           {(b?.spectatorCount ?? 0) > 0 && ` · ${b?.spectatorCount} spectateur${(b?.spectatorCount ?? 0) > 1 ? 's' : ''}`}
           {' · code '}
-          <span className="font-mono font-bold text-gray-800">{state.joinCode}</span>
+          <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -503,7 +567,7 @@ function Header({
           href={`${window.location.origin}/play/${state.joinCode}`}
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          className="rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10"
         >
           Page joueur ↗
         </a>
@@ -511,14 +575,14 @@ function Header({
           href={`${window.location.origin}/screen/PROJO`}
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          className="rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10"
         >
           Projecteur ↗
         </a>
         <button
           type="button"
           onClick={onRefresh}
-          className="rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-50"
+          className="rounded-lg border border-white/15 p-2 text-slate-400 hover:bg-white/10"
           aria-label="Rafraîchir"
         >
           <RefreshCw size={16} />
@@ -528,7 +592,7 @@ function Header({
         <button
           type="button"
           onClick={() => setQrOuvert(true)}
-          className="rounded-lg border border-gray-300 p-2 text-gray-500 hover:bg-gray-50"
+          className="rounded-lg border border-white/15 p-2 text-slate-400 hover:bg-white/10"
           aria-label="QR de la console"
         >
           <QrCode size={16} />
@@ -543,7 +607,7 @@ function Header({
             onClosed();
             toast.success('Battle terminée (fondu en cours)');
           }}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700 hover:bg-rose-100"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 py-2 text-sm font-bold text-rose-300 hover:bg-rose-500/25"
         >
           <Square size={14} /> Arrêter
         </button>
@@ -554,10 +618,10 @@ function Header({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
           onClick={() => setQrOuvert(false)}
         >
-          <div className="rounded-2xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-3 font-bold text-gray-900">Ouvrir la console ailleurs</h3>
+          <div className="rounded-2xl bg-white/5 p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 font-bold text-slate-100">Ouvrir la console ailleurs</h3>
             <QrCanvas value={urlConsole} size={220} />
-            <p className="mt-3 break-all text-xs text-gray-400">{urlConsole}</p>
+            <p className="mt-3 break-all text-xs text-slate-500">{urlConsole}</p>
           </div>
         </div>
       )}
@@ -578,10 +642,10 @@ function Btn({
 }) {
   const etroit = useContext(EtroitContext);
   const styles = {
-    primary: 'bg-indigo-600 text-white hover:bg-indigo-700',
-    secondary: 'border border-gray-300 text-gray-700 hover:bg-gray-50',
-    warn: 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100',
-    danger: 'border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100',
+    primary: 'bg-indigo-500 text-white hover:bg-indigo-400',
+    secondary: 'border border-white/15 text-slate-200 hover:bg-white/10',
+    warn: 'border border-amber-400/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25',
+    danger: 'border border-rose-400/40 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25',
   };
   return (
     <button
@@ -642,11 +706,11 @@ function ControlPanel({
   }, [state.phaseEndsAt, state.serverNow]);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-bold text-gray-900">Pilotage</h2>
+        <h2 className="font-bold text-slate-100">Pilotage</h2>
         {remaining !== null && (
-          <span className="rounded-full bg-gray-100 px-3 py-1 font-mono text-sm font-bold text-gray-700">
+          <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-sm font-bold text-slate-200">
             ⏱ {Math.ceil(remaining / 1000)}s
           </span>
         )}
@@ -665,7 +729,7 @@ function ControlPanel({
               <Pause size={15} /> Pause
             </Btn>
             {state.playerCount < 2 && (
-              <span className="inline-flex items-center rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-500">
+              <span className="inline-flex items-center rounded-lg bg-white/5 px-3 py-2 text-sm text-slate-400">
                 2 joueurs minimum (ajoute des bots pour tester)
               </span>
             )}
@@ -674,7 +738,7 @@ function ControlPanel({
 
         {(s === 'round_intro' || s === 'announce') && (
           <>
-            <span className="inline-flex items-center rounded-lg bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700">
+            <span className="inline-flex items-center rounded-lg bg-indigo-500/15 px-4 py-2.5 text-sm font-semibold text-indigo-300">
               {s === 'round_intro' ? '⚔️ Intro de manche (automatique)' : '📣 Annonce (automatique)'}
             </span>
             <Btn variant="warn" disabled={busy} onClick={() => void action('cancel-question', {}, 'Annuler cette question ?')}>
@@ -685,7 +749,7 @@ function ControlPanel({
 
         {(s === 'question' || s === 'locked') && (
           <>
-            <span className="inline-flex items-center rounded-lg bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700">
+            <span className="inline-flex items-center rounded-lg bg-indigo-500/15 px-4 py-2.5 text-sm font-semibold text-indigo-300">
               {s === 'question' ? '❓ Question en cours...' : '⏳ Grâce : dernières réponses acceptées'}
             </span>
             <Btn variant="warn" disabled={busy} onClick={() => void action('replay-question', {}, 'Rejouer cette question ? (les réponses seront effacées)')}>
@@ -699,7 +763,7 @@ function ControlPanel({
 
         {s === 'verdict' && (
           <>
-            <span className="inline-flex items-center gap-2 rounded-lg bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-700">
+            <span className="inline-flex items-center gap-2 rounded-lg bg-rose-500/15 px-4 py-2.5 text-sm font-bold text-rose-300">
               <Eye size={15} /> Vérifie les éliminations ci-dessous avant d'afficher les résultats
             </span>
             {/* le backend accepte les deux ici : une question posee de travers
@@ -716,7 +780,7 @@ function ControlPanel({
         {s === 'reveal' && (
           <>
             {b?.victoryPending ? (
-              <span className="inline-flex items-center rounded-lg bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700">
+              <span className="inline-flex items-center rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-300">
                 👑 Victoire ! L'écran final s'affiche automatiquement...
               </span>
             ) : (
@@ -767,13 +831,13 @@ function ControlPanel({
         )}
 
         {s === 'closing' && (
-          <span className="inline-flex items-center rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-600">
+          <span className="inline-flex items-center rounded-lg bg-white/10 px-4 py-2.5 text-sm font-semibold text-slate-300">
             🌙 Fondu de fin en cours...
           </span>
         )}
 
         {s === 'end' && b?.winner && (
-          <span className="inline-flex items-center rounded-lg bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700">
+          <span className="inline-flex items-center rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-300">
             👑 Vainqueur : {b.winner.pseudo}
           </span>
         )}
@@ -801,8 +865,8 @@ function VerdictPanel({
 
   if (v.computing) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-        <p className="font-semibold text-amber-800">🤖 Calcul des éliminations en cours...</p>
+      <div className="rounded-xl border border-amber-400/40 bg-amber-500/15 p-5">
+        <p className="font-semibold text-amber-200">🤖 Calcul des éliminations en cours...</p>
       </div>
     );
   }
@@ -810,19 +874,19 @@ function VerdictPanel({
   const zeroSurvivors = v.survivorsAfter <= 0 && v.survivorsBefore > 0;
 
   return (
-    <div className="rounded-xl border-2 border-rose-300 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border-2 border-rose-400/40 bg-white/5 p-5 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-bold text-gray-900">
+        <h2 className="font-bold text-slate-100">
           Verdict · {v.pending.filter((p) => !p.overturned).length} élimination{v.pending.filter((p) => !p.overturned).length > 1 ? 's' : ''} provisoire{v.pending.filter((p) => !p.overturned).length > 1 ? 's' : ''}
         </h2>
-        <span className="rounded-full bg-gray-100 px-3 py-1 font-mono text-sm font-bold text-gray-700">
+        <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-sm font-bold text-slate-200">
           {v.survivorsBefore} → {v.repechage ? v.survivorsBefore : v.survivorsAfter} survivant{(v.repechage ? v.survivorsBefore : v.survivorsAfter) > 1 ? 's' : ''}
         </span>
       </div>
 
       {zeroSurvivors && !v.repechage && (
-        <div className="mb-4 rounded-lg border border-rose-300 bg-rose-50 p-3">
-          <p className="mb-2 font-bold text-rose-800">
+        <div className="mb-4 rounded-lg border border-rose-400/40 bg-rose-500/15 p-3">
+          <p className="mb-2 font-bold text-rose-200">
             ⚠️ ZÉRO SURVIVANT : tout le monde tombe sur cette question. Deux choix :
           </p>
           <div className="flex flex-wrap gap-2">
@@ -839,8 +903,8 @@ function VerdictPanel({
       )}
 
       {v.repechage && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50 p-3">
-          <p className="font-bold text-amber-800">🛟 REPÊCHAGE GÉNÉRAL activé : personne n'est éliminé.</p>
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-400/40 bg-amber-500/15 p-3">
+          <p className="font-bold text-amber-200">🛟 REPÊCHAGE GÉNÉRAL activé : personne n'est éliminé.</p>
           <Btn variant="secondary" disabled={busy} onClick={() => void action('verdict-revive-group')}>
             Annuler le repêchage
           </Btn>
@@ -853,20 +917,20 @@ function VerdictPanel({
             key={p.playerId}
             className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
               v.repechage || p.overturned
-                ? 'border-emerald-200 bg-emerald-50'
-                : 'border-rose-200 bg-rose-50'
+                ? 'border-emerald-400/40 bg-emerald-500/15'
+                : 'border-rose-400/40 bg-rose-500/15'
             }`}
           >
             <span>
               <span className="font-bold">{p.pseudo}</span>
-              <span className="text-gray-600">
+              <span className="text-slate-300">
                 {p.reason === 'timeout'
                   ? ' · pas de réponse 😴'
                   : ` · réponse ${p.choice !== null ? String.fromCharCode(65 + p.choice) : '?'}`}
                 {p.elapsedMs !== null && ` · ${(p.elapsedMs / 1000).toFixed(1)}s`}
               </span>
-              {p.overturned === 'correct' && <span className="ml-2 font-bold text-emerald-700">✔ compté bonne réponse (+1)</span>}
-              {p.overturned === 'revived' && <span className="ml-2 font-bold text-emerald-700">🛟 ressuscité (sans point)</span>}
+              {p.overturned === 'correct' && <span className="ml-2 font-bold text-emerald-300">✔ compté bonne réponse (+1)</span>}
+              {p.overturned === 'revived' && <span className="ml-2 font-bold text-emerald-300">🛟 ressuscité (sans point)</span>}
             </span>
             {!v.repechage && (
               <span className="flex gap-1.5">
@@ -875,7 +939,7 @@ function VerdictPanel({
                     type="button"
                     disabled={busy}
                     onClick={() => void action('verdict-reset', { playerId: p.playerId })}
-                    className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                    className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-300 hover:bg-white/10"
                   >
                     Annuler
                   </button>
@@ -885,7 +949,7 @@ function VerdictPanel({
                       type="button"
                       disabled={busy}
                       onClick={() => void action('verdict-mark-correct', { playerId: p.playerId })}
-                      className="rounded-md border border-emerald-300 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                      className="rounded-md border border-emerald-300 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-200"
                     >
                       ✔ Bonne réponse
                     </button>
@@ -893,7 +957,7 @@ function VerdictPanel({
                       type="button"
                       disabled={busy}
                       onClick={() => void action('verdict-revive', { playerId: p.playerId })}
-                      className="rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-200"
+                      className="rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-200"
                     >
                       🛟 Ressusciter
                     </button>
@@ -904,11 +968,11 @@ function VerdictPanel({
           </div>
         ))}
         {v.pending.length === 0 && (
-          <p className="text-sm text-emerald-700">Aucune élimination : tout le monde a bien répondu !</p>
+          <p className="text-sm text-emerald-300">Aucune élimination : tout le monde a bien répondu !</p>
         )}
       </div>
 
-      <p className="mt-3 text-xs text-gray-400">
+      <p className="mt-3 text-xs text-slate-500">
         {v.answeredCount} réponse{v.answeredCount > 1 ? 's' : ''} reçue{v.answeredCount > 1 ? 's' : ''} ·
         bons répondeurs : {v.correctPseudos.length > 0 ? v.correctPseudos.join(', ') : 'aucun'}
       </p>
@@ -931,22 +995,22 @@ function QuestionCard({ state }: { state: GmState }) {
   const b = state.gm.battle;
   if (!q) return null;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-bold text-gray-900">
+        <h2 className="font-bold text-slate-100">
           Question {b?.roundQuestionCount ?? '?'} de la manche
         </h2>
-        <span className="text-sm text-gray-500">{q.difficulty} · {q.theme}</span>
+        <span className="text-sm text-slate-400">{q.difficulty} · {q.theme}</span>
       </div>
-      <p className="text-lg font-semibold text-gray-900">{q.question}</p>
+      <p className="text-lg font-semibold text-slate-100">{q.question}</p>
       <div className="mt-3 grid grid-cols-1 gap-1.5 md:grid-cols-2">
         {q.answers.map((a, i) => (
           <div
             key={i}
             className={`rounded-lg border px-3 py-2 text-sm ${
               i === q.correctIndex
-                ? 'border-emerald-300 bg-emerald-50 font-bold text-emerald-800'
-                : 'border-gray-200 text-gray-600'
+                ? 'border-emerald-300 bg-emerald-500/15 font-bold text-emerald-200'
+                : 'border-white/10 text-slate-300'
             }`}
           >
             {String.fromCharCode(65 + i)}. {a} {i === q.correctIndex && '✔'}
@@ -954,7 +1018,7 @@ function QuestionCard({ state }: { state: GmState }) {
         ))}
       </div>
       {q.helpAnimator && (
-        <p className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+        <p className="mt-3 rounded-lg bg-indigo-500/15 px-3 py-2 text-sm text-indigo-800">
           💡 <span className="font-semibold">Anecdote :</span> {q.helpAnimator}
         </p>
       )}
@@ -974,11 +1038,11 @@ function StandingsCard({ state }: { state: GmState }) {
   const final = b.finalStandings ?? null;
   const standings = final ?? b.generalStandings ?? [];
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 flex items-center gap-2 font-bold text-gray-900">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
+      <h2 className="mb-3 flex items-center gap-2 font-bold text-slate-100">
         <ListOrdered size={16} /> {final ? 'Classement final' : 'Classement général'}
         {!final && b.roundResult && (
-          <span className="text-sm font-normal text-gray-500">(après manche {b.roundResult.roundNumber})</span>
+          <span className="text-sm font-normal text-slate-400">(après manche {b.roundResult.roundNumber})</span>
         )}
       </h2>
       <div className="max-h-96 space-y-1 overflow-y-auto">
@@ -986,18 +1050,18 @@ function StandingsCard({ state }: { state: GmState }) {
           <div
             key={s.playerId}
             className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${
-              s.qualifiedForFinal ? 'bg-amber-50' : ''
+              s.qualifiedForFinal ? 'bg-amber-500/15' : ''
             } ${s.isSpectator ? 'opacity-50' : ''}`}
           >
             <span>
-              <span className="mr-2 text-xs text-gray-400">{s.position}.</span>
+              <span className="mr-2 text-xs text-slate-500">{s.position}.</span>
               <span className="font-semibold">{s.pseudo}</span>
-              {s.qualifiedForFinal && <span className="ml-2 text-xs font-bold text-amber-600">👑 finale</span>}
+              {s.qualifiedForFinal && <span className="ml-2 text-xs font-bold text-amber-300">👑 finale</span>}
             </span>
-            <span className="font-mono font-bold text-indigo-600">{s.score}</span>
+            <span className="font-mono font-bold text-indigo-300">{s.score}</span>
           </div>
         ))}
-        {standings.length === 0 && <p className="text-sm text-gray-400">Pas encore de classement.</p>}
+        {standings.length === 0 && <p className="text-sm text-slate-500">Pas encore de classement.</p>}
       </div>
     </div>
   );
@@ -1013,40 +1077,40 @@ function RevealPanel({ state }: { state: GmState }) {
   if (!r) return null;
   if (r.cancelled) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-        <h2 className="font-bold text-amber-800">🚫 Question annulée</h2>
-        <p className="mt-1 text-sm text-amber-700">La salle voit « elle ne compte pas, on continue ».</p>
+      <div className="rounded-xl border border-amber-400/40 bg-amber-500/15 p-5">
+        <h2 className="font-bold text-amber-200">🚫 Question annulée</h2>
+        <p className="mt-1 text-sm text-amber-300">La salle voit « elle ne compte pas, on continue ».</p>
       </div>
     );
   }
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 flex items-center gap-2 font-bold text-gray-900">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
+      <h2 className="mb-3 flex items-center gap-2 font-bold text-slate-100">
         <Eye size={16} /> À l'écran maintenant
       </h2>
       {r.correctAnswer && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
+        <p className="rounded-lg bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-200">
           ✔ {r.correctAnswer}
         </p>
       )}
-      <p className="mt-3 text-sm text-gray-600">
-        <span className="font-mono font-bold text-gray-900">{r.survivorsBefore}</span> →{' '}
-        <span className="font-mono font-bold text-indigo-600">{r.survivorsAfter}</span> survivant
+      <p className="mt-3 text-sm text-slate-300">
+        <span className="font-mono font-bold text-slate-100">{r.survivorsBefore}</span> →{' '}
+        <span className="font-mono font-bold text-indigo-300">{r.survivorsAfter}</span> survivant
         {r.survivorsAfter > 1 ? 's' : ''}
-        {r.victory && <span className="ml-2 font-bold text-amber-600">👑 victoire</span>}
+        {r.victory && <span className="ml-2 font-bold text-amber-300">👑 victoire</span>}
       </p>
       {r.repechage ? (
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+        <p className="mt-2 rounded-lg bg-amber-500/15 px-3 py-2 text-sm font-bold text-amber-200">
           🛟 Repêchage général : personne n'est éliminé.
         </p>
       ) : r.eliminated.length === 0 ? (
-        <p className="mt-2 text-sm text-gray-500">Aucun éliminé sur cette question.</p>
+        <p className="mt-2 text-sm text-slate-400">Aucun éliminé sur cette question.</p>
       ) : (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {r.eliminated.map((e) => (
             <span
               key={e.pseudo}
-              className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+              className="rounded-full bg-rose-500/15 px-2.5 py-1 text-xs font-semibold text-rose-300"
               title={e.reason === 'timeout' ? 'pas de réponse' : 'mauvaise réponse'}
             >
               💀 {e.pseudo}
@@ -1072,10 +1136,10 @@ function QueuePanel({
   const b = state.gm.battle;
   if (!b) return null;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-bold text-gray-900">Prochaines questions</h2>
-        <span className="rounded-full bg-indigo-100 px-3 py-0.5 text-sm font-bold text-indigo-700">
+        <h2 className="font-bold text-slate-100">Prochaines questions</h2>
+        <span className="rounded-full bg-indigo-500/20 px-3 py-0.5 text-sm font-bold text-indigo-300">
           Prochaine difficulté : {b.nextDifficulty}
         </span>
       </div>
@@ -1084,16 +1148,16 @@ function QueuePanel({
           const list = b.queue[d] ?? [];
           return (
             <div key={d}>
-              <h3 className={`mb-2 text-sm font-semibold ${d === b.nextDifficulty ? 'text-indigo-700' : 'text-gray-500'}`}>
+              <h3 className={`mb-2 text-sm font-semibold ${d === b.nextDifficulty ? 'text-indigo-300' : 'text-slate-400'}`}>
                 {d} {d === b.nextDifficulty && '← prochaine'}
               </h3>
               <div className="space-y-1.5">
                 {list.map((q, i) => (
-                  <div key={q.id} className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                    <p className="text-xs font-semibold text-gray-800">
+                  <div key={q.id} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+                    <p className="text-xs font-semibold text-slate-200">
                       {i + 1}. {q.question}
                     </p>
-                    <p className="mt-0.5 text-xs text-gray-400">
+                    <p className="mt-0.5 text-xs text-slate-500">
                       {q.theme} · réponse : {q.answers[q.correctIndex]}
                     </p>
                     <div className="mt-1.5 flex gap-1">
@@ -1101,7 +1165,7 @@ function QueuePanel({
                         type="button"
                         disabled={i === 0}
                         onClick={() => void action('queue-reorder', { difficulty: d, from: i, to: i - 1 })}
-                        className="rounded border border-gray-300 p-1 text-gray-500 hover:bg-white disabled:opacity-30"
+                        className="rounded border border-white/15 p-1 text-slate-400 hover:bg-white/5 disabled:opacity-30"
                         aria-label="Monter"
                       >
                         <ChevronUp size={12} />
@@ -1110,7 +1174,7 @@ function QueuePanel({
                         type="button"
                         disabled={i === list.length - 1}
                         onClick={() => void action('queue-reorder', { difficulty: d, from: i, to: i + 1 })}
-                        className="rounded border border-gray-300 p-1 text-gray-500 hover:bg-white disabled:opacity-30"
+                        className="rounded border border-white/15 p-1 text-slate-400 hover:bg-white/5 disabled:opacity-30"
                         aria-label="Descendre"
                       >
                         <ChevronDown size={12} />
@@ -1118,7 +1182,7 @@ function QueuePanel({
                       <button
                         type="button"
                         onClick={() => void action('queue-remove', { difficulty: d, questionId: q.id })}
-                        className="rounded border border-rose-200 p-1 text-rose-500 hover:bg-rose-50"
+                        className="rounded border border-rose-400/40 p-1 text-rose-500 hover:bg-rose-500/15"
                         aria-label="Retirer"
                       >
                         <Trash2 size={12} />
@@ -1126,7 +1190,7 @@ function QueuePanel({
                     </div>
                   </div>
                 ))}
-                {list.length === 0 && <p className="text-xs text-gray-400">File vide (remplie au tirage).</p>}
+                {list.length === 0 && <p className="text-xs text-slate-500">File vide (remplie au tirage).</p>}
               </div>
             </div>
           );
@@ -1163,27 +1227,27 @@ function PlayersPanel({
   const players = [...state.gm.players].sort((a, c) => c.score - a.score);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-3 font-bold text-gray-900">Joueurs ({players.length})</h2>
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
+      <h2 className="mb-3 font-bold text-slate-100">Joueurs ({players.length})</h2>
       <div className="max-h-80 space-y-1 overflow-y-auto">
         {players.map((p) => (
           <button
             key={p.id}
             type="button"
             onClick={() => setSelected(selected?.id === p.id ? null : p)}
-            className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm hover:bg-gray-50 ${
-              selected?.id === p.id ? 'bg-indigo-50' : ''
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm hover:bg-white/10 ${
+              selected?.id === p.id ? 'bg-indigo-500/15' : ''
             }`}
           >
             <span className="min-w-0 truncate">
               <span className="mr-1.5">{PLAYER_STATUS_BADGES[p.status] ?? ''}</span>
               <span className="font-semibold">{p.pseudo}</span>
-              {p.device === 'bot' && <span className="ml-1.5 text-xs text-gray-400">bot</span>}
+              {p.device === 'bot' && <span className="ml-1.5 text-xs text-slate-500">bot</span>}
             </span>
-            <span className="ml-2 shrink-0 font-mono font-bold text-indigo-600">{p.score}</span>
+            <span className="ml-2 shrink-0 font-mono font-bold text-indigo-300">{p.score}</span>
           </button>
         ))}
-        {players.length === 0 && <p className="text-sm text-gray-400">Personne pour l'instant.</p>}
+        {players.length === 0 && <p className="text-sm text-slate-500">Personne pour l'instant.</p>}
       </div>
 
       {selected && (
@@ -1196,7 +1260,7 @@ function PlayersPanel({
               type="number"
               value={points}
               onChange={(e) => setPoints(e.target.value)}
-              className="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              className="w-20 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
             />
             <button
               type="button"
@@ -1207,7 +1271,7 @@ function PlayersPanel({
                   toast.success(`${n > 0 ? '+' : ''}${n} pts pour ${selected.pseudo}`);
                 }
               }}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700"
+              className="rounded-lg bg-indigo-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-400"
             >
               <Plus size={13} className="inline" /> Points
             </button>
@@ -1217,7 +1281,7 @@ function PlayersPanel({
                 void action('kick', { playerId: selected.id }, `Retirer ${selected.pseudo} de la partie ?`);
                 setSelected(null);
               }}
-              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-100"
+              className="rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/25"
             >
               <UserX size={13} className="inline" /> Retirer
             </button>
@@ -1225,8 +1289,8 @@ function PlayersPanel({
         </div>
       )}
 
-      <div className="mt-4 border-t border-gray-100 pt-3">
-        <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-500">
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-400">
           <Bot size={14} /> Bots de test {b && b.botCount > 0 && `(${b.botCount})`}
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -1236,7 +1300,7 @@ function PlayersPanel({
             max={50}
             value={botCount}
             onChange={(e) => setBotCount(e.target.value)}
-            className="w-20 rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+            className="w-20 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
           />
           <button
             type="button"
@@ -1245,7 +1309,7 @@ function PlayersPanel({
               const n = parseInt(botCount, 10);
               if (!Number.isNaN(n)) void action('add-bots', { count: n });
             }}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            className="rounded-lg border border-white/15 px-3 py-1.5 text-sm font-semibold text-slate-300 hover:bg-white/10 disabled:opacity-40"
           >
             Ajouter
           </button>
@@ -1253,7 +1317,7 @@ function PlayersPanel({
             type="button"
             disabled={busy || !b || b.botCount === 0}
             onClick={() => void action('remove-bots', {}, 'Retirer tous les bots ?')}
-            className="rounded-lg border border-rose-200 px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-40"
+            className="rounded-lg border border-rose-400/40 px-3 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/15 disabled:opacity-40"
           >
             Tout retirer
           </button>
@@ -1285,13 +1349,13 @@ function MixerPanel({
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-4 font-bold text-gray-900">Mixer du projecteur</h2>
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
+      <h2 className="mb-4 font-bold text-slate-100">Mixer du projecteur</h2>
       <div className="space-y-4">
         <div>
           <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-600"><Music2 size={14} /> <span className="truncate">Musique de fond</span></span>
-            <span className="shrink-0 font-mono font-bold text-gray-800">{music}%</span>
+            <span className="flex min-w-0 items-center gap-2 font-medium text-slate-300"><Music2 size={14} /> <span className="truncate">Musique de fond</span></span>
+            <span className="shrink-0 font-mono font-bold text-slate-200">{music}%</span>
           </div>
           <input
             type="range"
@@ -1308,8 +1372,8 @@ function MixerPanel({
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-600"><Volume2 size={14} /> <span className="truncate">Effets sonores</span></span>
-            <span className="shrink-0 font-mono font-bold text-gray-800">{sfx}%</span>
+            <span className="flex min-w-0 items-center gap-2 font-medium text-slate-300"><Volume2 size={14} /> <span className="truncate">Effets sonores</span></span>
+            <span className="shrink-0 font-mono font-bold text-slate-200">{sfx}%</span>
           </div>
           <input
             type="range"
@@ -1326,8 +1390,8 @@ function MixerPanel({
         </div>
         <div>
           <div className="mb-1 flex items-center justify-between text-sm">
-            <span className="flex min-w-0 items-center gap-2 font-medium text-gray-600"><Film size={14} /> <span className="truncate">Média de la question</span></span>
-            <span className="shrink-0 font-mono font-bold text-gray-800">{media}%</span>
+            <span className="flex min-w-0 items-center gap-2 font-medium text-slate-300"><Film size={14} /> <span className="truncate">Média de la question</span></span>
+            <span className="shrink-0 font-mono font-bold text-slate-200">{media}%</span>
           </div>
           <input
             type="range"
@@ -1341,11 +1405,11 @@ function MixerPanel({
             }}
             className="w-full accent-indigo-600"
           />
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-slate-500">
             Extrait de blindtest et clip vidéo. Canal distinct de la musique de fond.
           </p>
         </div>
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-slate-500">
           La musique baisse automatiquement pendant les phases de suspense et remonte à ce niveau exact.
         </p>
       </div>

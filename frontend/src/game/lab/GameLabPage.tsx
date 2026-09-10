@@ -393,8 +393,8 @@ export default function GameLabPage() {
 
 /**
  * Cadre de la console animateur. Deux tailles : le telephone (375 px, la vraie
- * cible : l'animateur pilote depuis sa poche) et le bureau. Fond clair, comme
- * le back-office dont la console herite.
+ * cible : l'animateur pilote depuis sa poche) et le bureau. Fond sombre, celui
+ * de la coque plein ecran : la console vit hors du back-office.
  */
 function CadreConsole({
   etat,
@@ -416,7 +416,7 @@ function CadreConsole({
     return (
       <div className="flex justify-center overflow-x-auto">
         <div
-          className="w-[375px] shrink-0 overflow-y-auto rounded-[2rem] border-4 border-white/15 bg-gray-50 shadow-2xl"
+          className="w-[375px] shrink-0 overflow-y-auto rounded-[2rem] border-4 border-white/15 bg-slate-950 shadow-2xl"
           style={{ height: 812 }}
         >
           {corps}
@@ -424,7 +424,7 @@ function CadreConsole({
       </div>
     );
   }
-  return <div className="rounded-xl border-2 border-white/15 bg-gray-50 shadow-2xl">{corps}</div>;
+  return <div className="rounded-xl border-2 border-white/15 bg-slate-950 shadow-2xl">{corps}</div>;
 }
 
 function SceneJoueur({

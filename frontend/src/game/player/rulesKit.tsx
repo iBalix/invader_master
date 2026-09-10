@@ -21,8 +21,15 @@
 import React, { useEffect, useState } from 'react';
 import { serverNow } from '../lib/gameClient';
 
-// 7 s par slide : 8 s trainaient, 5 s ne laissaient pas finir de lire les
-// chapitres denses. Retour de la deuxieme soiree : +2 s.
+/**
+ * Cadence par defaut, celle du quiz : 7 s par chapitre. 8 s trainaient, 5 s ne
+ * laissaient pas finir de lire les chapitres denses (retour de la deuxieme
+ * soiree : +2 s).
+ *
+ * Chaque sequence peut la surcharger : la battle prend 9 s, ses regles etant
+ * plus surprenantes (on marque encore une fois elimine, la place de manche
+ * rapporte plus que les questions) et donc plus longues a digerer.
+ */
 export const CHAPITRE_MS = 7000;
 
 export interface Chapitre {
@@ -114,6 +121,7 @@ export function SequenceRegles({
   embedded,
   chapitreForce,
   surTitre,
+  cadenceMs = CHAPITRE_MS,
 }: {
   chapitres: Chapitre[];
   phaseStartedAt: number | null;
@@ -121,6 +129,8 @@ export function SequenceRegles({
   /** labo uniquement : fige un chapitre pour l'inspecter (jamais en partie) */
   chapitreForce?: number;
   surTitre: string;
+  /** duree d'un chapitre ; defaut CHAPITRE_MS (7 s, le quiz) */
+  cadenceMs?: number;
 }) {
   const grand = Boolean(embedded);
 
@@ -135,16 +145,16 @@ export function SequenceRegles({
   // PAS DE BOUCLE : au dernier chapitre on s'arrete et on attend l'animateur.
   // Une boucle infinie donnait l'impression que rien ne se passait ; le joueur
   // doit savoir qu'il a tout lu et qu'il n'attend plus que le lancement.
-  const naturel = Math.min(Math.floor(ecoule / CHAPITRE_MS), chapitres.length - 1);
+  const naturel = Math.min(Math.floor(ecoule / cadenceMs), chapitres.length - 1);
   const index = chapitreForce === undefined ? naturel : chapitreForce % chapitres.length;
   // Temps ecoule DANS le chapitre courant. Sur le dernier il continue de
   // croitre au lieu de repartir a zero : sans ca, les elements deja apparus
   // disparaitraient a chaque periode en clignotant.
-  const dansNaturel = ecoule - naturel * CHAPITRE_MS;
+  const dansNaturel = ecoule - naturel * cadenceMs;
   // Labo : un chapitre choisi s'affiche dans son etat FINAL, tous les seuils
   // franchis. C'est ce qu'on veut pour regler une mise en page ; l'animation
   // se regarde en mode « auto ».
-  const dansChapitre = chapitreForce === undefined ? dansNaturel : CHAPITRE_MS;
+  const dansChapitre = chapitreForce === undefined ? dansNaturel : cadenceMs;
   const c = chapitres[index];
   const dernier = index === chapitres.length - 1;
 
@@ -207,7 +217,7 @@ export function SequenceRegles({
         <div className={`mx-auto overflow-hidden rounded-full bg-white/10 ${grand ? 'h-1.5 w-72' : 'h-1 w-40'}`}>
           <div
             className="h-full rounded-full bg-cyan-300/70"
-            style={{ width: `${Math.min(1, dansChapitre / CHAPITRE_MS) * 100}%` }}
+            style={{ width: `${Math.min(1, dansChapitre / cadenceMs) * 100}%` }}
           />
         </div>
         <div className={`flex items-center justify-center gap-2 ${grand ? 'mt-3' : 'mt-2'}`}>

@@ -324,6 +324,13 @@ const CHAPITRES: Chapitre[] = [
   },
 ];
 
+/**
+ * 9 s par chapitre, deux de plus que le quiz : les regles de la battle
+ * surprennent (on marque encore une fois elimine, la place de manche rapporte
+ * plus que les questions), la salle a besoin du temps de lire.
+ */
+export const CADENCE_BATTLE_MS = 9000;
+
 /** nombre de chapitres, pour le selecteur du laboratoire */
 export const NB_CHAPITRES_BATTLE = CHAPITRES.length;
 
@@ -344,6 +351,7 @@ export default function BattleRules({
       embedded={embedded}
       chapitreForce={chapitreForce}
       surTitre="Comment on survit"
+      cadenceMs={CADENCE_BATTLE_MS}
     />
   );
 }
