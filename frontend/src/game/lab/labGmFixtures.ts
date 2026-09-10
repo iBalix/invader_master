@@ -201,6 +201,29 @@ export const GM_BATTLE: LabGmScenario[] = [
       ),
   },
   {
+    cle: 'gm-br-dernier-debout',
+    label: 'Manche jouée (1 survivant)',
+    description: 'Plus de « question suivante », seulement la fin de manche.',
+    state: () =>
+      base(
+        { status: 'reveal', phaseStartedAt: Date.now() - 20000, playerCount: 1 },
+        {
+          reveal: {
+            correctAnswer: 'Hayao Miyazaki',
+            eliminated: [
+              { pseudo: 'Nina', reason: 'wrong' },
+              { pseudo: 'Tom', reason: 'wrong' },
+            ],
+            repechage: false,
+            survivorsBefore: 3,
+            survivorsAfter: 1,
+            milestone: null,
+            roundWinner: 'Marco',
+          },
+        },
+      ),
+  },
+  {
     cle: 'gm-br-fin-manche',
     label: 'Fin de manche',
     description: 'Classement général, manche suivante ou finale.',

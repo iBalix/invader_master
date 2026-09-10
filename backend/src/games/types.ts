@@ -406,6 +406,12 @@ export interface BattleRevealData {
   /** palier franchi à cette question (20/10/5/3), pour le bandeau "PLUS QUE X !" */
   milestone: number | null;
   correctPseudos: string[];
+  /**
+   * Manche remportée : le dernier debout, quelle que soit la manche. Le legacy
+   * remplaçait le compteur par « MANCHE REMPORTÉE PAR X » dès qu'il ne restait
+   * qu'un survivant, pas seulement en finale.
+   */
+  roundWinner?: string;
   /** finale gagnée : l'advancer enchaîne automatiquement sur end */
   victory?: boolean;
 }

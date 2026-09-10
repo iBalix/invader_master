@@ -794,6 +794,15 @@ async function applyShowResults(session: SessionRow): Promise<void> {
     milestone,
     correctPseudos: players.filter((p) => correctIds.has(p.id)).map((p) => p.pseudo),
   };
+
+  // Dernier debout : le legacy remplacait le compteur par « MANCHE REMPORTEE
+  // PAR X » des ce moment-la, dans TOUTE manche et pas seulement en finale.
+  if (survivorsAfter === 1 && !v.repechage && effectiveEliminated.length > 0) {
+    const survivant = players.find(
+      (p) => p.status === 'active' && !effectiveEliminated.some((e) => e.playerId === p.id),
+    );
+    if (survivant) b.reveal.roundWinner = survivant.pseudo;
+  }
   b.verdict = undefined;
 
   // finale jouée : classement final précalculé, l'advancer enchaînera sur end
@@ -1020,6 +1029,19 @@ export async function battleGmAction(
       case 'next': {
         assertStatus(session, ['reveal'], action);
         if (b.victoryPending) throw httpError('La finale est jouée', 409);
+        // MEME GARDE QUE LE LEGACY : nextBattleQuestion() refusait de servir
+        // une question des qu'il ne restait qu'un survivant (« round_finished »).
+        // Poser une question a une seule personne n'a aucun sens, la manche est
+        // jouee. La console retire le bouton dans ce cas, ceci est le filet.
+        const restants = b.reveal?.survivorsAfter;
+        if (restants !== undefined && restants <= 1) {
+          throw httpError(
+            restants === 1
+              ? "Il ne reste qu'un survivant : la manche est jouée, termine-la."
+              : 'Plus aucun survivant : termine la manche.',
+            409,
+          );
+        }
         assertRevealDone(session);
         await drawNextQuestion(session, params.difficulty);
         setPhase(session, 'announce', session.config.announceMs);

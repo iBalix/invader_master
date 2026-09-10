@@ -585,20 +585,27 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
   // TEMPS 3 : les survivants. Plein ecran, le compteur est le heros.
   if (survivantsVisible) {
     const dans = ecoule - BR_REVEAL_SURVIVANTS_MS;
-    if (reveal.victory) {
+    // DERNIER DEBOUT. Le legacy remplacait le compteur par « MANCHE REMPORTEE
+    // PAR X » des qu'il ne restait qu'un survivant, dans TOUTE manche : la
+    // manche est jouee, il n'y a plus de question a poser. Le portage ne le
+    // faisait qu'en finale.
+    const vainqueur = reveal.victory
+      ? (state.battle?.winner?.pseudo ?? reveal.roundWinner)
+      : reveal.roundWinner;
+    if (vainqueur) {
       return (
         <FullCenter>
           <div className="anim-breathe" style={{ fontSize: '6rem', lineHeight: 1 }}>
             🏆
           </div>
           <p className="mt-6 font-black uppercase tracking-[0.4em] text-amber-300/70" style={{ fontSize: '2rem' }}>
-            Manche remportée par
+            {reveal.victory ? 'Vainqueur de la battle' : 'Manche remportée par'}
           </p>
           <h1
             className="anim-stomp mt-4 font-black uppercase text-amber-300"
             style={{ fontSize: '9rem', lineHeight: 1 }}
           >
-            {state.battle?.winner?.pseudo ?? '?'}
+            {vainqueur}
           </h1>
           <p className="anim-fade-up mt-10 text-4xl text-white/60" style={{ animationDelay: '0.5s' }}>
             👑 Dernier debout

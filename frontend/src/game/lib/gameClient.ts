@@ -150,6 +150,8 @@ export interface BattleRevealData {
   survivorsAfter: number;
   milestone: number | null;
   correctPseudos: string[];
+  /** dernier debout de la manche, quelle que soit la manche */
+  roundWinner?: string;
   victory?: boolean;
 }
 

@@ -115,6 +115,7 @@ export interface GmBattle {
     survivorsBefore: number;
     survivorsAfter: number;
     milestone?: number | null;
+    roundWinner?: string;
     victory?: boolean;
   } | null;
   roundResult: {
@@ -753,6 +754,9 @@ function ControlPanel({
       ? Math.max(0, state.phaseStartedAt + minimumReveal - (maintenant + (state.serverNow - Date.now())))
       : 0;
   const verrou = verrouMs > 0;
+  /** manche jouee : un survivant ou moins, il n'y a plus de question a poser */
+  const manchejouee =
+    s === 'reveal' && !b?.isFinal && (b?.reveal?.survivorsAfter ?? 2) <= 1;
 
   useEffect(() => {
     if (!state.phaseEndsAt) {
@@ -844,6 +848,21 @@ function ControlPanel({
               <span className="inline-flex items-center rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-300">
                 👑 Victoire ! L'écran final s'affiche automatiquement...
               </span>
+            ) : manchejouee ? (
+              /* PLUS QU'UN SURVIVANT : la manche est jouee. Le legacy retirait
+                 purement et simplement « question suivante » dans ce cas, et
+                 c'est la bonne facon : poser une question a une seule personne
+                 n'a aucun sens. Le serveur la refuse aussi (409). */
+              <>
+                <span className="inline-flex items-center gap-2 rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-200">
+                  👑 {b?.reveal?.roundWinner
+                    ? `${b.reveal.roundWinner} remporte la manche`
+                    : 'Plus de survivant'}
+                </span>
+                <Btn variant="primary" disabled={busy} onClick={() => void action('end-round', {}, 'Terminer la manche et distribuer les bonus ?')}>
+                  <Flag size={15} /> Fin de manche
+                </Btn>
+              </>
             ) : (
               <>
                 <Btn variant="primary" disabled={busy || verrou} onClick={() => void action('next', forcee ? { difficulty: forcee } : {})}>

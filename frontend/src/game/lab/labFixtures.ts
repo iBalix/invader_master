@@ -1264,6 +1264,34 @@ export const SCENARIOS: LabScenario[] = [
       ),
   },
   {
+    cle: 'br-projo-dernier-debout',
+    jeu: 'battle',
+    surface: 'projo',
+    label: 'Dernier debout (manche)',
+    description: 'Un seul survivant : la manche est jou\u00e9e, pas de question suivante.',
+    sauts: [
+      ['R\u00e9ponse', 3400],
+      ['Manche remport\u00e9e', 7400],
+    ],
+    state: () =>
+      baseBattle(
+        { status: 'reveal', question: QUESTION_BATTLE },
+        {
+          survivorCount: 1,
+          reveal: {
+            ...revealBattle(),
+            eliminated: [
+              { pseudo: 'Nina', reason: 'wrong' },
+              { pseudo: 'Tom', reason: 'wrong' },
+            ],
+            survivorsBefore: 3,
+            survivorsAfter: 1,
+            roundWinner: 'Marco',
+          },
+        },
+      ),
+  },
+  {
     cle: 'br-projo-victoire',
     jeu: 'battle',
     surface: 'projo',
