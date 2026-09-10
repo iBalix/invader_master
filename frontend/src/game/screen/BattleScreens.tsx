@@ -10,8 +10,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BR_DECOMPTE_MS,
-  BR_INTRO_MANCHE_MS,
-  BR_INTRO_PSEUDOS_MS,
+  BR_INTRO_ACTE_CATEGORIES,
+  BR_INTRO_ACTE_COMBATTANTS,
   BR_PALIER_DUREE_MS,
   BR_PALIER_MS,
   BR_REVEAL_COMPTE_MS,
@@ -159,41 +159,111 @@ export function BattleProjectorBody({
 // ---------------------------------------------------------------------------
 
 /**
- * Intro de manche, en trois temps comme le legacy : le nuage de categories,
- * puis le nuage de pseudos, puis le numero de manche. Douze secondes qui
- * laissent la salle se rassembler et l'animateur presenter la manche.
+ * Intro de manche, en trois actes, dans l'ordre du legacy :
  *
- * Les positions des pseudos sont tirees d'un hachage du pseudo : elles sont
- * donc STABLES d'un rendu a l'autre et identiques sur les deux dalles d'une
- * table, contrairement a un Math.random() qui rebattait tout a chaque tick.
+ *   1. le TITRE  — « BATTLE ROYALE », « MANCHE N », l'effectif en piste.
+ *      C'est ce qui doit tomber en premier : la salle a besoin de savoir ou
+ *      elle en est avant qu'on lui parle de categories.
+ *   2. AU PROGRAMME — le nuage de categories de la banque.
+ *   3. LES COMBATTANTS — le nuage de pseudos, ou la grille des finalistes.
+ *
+ * Les bornes sont des FRACTIONS de la duree reelle de la phase (cf.
+ * BR_INTRO_ACTE_*), jamais des ms en dur : le serveur est maitre de la duree
+ * et l'ecran s'y adapte. C'est ce qui manquait, et l'intro se faisait couper
+ * par la premiere question.
+ *
+ * Les tailles des nuages sont tirees d'un hachage du mot : stables d'un rendu
+ * a l'autre et identiques sur les deux dalles d'une table, contrairement a un
+ * Math.random() qui rebattait tout a chaque tick.
  */
 function RoundIntroProjo({ state }: { state: PublicState }) {
   const b = state.battle;
   const isFinal = b?.isFinal ?? false;
   const ecoule = useEcoule(state);
-  const temps = ecoule < BR_INTRO_PSEUDOS_MS ? 0 : ecoule < BR_INTRO_MANCHE_MS ? 1 : 2;
+  const duree =
+    state.phaseEndsAt !== null && state.phaseStartedAt !== null
+      ? Math.max(1, state.phaseEndsAt - state.phaseStartedAt)
+      : 12_000;
+  const part = Math.min(1, Math.max(0, ecoule / duree));
+  const acte = part < BR_INTRO_ACTE_CATEGORIES ? 0 : part < BR_INTRO_ACTE_COMBATTANTS ? 1 : 2;
 
-  useCue(ecoule >= 200, () => gameAudio.sample(SON_BATTLE.introManche, { volume: 0.7 }));
+  useCue(ecoule >= 150, () => gameAudio.sample(SON_BATTLE.introManche, { volume: 0.7 }));
 
-  const finalistes = (b?.generalStandings ?? []).filter((e) => e.qualifiedForFinal).slice(0, b?.finalSize ?? 10);
-  const noms = isFinal && finalistes.length > 0
-    ? finalistes.map((e) => e.pseudo)
-    : state.players.map((p) => p.pseudo);
+  const finalistes = (b?.generalStandings ?? [])
+    .filter((e) => e.qualifiedForFinal)
+    .slice(0, b?.finalSize ?? 10);
+  const noms =
+    isFinal && finalistes.length > 0
+      ? finalistes.map((e) => e.pseudo)
+      : state.players.map((p) => p.pseudo);
 
-  if (temps === 0) {
+  // ACTE 1 : le titre de la manche
+  if (acte === 0) {
+    const dans = ecoule;
     return (
       <FullCenter>
-        <p className="text-3xl font-black uppercase tracking-[0.35em] text-white/40">Au programme</p>
-        <div className="mt-12 flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-6">
+        <p
+          className="font-black uppercase tracking-[0.5em] text-white/40"
+          style={{
+            fontSize: '2.5rem',
+            opacity: dans >= 150 ? 1 : 0,
+            transition: 'opacity 500ms ease',
+          }}
+        >
+          Battle Royale
+        </p>
+        <h1
+          className={`anim-stomp mt-6 text-center font-black uppercase tracking-widest ${
+            isFinal ? 'text-amber-300' : 'text-white'
+          }`}
+          style={{ fontSize: isFinal ? '10rem' : '12rem', lineHeight: 1 }}
+        >
+          {isFinal ? '👑 La finale' : `Manche ${b?.roundNumber ?? 1}`}
+        </h1>
+        <p
+          className="mt-10 font-black uppercase tracking-[0.2em] text-cyan-300"
+          style={{
+            fontSize: '3.5rem',
+            opacity: dans >= 1400 ? 1 : 0,
+            transform: dans >= 1400 ? 'translateY(0)' : 'translateY(20px)',
+            transition: 'opacity 500ms ease, transform 560ms cubic-bezier(0.3, 1.2, 0.4, 1)',
+          }}
+        >
+          {b?.survivorCount} combattant{(b?.survivorCount ?? 0) > 1 ? 's' : ''}
+        </p>
+        <p
+          className="mt-3 font-bold uppercase tracking-[0.35em] text-white/50"
+          style={{
+            fontSize: '2rem',
+            opacity: dans >= 2200 ? 1 : 0,
+            transition: 'opacity 500ms ease',
+          }}
+        >
+          1 seul survivant
+        </p>
+      </FullCenter>
+    );
+  }
+
+  // ACTE 2 : les categories au programme
+  if (acte === 1) {
+    const dans = ecoule - duree * BR_INTRO_ACTE_CATEGORIES;
+    return (
+      <FullCenter>
+        <p className="font-black uppercase tracking-[0.45em] text-white/40" style={{ fontSize: '2.25rem' }}>
+          Au programme
+        </p>
+        <div className="mt-14 flex max-w-6xl flex-wrap items-center justify-center gap-x-12 gap-y-8">
           {CATEGORIES_INTRO.map((c, i) => (
             <span
               key={c}
               className="font-black uppercase text-cyan-300"
               style={{
-                fontSize: `${2 + ((i * 7) % 5) * 0.55}rem`,
-                opacity: ecoule >= 400 + i * 180 ? 1 : 0,
-                transform: ecoule >= 400 + i * 180 ? 'scale(1)' : 'scale(0.7)',
-                transition: 'opacity 400ms ease, transform 480ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+                fontSize: `${3.4 + (hachage(c) % 4) * 0.9}rem`,
+                lineHeight: 1,
+                opacity: dans >= 200 + i * 150 ? 1 : 0,
+                transform: dans >= 200 + i * 150 ? 'scale(1)' : 'scale(0.6)',
+                transition: 'opacity 380ms ease, transform 460ms cubic-bezier(0.3, 1.4, 0.4, 1)',
               }}
             >
               {c}
@@ -204,45 +274,33 @@ function RoundIntroProjo({ state }: { state: PublicState }) {
     );
   }
 
-  if (temps === 1) {
-    const dans = ecoule - BR_INTRO_PSEUDOS_MS;
-    return (
-      <FullCenter>
-        <p className="text-3xl font-black uppercase tracking-[0.35em] text-white/40">
-          {isFinal ? 'Les finalistes' : 'Les combattants'}
-        </p>
-        <div className="mt-10 flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-4">
-          {noms.slice(0, 40).map((pseudo, i) => (
-            <span
-              key={pseudo}
-              className={`font-black ${isFinal ? 'text-amber-300' : 'text-white/85'}`}
-              style={{
-                fontSize: `${1.6 + (hachage(pseudo) % 4) * 0.5}rem`,
-                opacity: dans >= 150 + i * 85 ? 1 : 0,
-                transform: dans >= 150 + i * 85 ? 'translateY(0)' : 'translateY(14px)',
-                transition: 'opacity 360ms ease, transform 400ms ease',
-              }}
-            >
-              {pseudo}
-            </span>
-          ))}
-        </div>
-      </FullCenter>
-    );
-  }
-
+  // ACTE 3 : les combattants
+  const dans = ecoule - duree * BR_INTRO_ACTE_COMBATTANTS;
   return (
     <FullCenter>
-      <h1
-        className={`anim-stomp text-center text-9xl font-black uppercase tracking-widest ${
-          isFinal ? 'text-amber-300' : ''
-        }`}
+      <p
+        className={`font-black uppercase tracking-[0.45em] ${isFinal ? 'text-amber-300/70' : 'text-white/40'}`}
+        style={{ fontSize: '2.25rem' }}
       >
-        {isFinal ? '👑 LA FINALE' : `MANCHE ${b?.roundNumber ?? 1}`}
-      </h1>
-      <p className="anim-fade-up mt-10 text-4xl font-bold text-cyan-300" style={{ animationDelay: '0.4s' }}>
-        {b?.survivorCount} COMBATTANT{(b?.survivorCount ?? 0) > 1 ? 'S' : ''}, 1 SEUL SURVIVANT
+        {isFinal ? 'Les finalistes' : 'Les combattants'}
       </p>
+      <div className="mt-12 flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-6">
+        {noms.slice(0, 40).map((pseudo, i) => (
+          <span
+            key={pseudo}
+            className={`font-black ${isFinal ? 'text-amber-300' : 'text-white/90'}`}
+            style={{
+              fontSize: `${2.6 + (hachage(pseudo) % 4) * 0.7}rem`,
+              lineHeight: 1,
+              opacity: dans >= 120 + i * 70 ? 1 : 0,
+              transform: dans >= 120 + i * 70 ? 'translateY(0)' : 'translateY(18px)',
+              transition: 'opacity 340ms ease, transform 380ms ease',
+            }}
+          >
+            {pseudo}
+          </span>
+        ))}
+      </div>
     </FullCenter>
   );
 }

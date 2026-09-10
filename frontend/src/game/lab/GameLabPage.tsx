@@ -108,17 +108,30 @@ export default function GameLabPage() {
   }, [sautMs]);
   const state = useMemo(() => {
     if (sautMs <= 0 || stateBrut.phaseStartedAt === null) return stateBrut;
-    return { ...stateBrut, phaseStartedAt: Date.now() - sautMs };
+    // Les DEUX bornes reculent d'autant. Ne reculer que le debut allongeait la
+    // duree de phase (phaseEndsAt - phaseStartedAt), et tout ecran qui en
+    // derive ses seuils tombait a cote : l'intro de manche affichait l'acte
+    // precedent a chaque saut.
+    const debut = Date.now() - sautMs;
+    const fin =
+      stateBrut.phaseEndsAt === null
+        ? null
+        : stateBrut.phaseEndsAt - (stateBrut.phaseStartedAt - debut);
+    return { ...stateBrut, phaseStartedAt: debut, phaseEndsAt: fin };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stateBrut, sautMs, sautMs > 0 ? Math.floor(Date.now() / 300) : 0]);
 
   // le gabarit projecteur n'a de sens que pour les scenarios projecteur, et
   // inversement : on bascule automatiquement pour eviter les etats absurdes
   useEffect(() => {
+    if (gmCle) {
+      if (gabarit === 'projo') setGabarit('phone');
+      return;
+    }
     if (scenario.surface === 'projo' && gabarit !== 'projo') setGabarit('projo');
     if (scenario.surface !== 'projo' && gabarit === 'projo') setGabarit('mini');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenario.surface]);
+  }, [scenario.surface, gmCle]);
 
   return (
     // h-dvh + overflow-hidden sur la coque : chaque colonne gere SON propre
@@ -232,8 +245,12 @@ export default function GameLabPage() {
                 key={g.cle}
                 type="button"
                 disabled={
-                  (scenario.surface === 'projo' && g.cle !== 'projo') ||
-                  (scenario.surface !== 'projo' && g.cle === 'projo')
+                  // la console se regarde au telephone ou au bureau, jamais au
+                  // projecteur ; sinon on suit la surface du scenario d'ecran
+                  gmCle
+                    ? g.cle === 'projo'
+                    : (scenario.surface === 'projo' && g.cle !== 'projo') ||
+                      (scenario.surface !== 'projo' && g.cle === 'projo')
                 }
                 onClick={() => setGabarit(g.cle)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-bold disabled:opacity-25 ${

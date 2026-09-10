@@ -188,7 +188,11 @@ export const DEFAULT_BATTLE_CONFIG: SessionConfig = {
   speedBonus: false,
   quizName: 'Battle Royale',
   graceMs: 4000,
-  roundIntroMs: 5000,
+  // 12 s, la duree du legacy : l'intro de manche raconte trois temps (le
+  // titre, les categories, les combattants). A 5 s, l'ecran en etait encore au
+  // deuxieme quand le moteur enchainait sur l'annonce : les deux se
+  // chevauchaient.
+  roundIntroMs: 12_000,
   standingsPageMs: 10000,
   fadeOutMs: 5000,
   finalSize: 10,

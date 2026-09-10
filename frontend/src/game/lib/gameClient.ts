@@ -583,11 +583,18 @@ export const AUDIO_REMONTEE_MS = 3500;
  * montage restait bloquee sur le PC du projecteur.
  */
 
-/** intro de manche : nuage de categories, puis de pseudos, puis le numero */
-export const BR_INTRO_PSEUDOS_MS = 4600;
-export const BR_INTRO_MANCHE_MS = 8600;
-/** duree totale de l'intro, miroir de config.roundIntroMs cote serveur */
-export const BR_INTRO_MS = 12000;
+/**
+ * Intro de manche, en trois actes : le titre de la manche, les categories au
+ * programme, puis les combattants.
+ *
+ * Les bornes sont des FRACTIONS de la duree reelle de la phase, pas des ms en
+ * dur. Le serveur est maitre de cette duree (config.roundIntroMs) : quand elle
+ * valait 5 s et que l'ecran jouait 12 s de sequence, le moteur enchainait sur
+ * l'annonce alors que l'intro en etait a son deuxieme acte, et les deux se
+ * chevauchaient. En fractions, l'ecran suit toujours le serveur.
+ */
+export const BR_INTRO_ACTE_CATEGORIES = 0.34;
+export const BR_INTRO_ACTE_COMBATTANTS = 0.66;
 
 /** annonce : le decompte 3-2-1 occupe les trois dernieres secondes */
 export const BR_DECOMPTE_MS = 3000;

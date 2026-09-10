@@ -9,6 +9,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   Bot,
@@ -21,6 +22,7 @@ import {
   LifeBuoy,
   ListOrdered,
   Film,
+  MonitorPlay,
   Music2,
   FlaskConical,
   Pause,
@@ -30,6 +32,7 @@ import {
   RefreshCw,
   RotateCcw,
   ScrollText,
+  Smartphone,
   Square,
   Swords,
   Trash2,
@@ -518,6 +521,14 @@ export function BattleGmBody({
 // Header + pilotage
 // ---------------------------------------------------------------------------
 
+/**
+ * En-tete collant, calque sur celui du quiz.
+ *
+ * Les actions sont en ICONES SEULES sous 900 px : a quatre libelles, l'en-tete
+ * partait sur deux lignes en 375 px et le nom de la partie etait ecrase. La
+ * barre du bas dit combien il reste de monde en piste : c'est l'information
+ * qui compte dans une battle, et elle fond a vue d'oeil.
+ */
 function Header({
   state,
   onRefresh,
@@ -529,102 +540,145 @@ function Header({
   action: (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
   onClosed: () => void;
 }) {
+  const etroit = useContext(EtroitContext);
   const b = state.gm.battle;
   const [qrOuvert, setQrOuvert] = useState(false);
   const urlConsole = `${window.location.origin}/evenements/battle-live`;
+  const inscrits =
+    state.playerCount + (b?.eliminatedCount ?? 0) + (b?.waitingCount ?? 0) + (b?.spectatorCount ?? 0);
+  const enPiste = inscrits > 0 ? state.playerCount / inscrits : 0;
+
+  const bouton = 'inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold';
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm">
-      <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold">{state.quizName}</h1>
-          <span className={`rounded-full px-3 py-0.5 text-sm font-bold ${
-            state.status === 'verdict' ? 'bg-rose-500/20 text-rose-300' : 'bg-indigo-500/20 text-indigo-300'
-          }`}>
-            {STATUS_LABELS[state.status] ?? state.status}
-          </span>
-          {b?.isFinal && (
-            <span className="rounded-full bg-amber-500/20 px-3 py-0.5 text-sm font-bold text-amber-300">
-              👑 FINALE
+    <div className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-slate-950/95 px-3 py-2.5 backdrop-blur sm:-mx-5 sm:px-5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-sm font-black lg:text-lg">{state.quizName}</h1>
+            <span
+              className={`shrink-0 truncate rounded-full px-2.5 py-0.5 text-[11px] font-bold lg:text-xs ${
+                state.status === 'verdict'
+                  ? 'bg-rose-500/20 text-rose-300'
+                  : 'bg-indigo-500/20 text-indigo-300'
+              }`}
+            >
+              {STATUS_LABELS[state.status] ?? state.status}
             </span>
-          )}
-          {state.config.testMode && (
-            <span className="rounded-full bg-amber-500 px-3 py-0.5 text-sm font-bold text-white">
-              🧪 TEST · stock préservé
-            </span>
-          )}
+            {b?.isFinal && (
+              <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold text-amber-300">
+                👑
+                <span className="ml-1 hidden lg:inline">FINALE</span>
+              </span>
+            )}
+            {state.config.testMode && (
+              <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
+                🧪
+                <span className="ml-1 hidden lg:inline">TEST</span>
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 truncate text-[11px] text-slate-400 lg:text-xs">
+            {b && b.roundNumber > 0 && `M${b.roundNumber} · Q${b.roundQuestionCount} · `}
+            <span className="font-bold text-slate-200">{state.playerCount}</span> en vie ·{' '}
+            {b?.eliminatedCount ?? 0} éliminé{(b?.eliminatedCount ?? 0) > 1 ? 's' : ''}
+            {(b?.waitingCount ?? 0) > 0 && ` · ${b?.waitingCount} en attente`}
+            {(b?.spectatorCount ?? 0) > 0 && ` · ${b?.spectatorCount} spect.`}
+            {' · '}
+            <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
+          </p>
         </div>
-        <p className="mt-1 text-sm text-slate-400">
-          {b && b.roundNumber > 0 && `Manche ${b.roundNumber} · question ${b.roundQuestionCount} · `}
-          {state.playerCount} en vie · {b?.eliminatedCount ?? 0} éliminé{(b?.eliminatedCount ?? 0) > 1 ? 's' : ''}
-          {(b?.waitingCount ?? 0) > 0 && ` · ${b?.waitingCount} en attente`}
-          {(b?.spectatorCount ?? 0) > 0 && ` · ${b?.spectatorCount} spectateur${(b?.spectatorCount ?? 0) > 1 ? 's' : ''}`}
-          {' · code '}
-          <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <a
-          href={`${window.location.origin}/play/${state.joinCode}`}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10"
-        >
-          Page joueur ↗
-        </a>
-        <a
-          href={`${window.location.origin}/screen/PROJO`}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-slate-300 hover:bg-white/10"
-        >
-          Projecteur ↗
-        </a>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="rounded-lg border border-white/15 p-2 text-slate-400 hover:bg-white/10"
-          aria-label="Rafraîchir"
-        >
-          <RefreshCw size={16} />
-        </button>
-        {/* Ouvrir la console sur un AUTRE appareil : l'animateur passe la main,
-            ou prend son telephone en salle. */}
-        <button
-          type="button"
-          onClick={() => setQrOuvert(true)}
-          className="rounded-lg border border-white/15 p-2 text-slate-400 hover:bg-white/10"
-          aria-label="QR de la console"
-        >
-          <QrCode size={16} />
-        </button>
-        {/* Arret TOUJOURS accessible : il etait enterre en bas de page, et une
-            soiree qui doit s'arreter ne laisse pas le temps de faire defiler. */}
-        <button
-          type="button"
-          onClick={async () => {
-            if (!confirm('Arrêter la battle ? Les écrans font un fondu puis reviennent à l\'accueil.')) return;
-            await action('stop');
-            onClosed();
-            toast.success('Battle terminée (fondu en cours)');
-          }}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 py-2 text-sm font-bold text-rose-300 hover:bg-rose-500/25"
-        >
-          <Square size={14} /> Arrêter
-        </button>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onRefresh}
+            title="Rafraîchir"
+            aria-label="Rafraîchir"
+            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+          >
+            <RefreshCw size={15} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setQrOuvert(true)}
+            title="QR code de la console"
+            aria-label="QR code de la console"
+            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+          >
+            <QrCode size={15} />
+            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>QR console</span>
+          </button>
+          <a
+            href={`${window.location.origin}/play/${state.joinCode}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Ouvrir la page joueur"
+            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+          >
+            <Smartphone size={15} />
+            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Joueur ↗</span>
+          </a>
+          <a
+            href={`${window.location.origin}/screen/PROJO`}
+            target="_blank"
+            rel="noreferrer"
+            title="Ouvrir le projecteur"
+            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+          >
+            <MonitorPlay size={15} />
+            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Projo ↗</span>
+          </a>
+          {/* Arret toujours a portee : une soiree qui doit s'arreter ne laisse
+              pas le temps de faire defiler jusqu'en bas de page. */}
+          <button
+            type="button"
+            onClick={async () => {
+              if (!confirm('Arrêter la battle ? Les écrans font un fondu puis reviennent à l\'accueil.')) return;
+              await action('stop');
+              onClosed();
+              toast.success('Battle terminée (fondu en cours)');
+            }}
+            title="Arrêter la battle"
+            aria-label="Arrêter la battle"
+            className={`${bouton} border-rose-400/40 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20`}
+          >
+            <Square size={15} />
+            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Arrêter</span>
+          </button>
+        </div>
       </div>
 
-      {qrOuvert && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
-          onClick={() => setQrOuvert(false)}
-        >
-          <div className="rounded-2xl bg-white/5 p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-3 font-bold text-slate-100">Ouvrir la console ailleurs</h3>
-            <QrCanvas value={urlConsole} size={220} />
-            <p className="mt-3 break-all text-xs text-slate-500">{urlConsole}</p>
-          </div>
+      {/* Ce qui reste en piste, en une barre : elle fond a chaque question. */}
+      {inscrits > 0 && (
+        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-emerald-400"
+            style={{ width: `${enPiste * 100}%`, transition: 'width 500ms ease' }}
+          />
         </div>
       )}
+
+      {/* PORTAIL obligatoire : l'en-tete est collant avec backdrop-blur, et un
+          backdrop-filter fait de son element le referent des descendants en
+          position fixed. Rendue ici, la modale se centrait dans l'en-tete. */}
+      {qrOuvert &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-6"
+            onClick={() => setQrOuvert(false)}
+          >
+            <div
+              className="rounded-2xl bg-white p-6 text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="mb-3 font-bold text-gray-900">Ouvrir la console ailleurs</h3>
+              <QrCanvas value={urlConsole} size={220} />
+              <p className="mt-3 break-all text-xs text-gray-400">{urlConsole}</p>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -674,8 +728,15 @@ function ControlPanel({
 }) {
   const [remaining, setRemaining] = useState<number | null>(null);
   const [maintenant, setMaintenant] = useState(() => Date.now());
+  /** difficulte forcee pour la prochaine question ; null = rampe automatique */
+  const [forcee, setForcee] = useState<string | null>(null);
   const s = state.status;
   const b = state.gm.battle;
+
+  // le choix ne vaut que pour UNE question : on le relache des qu'elle est tiree
+  useEffect(() => {
+    setForcee(null);
+  }, [state.currentQuestionIndex]);
 
   // Verrou de revelation : le serveur refuse « question suivante » et « fin de
   // manche » tant que la sequence n'a pas fini de se jouer (409). Le bouton
@@ -785,12 +846,36 @@ function ControlPanel({
               </span>
             ) : (
               <>
-                <Btn variant="primary" disabled={busy || verrou} onClick={() => void action('next')}>
+                <Btn variant="primary" disabled={busy || verrou} onClick={() => void action('next', forcee ? { difficulty: forcee } : {})}>
                   <ChevronRight size={15} />{' '}
                   {verrou
                     ? `Révélation en cours... ${Math.ceil(verrouMs / 1000)}s`
-                    : `Question suivante (${b?.nextDifficulty})`}
+                    : `Question suivante (${forcee ?? b?.nextDifficulty})`}
                 </Btn>
+                {/* La rampe automatique (3 faciles, 5 moyennes, puis
+                    difficiles) convient la plupart du temps, mais l'animateur
+                    sent parfois qu'il faut une facile pour laisser respirer la
+                    salle, ou une difficile pour couper court a une manche qui
+                    s'eternise. Le choix ne vaut que pour la prochaine. */}
+                <div className="flex w-full items-center gap-1 rounded-xl border border-white/10 p-1">
+                  <span className="px-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Forcer
+                  </span>
+                  {DIFFICULTIES.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setForcee(forcee === d ? null : d)}
+                      className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-bold transition ${
+                        forcee === d
+                          ? 'bg-indigo-500/25 text-indigo-200'
+                          : 'text-slate-400 hover:bg-white/5'
+                      }`}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
                 {!b?.isFinal && (
                   <Btn disabled={busy || verrou} onClick={() => void action('end-round', {}, 'Terminer la manche et distribuer les bonus ?')}>
                     <Flag size={15} /> Fin de manche

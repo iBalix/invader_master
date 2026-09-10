@@ -1141,11 +1141,11 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'battle',
     surface: 'projo',
     label: 'Intro de manche',
-    description: 'Cat\u00e9gories, pseudos, num\u00e9ro de manche.',
+    description: 'Titre de manche, cat\u00e9gories, puis les combattants.',
     sauts: [
-      ['Cat\u00e9gories', 800],
-      ['Pseudos', 5200],
-      ['Manche', 9200],
+      ['Titre', 2600],
+      ['Cat\u00e9gories', 6300],
+      ['Combattants', 10700],
     ],
     state: () =>
       baseBattle({ status: 'round_intro', phaseEndsAt: serverNow() + 12000 }, { survivorCount: 40 }),
@@ -1157,9 +1157,9 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Intro de finale',
     description: 'Les dix finalistes annonc\u00e9s.',
     sauts: [
-      ['Cat\u00e9gories', 800],
-      ['Finalistes', 5200],
-      ['Finale', 9200],
+      ['Titre', 2600],
+      ['Cat\u00e9gories', 6300],
+      ['Finalistes', 10700],
     ],
     state: () =>
       baseBattle(

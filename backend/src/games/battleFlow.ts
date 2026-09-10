@@ -41,7 +41,7 @@ import {
 import { invalidateActiveSession } from './lights.js';
 import { switchScreensToDefault } from './screens.js';
 import { broadcast } from './realtime.js';
-import { ensureQuestionStock } from '../services/battleQuestionGen.js';
+import { BATTLE_DIFFICULTIES, ensureQuestionStock } from '../services/battleQuestionGen.js';
 import {
   BR_REVEAL_MIN_MS,
   BR_REVEAL_MIN_PALIER_MS,
@@ -201,11 +201,21 @@ async function refillQueue(session: SessionRow, difficulty: string): Promise<voi
   markDirty(session);
 }
 
-/** tire la prochaine question : consomme la file, marque used_at, ajoute le snapshot */
-async function drawNextQuestion(session: SessionRow): Promise<void> {
+/**
+ * Tire la prochaine question : consomme la file, marque used_at, ajoute le
+ * snapshot.
+ *
+ * `forcee` court-circuite la rampe automatique : l'animateur sent parfois que
+ * la salle a besoin d'une facile pour respirer, ou d'une difficile pour couper
+ * court a une manche qui s'eternise.
+ */
+async function drawNextQuestion(session: SessionRow, forcee?: string): Promise<void> {
   const b = battle(session);
   const n = b.roundQuestionCount + 1;
-  const difficulty = nextDifficultyFor(b.isFinal, n);
+  const difficulty =
+    forcee && (BATTLE_DIFFICULTIES as readonly string[]).includes(forcee)
+      ? forcee
+      : nextDifficultyFor(b.isFinal, n);
   await refillQueue(session, difficulty);
 
   const item = b.queue[difficulty]?.shift();
@@ -1011,7 +1021,7 @@ export async function battleGmAction(
         assertStatus(session, ['reveal'], action);
         if (b.victoryPending) throw httpError('La finale est jouée', 409);
         assertRevealDone(session);
-        await drawNextQuestion(session);
+        await drawNextQuestion(session, params.difficulty);
         setPhase(session, 'announce', session.config.announceMs);
         break;
       }
