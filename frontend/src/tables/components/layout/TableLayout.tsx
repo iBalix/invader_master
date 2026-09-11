@@ -16,7 +16,7 @@
  *     (useLaunchNavigation), pas par un evenement temps reel volatile.
  */
 
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useOutlet } from 'react-router-dom';
 import { useMemo, useRef } from 'react';
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useInactivity } from '../../hooks/useInactivity';
@@ -52,10 +52,11 @@ function getRouteKind(pathname: string): RouteKind {
   // le videoprojecteur sans toucher la dalle ne doit pas basculer en veille
   // au bout de 90 s en pleine partie.
   if (pathname.startsWith('/table/play')) return 'fullscreen';
-  // page de PARTIE d'échecs (avec sessionId) : plein écran, veille coupée.
-  // Les lobbys /table/games/chess et /table/games/blackjack restent des pages 'sub' classiques.
+  // page de PARTIE d'échecs, de blackjack ou de Flappy Bar (avec sessionId) : plein écran, veille coupée.
+  // Les lobbys /table/games/chess, /table/games/blackjack et /table/games/flappybar restent des pages 'sub' classiques.
   if (pathname.startsWith('/table/games/chess/')) return 'fullscreen';
   if (pathname.startsWith('/table/games/blackjack/')) return 'fullscreen';
+  if (pathname.startsWith('/table/games/flappybar/')) return 'fullscreen';
   if (pathname.startsWith('/table/setup')) return 'setup';
   return 'sub';
 }
@@ -96,6 +97,13 @@ export default function TableLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const routeKind = getRouteKind(location.pathname);
+  // L'element de la route courante, FIGE pour ce rendu : la motion.div sortante
+  // gardee par AnimatePresence pendant le fondu rendait encore l'Outlet, qui se
+  // resolvait deja vers la NOUVELLE page. Resultat : la page d'arrivee etait
+  // montee deux fois pendant la transition (deux boots Phaser pour Flappy Bar,
+  // doubles requetes pour les autres jeux). Avec useOutlet, la div sortante
+  // conserve l'ancienne page et la div entrante recoit la nouvelle.
+  const outlet = useOutlet();
   const perf = usePerfMode();
 
   // Direction de transition courante (from -> to), calculee a chaque change
@@ -181,7 +189,7 @@ export default function TableLayout() {
         {perf.reduced ? (
           // mode lite : pas d'AnimatePresence, juste l'Outlet brut
           <div className="absolute inset-0 h-full w-full">
-            <Outlet />
+            {outlet}
           </div>
         ) : (
           <AnimatePresence mode="popLayout" initial={false} custom={direction}>
@@ -200,7 +208,7 @@ export default function TableLayout() {
               className="absolute inset-0 h-full w-full"
               style={{ willChange: 'transform, opacity' }}
             >
-              <Outlet />
+              {outlet}
             </motion.div>
           </AnimatePresence>
         )}
