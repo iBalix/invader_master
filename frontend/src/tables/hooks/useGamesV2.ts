@@ -57,6 +57,13 @@ export interface GameV2 {
   playerCounts?: string[];
   /** jeu reserve aux bornes de la salle : pas de lancement depuis une table */
   bornesOnly?: boolean;
+  /**
+   * Interrupteur du catalogue : false = masque de la liste des tables. Le
+   * filtrage est fait cote serveur (GET /public/games-v2 ne renvoie que les
+   * jeux actifs), la valeur n'est ici qu'indicative.
+   * Optionnel : absent tant que la migration 050 n'est pas appliquee.
+   */
+  active?: boolean;
   youtubeVideoId?: string | null;
   youtubeStartSec?: number;
   youtubeDurationSec?: number | null;

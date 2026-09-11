@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { requireOrderingEnabled } from '../middleware/requireOrderingEnabled.js';
 import { resolveEffectiveDesign } from '../lib/designResolver.js';
+import { colonneActivePresente } from '../lib/gamesV2Columns.js';
 import {
   ackOrder,
   createOrder,
@@ -216,6 +217,14 @@ tablesRoutes.get('/:hostname/home', async (req, res) => {
     return;
   }
   try {
+    // Videos des jeux inactifs exclues de l'accueil (docs/migration-050), filtre
+    // pose seulement si la colonne existe deja : cf. lib/gamesV2Columns.ts.
+    let gameVideosQuery = supabaseAdmin
+      .from('games_v2')
+      .select('youtube_video_id, youtube_start_sec')
+      .not('youtube_video_id', 'is', null);
+    if (await colonneActivePresente()) gameVideosQuery = gameVideosQuery.eq('active', true);
+
     const [featuredQ, liveQ, nextEventQ, settingsQ, menuVideosQ, gameVideosQ] = await Promise.all([
       supabaseAdmin
         .from('table_featured')
@@ -234,10 +243,7 @@ tablesRoutes.get('/:hostname/home', async (req, res) => {
         .maybeSingle(),
       supabaseAdmin.from('tables_settings').select('*').limit(1).maybeSingle(),
       supabaseAdmin.from('menu_products_v2').select('video_url').not('video_url', 'is', null),
-      supabaseAdmin
-        .from('games_v2')
-        .select('youtube_video_id, youtube_start_sec')
-        .not('youtube_video_id', 'is', null),
+      gameVideosQuery,
     ]);
 
     const menuVideos = (menuVideosQ.data ?? [])

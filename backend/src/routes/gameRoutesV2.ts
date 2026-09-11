@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
+import { colonneActivePresente } from '../lib/gamesV2Columns.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
@@ -14,7 +15,7 @@ const ALLOWED = [
   'youtube_video_id', 'youtube_start_sec', 'youtube_duration_sec',
   'control_a', 'control_b', 'control_x', 'control_y',
   'control_l', 'control_r', 'control_start', 'control_select',
-  'special_note', 'game_type', 'game_url',
+  'special_note', 'game_type', 'game_url', 'active',
 ] as const;
 
 /** configurations de joueurs, alignees une a une sur les puces de filtre */
@@ -30,10 +31,20 @@ function pick(body: Record<string, unknown>): Record<string, unknown> {
   if ('game_type' in out && out.game_type !== 'emulator' && out.game_type !== 'web') {
     delete out.game_type;
   }
-  // Clamp max_players to 1-8 (les jeux web en reseau montent a 8)
+  // active : booleen strict. Le back-office envoie true/false, on tolere aussi
+  // 'true'/'false' et 1/0 ; toute autre valeur est ignoree plutot que de laisser
+  // PostgREST repondre un 500 opaque ("invalid input syntax for type boolean").
+  if ('active' in out) {
+    const v = out.active;
+    if (v === true || v === 'true' || v === 1) out.active = true;
+    else if (v === false || v === 'false' || v === 0) out.active = false;
+    else delete out.active;
+  }
+  // Clamp max_players to 1-20 (Flappy Bar accueille tout le bar, CHECK releve
+  // a 20 par docs/migration-051-flappybar.sql)
   if (out.max_players != null) {
     const n = Number(out.max_players);
-    if (Number.isFinite(n)) out.max_players = Math.max(1, Math.min(8, Math.round(n)));
+    if (Number.isFinite(n)) out.max_players = Math.max(1, Math.min(20, Math.round(n)));
     else delete out.max_players;
   }
   // player_counts : vocabulaire ferme, aligne sur les puces de filtre des
@@ -205,6 +216,7 @@ gameV2Routes.post('/', async (req, res) => {
     const { category_ids, images } = req.body;
     const fields = pick(req.body);
     if (!(await colonneTagsPresente())) delete fields.player_counts;
+    if (!(await colonneActivePresente())) delete fields.active;
 
     const { data: game, error } = await supabaseAdmin
       .from('games_v2')
@@ -256,6 +268,7 @@ gameV2Routes.put('/:id', async (req, res) => {
     const { category_ids, images } = req.body;
     const fields = pick(req.body);
     if (!(await colonneTagsPresente())) delete fields.player_counts;
+    if (!(await colonneActivePresente())) delete fields.active;
 
     // On selectionne la ligne mise a jour pour detecter un update silencieux
     // (RLS qui filtre, ID invalide). Sans ca, PostgREST renvoie 204 meme si 0

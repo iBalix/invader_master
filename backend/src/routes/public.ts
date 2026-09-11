@@ -4,6 +4,7 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
+import { colonneActivePresente } from '../lib/gamesV2Columns.js';
 
 export const publicRoutes = Router();
 
@@ -433,10 +434,16 @@ publicRoutes.get('/games-v2', async (req, res) => {
       .select('*')
       .order('name', { ascending: true });
 
-    const { data: games } = await supabaseAdmin
+    // Jeux inactifs masques de la liste des tables (docs/migration-050). Le
+    // filtre n'est pose que si la colonne existe deja : un push sur main deploie
+    // en prod avant la migration, et filtrer sur une colonne absente ferait 500
+    // (page des jeux vide dans le bar). Cf. lib/gamesV2Columns.ts.
+    let gamesQuery = supabaseAdmin
       .from('games_v2')
       .select('*')
       .order('display_order', { ascending: true });
+    if (await colonneActivePresente()) gamesQuery = gamesQuery.eq('active', true);
+    const { data: games } = await gamesQuery;
 
     const { data: images } = await supabaseAdmin
       .from('game_images_v2')

@@ -21,6 +21,8 @@ interface GameForm {
   display_order: number;
   competition: boolean;
   competition_link: string;
+  /** false = masque de la liste des tables, mais toujours joignable par URL directe */
+  active: boolean;
   /** configurations de joueurs cochees ('1' | '2' | '3' | '4' | '4+') */
   player_counts: string[];
   youtube_url: string;
@@ -56,6 +58,7 @@ const EMPTY: GameForm = {
   display_order: 100,
   competition: false,
   competition_link: '',
+  active: true,
   player_counts: [],
   youtube_url: '',
   youtube_video_id: null,
@@ -209,6 +212,8 @@ export default function GameFormV2Page() {
         display_order: g.display_order ?? 100,
         competition: g.competition ?? false,
         competition_link: g.competition_link ?? '',
+        // absent tant que migration-050 n'est pas appliquee : un jeu est actif par defaut
+        active: g.active ?? true,
         player_counts: configsInitiales(g),
         youtube_url: videoId ? `https://youtu.be/${videoId}` : '',
         youtube_video_id: videoId,
@@ -288,6 +293,7 @@ export default function GameFormV2Page() {
         display_order: form.display_order,
         competition: form.competition,
         competition_link: form.competition_link || null,
+        active: form.active,
         cover_url: coverUrl,
         player_counts: form.player_counts,
         youtube_video_id: form.youtube_video_id,
@@ -492,6 +498,17 @@ export default function GameFormV2Page() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <button type="button" onClick={() => set('active', !form.active)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${form.active ? 'bg-primary-500' : 'bg-gray-300'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.active ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+              <span className="text-sm text-gray-700">Jeu actif (visible sur les tables)</span>
+            </label>
+            <p className="mt-1 text-xs text-gray-500">Un jeu inactif reste lançable par son URL directe</p>
           </div>
 
           <div className="flex items-center gap-6">

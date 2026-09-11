@@ -21,6 +21,8 @@ interface GameRow {
   youtube_video_id: string | null;
   categories: string[];
   competition: boolean;
+  /** absent tant que migration-050 n'est pas appliquee : traite comme actif */
+  active?: boolean;
 }
 
 const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '4+'] as const;
@@ -108,6 +110,33 @@ export default function GamesV2ListPage() {
       toast.success('Jeu supprimé');
       loadGames();
     } catch { toast.error('Erreur lors de la suppression'); }
+  };
+
+  /**
+   * Bascule actif/inactif depuis la liste, en optimiste : le cas d'usage est
+   * "couper un jeu bugue en un clic", sans passer par le formulaire. `active`
+   * absent (migration-050 pas encore appliquee) vaut actif.
+   */
+  const handleToggleActive = async (g: GameRow) => {
+    const cible = !(g.active ?? true);
+    const majLocale = (val: boolean | undefined) =>
+      setGames((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: val } : x)));
+    majLocale(cible);
+    try {
+      const { data } = await api.put(`/api/games-v2/${g.id}`, { active: cible });
+      // le backend ignore le champ tant que la colonne manque : on se realigne
+      // sur ce qui a vraiment ete enregistre plutot que d'afficher un mensonge
+      const reel: boolean = data?.game?.active ?? true;
+      if (reel !== cible) {
+        majLocale(reel);
+        toast.error('Colonne "active" absente en base : appliquer docs/migration-050-games-v2-active.sql');
+        return;
+      }
+      toast.success(cible ? 'Jeu activé' : 'Jeu désactivé');
+    } catch {
+      majLocale(g.active);
+      toast.error("Erreur lors de la mise à jour de l'état du jeu");
+    }
   };
 
   const handleDeleteCategory = async (id: string, name: string) => {
@@ -295,24 +324,30 @@ export default function GamesV2ListPage() {
                     <th className="px-6 py-3">Plateforme(s)</th>
                     <th className="px-6 py-3">Catégories</th>
                     <th className="px-6 py-3 text-center">Ordre</th>
+                    <th className="px-6 py-3 text-center">Actif</th>
                     <th className="px-6 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredGames.map((g) => (
-                    <tr key={g.id} className="hover:bg-gray-50 transition">
+                    <tr key={g.id} className={`hover:bg-gray-50 transition ${(g.active ?? true) ? '' : 'opacity-60'}`}>
                       <td className="px-6 py-4 font-medium">
-                        <Link
-                          to={`/contenus/jeux-v2/game/${g.id}`}
-                          className="flex items-center gap-3 text-primary-600 hover:underline"
-                        >
-                          {g.cover_url ? (
-                            <img src={g.cover_url} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
-                          ) : (
-                            <div className="w-10 h-10 rounded bg-gray-100 flex-shrink-0" />
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/contenus/jeux-v2/game/${g.id}`}
+                            className="flex items-center gap-3 text-primary-600 hover:underline"
+                          >
+                            {g.cover_url ? (
+                              <img src={g.cover_url} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-gray-100 flex-shrink-0" />
+                            )}
+                            {g.name}
+                          </Link>
+                          {!(g.active ?? true) && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactif</span>
                           )}
-                          {g.name}
-                        </Link>
+                        </div>
                       </td>
                       <td className="px-6 py-4 text-gray-600 text-sm">
                         {g.console_display_name ? (
@@ -365,6 +400,17 @@ export default function GamesV2ListPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center text-gray-500 text-sm">{g.display_order}</td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(g)}
+                          aria-pressed={g.active ?? true}
+                          title={(g.active ?? true) ? 'Désactiver (masquer sur les tables)' : 'Activer (afficher sur les tables)'}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${(g.active ?? true) ? 'bg-primary-500' : 'bg-gray-300'}`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${(g.active ?? true) ? 'translate-x-4' : 'translate-x-1'}`} />
+                        </button>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <Link to={`/contenus/jeux-v2/game/${g.id}`} className="p-1.5 text-gray-400 hover:text-primary-500 transition" title="Modifier">
