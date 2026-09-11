@@ -27,8 +27,10 @@ export const FLAP_COUNTDOWN_MS = 5_000;
 export const FLAP_RESTART_LOCK_MS = 10_000;
 /** durée max d'une manche (garde-fou, phase_ends_at) */
 export const FLAP_ROUND_CAP_MS = 5 * 60_000;
-/** lobby sans activité : la session est fermée */
-export const FLAP_LOBBY_TTL_MS = 15 * 60_000;
+/** salle d'attente AVANT la première manche sans lancement : la partie est fermée */
+export const FLAP_LOBBY_TTL_MS = 5 * 60_000;
+/** entre deux manches : pas de relance dans ce délai => partie fermée, joueurs renvoyés au lobby */
+export const FLAP_IDLE_AFTER_ROUND_MS = 2 * 60_000;
 /** socket morte en pleine manche : le joueur est résolu d'office après ce délai */
 export const FLAP_DISCONNECT_GRACE_MS = 8_000;
 /**
@@ -130,6 +132,9 @@ export interface FlapRankingEntry {
 
 export type FlapRoundEnd = 'all_dead' | 'cap' | 'terminated';
 
+/** pourquoi la partie s'est fermée : délai sans relance, plus personne, arrêt staff */
+export type FlapEndReason = 'idle' | 'empty' | 'terminated';
+
 export interface FlapRecordRef {
   pseudo: string;
   score: number;
@@ -164,6 +169,8 @@ export interface FlapState {
   recordsVersion: number;
   /** dernière invitation diffusée au bar (anti-spam) */
   inviteAt: number | null;
+  /** renseigné quand la partie est fermée (statut 'end') */
+  endReason?: FlapEndReason;
 }
 
 export function flapStateOf(session: SessionRow): FlapState {

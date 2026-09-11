@@ -48,6 +48,7 @@ import {
   FLAP_DEATH_TOLERANCE_FRAMES,
   FLAP_INVITE_COOLDOWN_MS,
   FLAP_LOBBY_TOPIC,
+  FLAP_IDLE_AFTER_ROUND_MS,
   FLAP_LOBBY_TTL_MS,
   FLAP_MAX_FLAPS,
   FLAP_MAX_PLAYERS,
@@ -68,6 +69,7 @@ import {
   type FlapPlayer,
   type FlapRankingEntry,
   type FlapRound,
+  type FlapEndReason,
   type FlapRoundEnd,
   type FlapRoundResult,
   type FlapState,
@@ -279,7 +281,8 @@ export async function joinFlapSession(
       }
       // arrivé pendant une manche : on regarde, on entre à la suivante
       state.players[player.id] = makePlayer(state, player, s.status === 'lobby' ? 'active' : 'pending');
-      if (s.status === 'lobby') refreshLobbyTtl(s);
+      // une arrivée prolonge la salle d'attente, pas le délai de relance entre deux manches
+      if (s.status === 'lobby' && state.roundsPlayed === 0) refreshLobbyTtl(s);
       markDirty(s);
       return s;
     });
@@ -447,15 +450,18 @@ function finishRoundSync(session: SessionRow, state: FlapState, endedBy: FlapRou
   }
   state.roundsPlayed += 1;
   session.status = 'lobby';
-  refreshLobbyTtl(session);
+  // 2 min pour relancer, sinon la partie se ferme et les dalles retournent au lobby
+  session.phase_started_at = nowIso();
+  session.phase_ends_at = new Date(Date.now() + FLAP_IDLE_AFTER_ROUND_MS).toISOString();
   markDirty(session);
   emitFlapEvent('round_ended', { sessionId: session.id, index: round.index });
   notifyLobby();
 }
 
-/** fin de partie (lobby expiré, plus personne, arrêt staff) */
-function cancelGame(session: SessionRow, state: FlapState): void {
+/** fin de partie (délai sans relance, plus personne, arrêt staff) */
+function cancelGame(session: SessionRow, state: FlapState, reason: FlapEndReason): void {
   state.round = null;
+  state.endReason = reason;
   session.status = 'end';
   session.ended_at = nowIso();
   session.phase_ends_at = null;
@@ -616,7 +622,7 @@ export async function flapPlayerAction(
           state.hostPlayerId = next ? next.playerId : '';
         }
         if (presentPlayers(state).length === 0) {
-          cancelGame(s, state);
+          cancelGame(s, state, 'empty');
           return s;
         }
         if (s.status === 'playing' && state.round?.results[player.id]?.alive) {
@@ -782,7 +788,7 @@ export async function flapGmAction(sessionId: string, action: string): Promise<S
     const state = flapStateOf(session);
     // la manche en cours est classée (et ses records appliqués après commit)
     if (session.status === 'playing' && state.round) finishRoundSync(session, state, 'terminated');
-    cancelGame(session, state);
+    cancelGame(session, state, 'terminated');
     return session;
   });
 }
@@ -799,7 +805,7 @@ function flapAdvance(session: SessionRow): boolean {
   const state = flapStateOf(session);
   if (session.status === 'lobby') {
     // TTL du lobby écoulé : personne n'a bougé, on ferme
-    cancelGame(session, state);
+    cancelGame(session, state, 'idle');
     return true;
   }
   if (session.status === 'playing') {

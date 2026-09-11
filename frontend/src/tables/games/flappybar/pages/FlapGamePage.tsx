@@ -39,6 +39,8 @@ import '../flap.css';
 const LOBBY_PATH = '/table/games/flappybar';
 const DEATH_RETRY_MS = [500, 1500, 4000];
 const INVITE_COOLDOWN_MS = 45_000;
+/** écran « partie fermée » : temps d'affichage avant le retour automatique au lobby */
+const END_REDIRECT_MS = 8_000;
 
 function httpStatus(err: unknown): number | undefined {
   return (err as { response?: { status?: number } }).response?.status;
@@ -339,7 +341,24 @@ export default function FlapGamePage() {
     [sessionId, applyResponse, t],
   );
 
-  // partie finie laissée à l'écran : retour lobby après 2 min sans toucher
+  // partie fermée (délai sans relance, plus personne, arrêt staff) : les dalles
+  // repartent d'elles-mêmes au lobby après un court affichage du classement
+  const [endSeconds, setEndSeconds] = useState(END_REDIRECT_MS / 1000);
+  useEffect(() => {
+    if (status !== 'end') return undefined;
+    if (!isDemo) clearFlapIdentity(sessionId);
+    setEndSeconds(END_REDIRECT_MS / 1000);
+    const startedAt = Date.now();
+    const tick = window.setInterval(() => {
+      setEndSeconds(Math.max(0, Math.ceil((END_REDIRECT_MS - (Date.now() - startedAt)) / 1000)));
+    }, 250);
+    const leave = window.setTimeout(backToLobby, END_REDIRECT_MS);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(leave);
+    };
+  }, [status, isDemo, sessionId, backToLobby]);
+  // filet de sécurité si la redirection automatique n'a pas eu lieu
   useInactivity({ timeoutMs: 120_000, enabled: status === 'end', onIdle: backToLobby });
 
   // ----- rendu
@@ -381,7 +400,15 @@ export default function FlapGamePage() {
           <span className="font-display text-[64px] uppercase leading-none tracking-wider" style={{ color: theme.palette.accent }}>
             {t('table.flap.end.title', 'Partie terminée')}
           </span>
-          <span className="text-[28px] text-white/70">{t('table.flap.end.sub', "Merci d'avoir joué")}</span>
+          <span className="text-[28px] text-white/70">
+            {state.endReason === 'idle'
+              ? t('table.flap.end.idle', 'Aucune manche relancée depuis 2 minutes : la partie est fermée')
+              : state.endReason === 'empty'
+                ? t('table.flap.end.empty', 'Tous les joueurs sont partis')
+                : state.endReason === 'terminated'
+                  ? t('table.flap.end.terminated', 'Partie arrêtée par le bar')
+                  : t('table.flap.end.sub', "Merci d'avoir joué")}
+          </span>
           {state.lastRound && (
             <div className="w-[1120px] max-w-[94vw]">
               <RoundResultsTable ranking={state.lastRound.ranking} myPlayerId={you?.playerId ?? null} endedBy={state.lastRound.endedBy} accent={theme.palette.accent} t={t} />
@@ -390,6 +417,9 @@ export default function FlapGamePage() {
           <ArcadeButton variant="accent" size="xl" className="min-h-[80px] px-14 text-[28px]" icon={<LogOut className="h-7 w-7" />} onClick={backToLobby}>
             {t('table.flap.end.exit', 'Retour au lobby')}
           </ArcadeButton>
+          <span className="text-[22px] text-white/50">
+            {t('table.flap.end.redirect', 'Retour au lobby dans {seconds} s').replace('{seconds}', String(endSeconds))}
+          </span>
         </div>
       )}
 

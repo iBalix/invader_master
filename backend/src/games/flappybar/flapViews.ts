@@ -16,6 +16,7 @@ import {
   restartUnlockAt,
   FLAP_MIN_PLAYERS_TO_START,
   type FlapConfig,
+  type FlapEndReason,
   type FlapLastRound,
   type FlapPlayerStatus,
   type FlapRound,
@@ -57,6 +58,8 @@ export interface FlapPublicState {
   /** ms epoch à partir duquel "Nouvelle manche" est autorisé (null avant la 1re manche) */
   restartUnlockAt: number | null;
   ended: boolean;
+  /** pourquoi la partie est fermée (statut 'end'), sinon null */
+  endReason: FlapEndReason | null;
 }
 
 export interface FlapYou {
@@ -123,6 +126,7 @@ export function buildFlapPublicState(session: SessionRow): FlapPublicState {
     recordsVersion: state.recordsVersion,
     restartUnlockAt: restartUnlockAt(state),
     ended: sessionStatus(session) === 'end',
+    endReason: state.endReason ?? null,
   };
 }
 

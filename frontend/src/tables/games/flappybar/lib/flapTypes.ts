@@ -16,6 +16,7 @@ export type FlapSessionStatus = 'lobby' | 'playing' | 'end';
 export type FlapPlayerStatus = 'active' | 'pending' | 'left';
 export type FlapResolvedBy = 'client' | 'server';
 export type FlapRoundEnd = 'all_dead' | 'cap' | 'terminated';
+export type FlapEndReason = 'idle' | 'empty' | 'terminated';
 
 export interface FlapConfigView {
   theme: string;
@@ -111,6 +112,7 @@ export interface FlapPublicState {
   recordsVersion: number;
   restartUnlockAt: number | null;
   ended: boolean;
+  endReason: FlapEndReason | null;
 }
 
 export interface FlapYou {

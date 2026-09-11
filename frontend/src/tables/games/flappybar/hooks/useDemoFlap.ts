@@ -80,6 +80,7 @@ export function useDemoFlap(themeId: string, enabled: boolean, bridge: FlapBridg
       recordsVersion: 0,
       restartUnlockAt: null,
       ended: false,
+      endReason: null,
     };
   }, [themeId]);
 
