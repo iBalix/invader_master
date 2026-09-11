@@ -104,6 +104,8 @@ export const PIPE_CAP_H = 40;
 
 export const FRAME = {
   bird: ['bird-0', 'bird-1', 'bird-2'],
+  /** mêmes frames en nuances de gris : les adversaires (générées au boot à partir de bird-*) */
+  ghost: ['ghost-0', 'ghost-1', 'ghost-2'],
   pipeBody: 'pipe-body',
   /** dessiné pour le tuyau du BAS (ouverture vers le haut), retourné pour le haut */
   pipeCap: 'pipe-cap',

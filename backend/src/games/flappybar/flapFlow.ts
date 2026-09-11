@@ -201,7 +201,8 @@ export async function createFlapSession(
   const config: FlapConfig = {
     theme,
     maxPlayers,
-    hostOnlyStart: false,
+    // seul le créateur de la partie lance et relance les manches (décision produit 11/09/2026)
+    hostOnlyStart: true,
     countdownMs: FLAP_COUNTDOWN_MS,
     roundCapMs: FLAP_ROUND_CAP_MS,
     creatorPseudo: input.pseudo.trim(),

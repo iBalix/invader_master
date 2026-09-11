@@ -21,7 +21,7 @@ import type { BridgeRound, BridgeState, FlapBridge, FlapPhase, RankingRow } from
 import { getFlapTheme } from '../themes';
 import type { FlapTheme } from '../themes/types';
 import { ATLAS_KEY, FRAME } from '../themes/types';
-import { BIRD_ANIM, BirdActor } from './BirdActor';
+import { BIRD_ANIM, BirdActor, GHOST_ANIM } from './BirdActor';
 import { Fx } from './Fx';
 import { GhostManager } from './GhostManager';
 import { Parallax } from './Parallax';
@@ -96,6 +96,12 @@ export class PlayScene extends Phaser.Scene {
     this.anims.create({
       key: BIRD_ANIM,
       frames: [0, 1, 2, 1].map((i) => ({ key: ATLAS_KEY, frame: FRAME.bird[i] })),
+      frameRate: 10,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: GHOST_ANIM,
+      frames: [0, 1, 2, 1].map((i) => ({ key: ATLAS_KEY, frame: FRAME.ghost[i] })),
       frameRate: 10,
       repeat: -1,
     });

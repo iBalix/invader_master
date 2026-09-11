@@ -12,6 +12,8 @@ import type { FlapTheme } from '../themes/types';
 import { ATLAS_KEY, BIRD_TEX_W, FRAME } from '../themes/types';
 
 export const BIRD_ANIM = 'flap-bird';
+/** même battement d'ailes, frames en nuances de gris (adversaires) */
+export const GHOST_ANIM = 'flap-ghost';
 /**
  * Rendu à 1,5x la taille de la hitbox legacy : sur une dalle vue de biais à
  * distance de bar, 68 px étaient illisibles. La hitbox (SIM.HITBOX_*) reste

@@ -21,6 +21,7 @@ import {
   WORLD_H,
   WORLD_W,
   bgLayerKey,
+  FRAME,
 } from '../themes/types';
 import { buildRetroFont } from './retroFont';
 
@@ -104,6 +105,7 @@ export class BootScene extends Phaser.Scene {
     if (!tex) return;
     const ctx = tex.getContext();
     const packer = new ShelfPacker(ATLAS_W, ATLAS_H);
+    const rects = new Map<string, { x: number; y: number; w: number; h: number }>();
     const builder: AtlasBuilder = {
       frame: (name, w, h, draw) => {
         const slot = packer.place(w, h);
@@ -111,6 +113,7 @@ export class BootScene extends Phaser.Scene {
           console.warn('[flappybar] atlas plein, case ignorée', name);
           return;
         }
+        rects.set(name, { x: slot.x, y: slot.y, w, h });
         ctx.save();
         ctx.translate(slot.x, slot.y);
         ctx.beginPath();
@@ -123,6 +126,18 @@ export class BootScene extends Phaser.Scene {
     };
     drawParticleFrames(builder);
     theme.drawAtlas(builder);
+    // Adversaires en nuances de gris : recopie des frames de l'oiseau avec un
+    // filtre canvas, une fois au boot. Zéro coût au rendu (pas de post-FX),
+    // et le joueur reconnaît son propre oiseau, le seul en couleur.
+    FRAME.bird.forEach((birdName, i) => {
+      const src = rects.get(birdName);
+      if (!src) return;
+      builder.frame(FRAME.ghost[i], src.w, src.h, (c, w, h) => {
+        c.filter = 'grayscale(1) brightness(1.08)';
+        c.drawImage(tex.canvas, src.x, src.y, src.w, src.h, 0, 0, w, h);
+        c.filter = 'none';
+      });
+    });
     tex.refresh();
     if (theme.pixel) tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
   }

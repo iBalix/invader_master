@@ -19,14 +19,15 @@ import Phaser from 'phaser';
 import { SIM, metersOf, simulate, stepSim, type SimState } from '../sim/flapSim';
 import type { BridgePlayer } from './bridge';
 import { ATLAS_KEY, FRAME } from '../themes/types';
-import { BIRD_ANIM, BIRD_SCALE } from './BirdActor';
+import { BIRD_SCALE, GHOST_ANIM } from './BirdActor';
 import type { Fx } from './Fx';
 import { FLAP_FONT } from './retroFont';
 
 const POOL = 20;
 const MAX_STEPS = 30;
 const RESYNC_GAP = 180;
-const ALPHA_GHOST = 0.45;
+/** adversaires en nuances de gris (frames ghost-*) : un peu plus opaques qu'en couleur, la teinte suffit à distinguer le sien */
+const ALPHA_GHOST = 0.6;
 const ALPHA_FOCUS = 0.95;
 const ALPHA_PREDICTED = 0.3;
 const ALPHA_DEAD = 0.3;
@@ -106,7 +107,7 @@ export class GhostManager {
   ) {
     for (let i = 0; i < POOL; i += 1) {
       this.sprites.push(
-        scene.add.sprite(0, 0, ATLAS_KEY, FRAME.bird[0]).setScale(BIRD_SCALE).setDepth(30).setAlpha(ALPHA_GHOST).setVisible(false),
+        scene.add.sprite(0, 0, ATLAS_KEY, FRAME.ghost[0]).setScale(BIRD_SCALE).setDepth(30).setAlpha(ALPHA_GHOST).setVisible(false),
       );
       this.labels.push(scene.add.bitmapText(0, 0, FLAP_FONT, '', 26).setOrigin(0.5, 1).setDepth(31).setVisible(false));
       this.free.push(i);
@@ -315,7 +316,7 @@ export class GhostManager {
     const flaps = this.pendingFlaps.get(player.playerId) ?? [];
     this.pendingFlaps.delete(player.playerId);
     const sim = simulate(this.seed, flaps, this.targetFrame);
-    this.sprites[slot].setVisible(false).setAlpha(ALPHA_GHOST).clearTint().setAngle(0).play(BIRD_ANIM);
+    this.sprites[slot].setVisible(false).setAlpha(ALPHA_GHOST).clearTint().setAngle(0).play(GHOST_ANIM);
     this.labels[slot].setVisible(false).setText('');
     const ghost: Ghost = {
       id: player.playerId,
