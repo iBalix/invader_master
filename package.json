@@ -11,7 +11,7 @@
     "dev:front": "npm run dev --prefix frontend",
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
     "seed": "npx tsx scripts/seed-admin.ts",
-    "lint": "npm run lint --prefix backend && npm run lint --prefix frontend"
+    "lint": "node scripts/check-flap-sim.js && npm run lint --prefix backend && npm run lint --prefix frontend"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.98.0"

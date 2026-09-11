@@ -35,6 +35,7 @@ import { publicRoutes } from './routes/public.js';
 import { gamePublicRoutes } from './routes/gamePublic.js';
 import { chessPublicRoutes } from './routes/chessPublic.js';
 import { blackjackPublicRoutes } from './routes/blackjackPublic.js';
+import { flappybarPublicRoutes } from './routes/flappybarPublic.js';
 import { gameSessionRoutes } from './routes/game.js';
 import { tablesRoutes } from './routes/tables.js';
 import { liveEventStateAuthRoutes, liveEventStatePublicRoutes } from './routes/liveEventState.js';
@@ -51,6 +52,8 @@ import { cashRoutes } from './routes/cash.js';
 import { financeReportRoutes } from './routes/financeReport.js';
 import { rolePermissionRoutes } from './routes/rolePermissions.js';
 import { initAgentBridge } from './websocket/agent-bridge.js';
+import { attachUpgradeRouter } from './websocket/upgrade-router.js';
+import { initFlappybarBridge } from './websocket/flappybar-bridge.js';
 import { startLaunchScheduler } from './services/tableLaunch.js';
 
 const app = express();
@@ -77,6 +80,7 @@ app.use(express.json());
 app.use('/public/game', cors(), gamePublicRoutes);
 app.use('/public/chess', cors(), chessPublicRoutes);
 app.use('/public/blackjack', cors(), blackjackPublicRoutes);
+app.use('/public/flappybar', cors(), flappybarPublicRoutes);
 app.use('/public', cors(), publicRoutes);
 app.use('/public/tables', cors(), tablesRoutes);
 app.use('/public/live-event', cors(), liveEventStatePublicRoutes);
@@ -133,7 +137,11 @@ app.use((_req, res) => {
 });
 
 const server = createServer(app);
+// un seul écouteur 'upgrade' pour tous les WebSocket : deux WebSocketServer
+// attachés au même serveur HTTP se répondraient 400 l'un l'autre (cf. upgrade-router)
+attachUpgradeRouter(server);
 initAgentBridge(server);
+initFlappybarBridge();
 
 server.listen(PORT, () => {
   console.log(`[invader-backend] Listening on port ${PORT}`);

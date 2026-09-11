@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { randomUUID } from 'crypto';
+import { registerWsPath } from './upgrade-router.js';
 
 // ---------------------------------------------------------------------------
 // Protocole
@@ -176,7 +177,11 @@ export function initAgentBridge(server: Server): void {
     return;
   }
 
-  const wss = new WebSocketServer({ server, path: '/ws/agent' });
+  // mode noServer : l'upgrade HTTP est distribué par upgrade-router (un seul
+  // écouteur 'upgrade' pour /ws/agent et /ws/flappybar). Le paramètre `server`
+  // est conservé pour la signature ; le routeur y est attaché dans index.ts.
+  const wss = new WebSocketServer({ noServer: true });
+  registerWsPath('/ws/agent', wss);
 
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url ?? '', `http://${req.headers.host}`);

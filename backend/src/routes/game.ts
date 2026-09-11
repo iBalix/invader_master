@@ -22,6 +22,9 @@ import { buildChessPublicState } from '../games/chess/chessViews.js';
 // idem : enregistre l'advancer 'blackjack'
 import { bjGmAction } from '../games/blackjack/bjFlow.js';
 import { buildBjPublicState } from '../games/blackjack/bjViews.js';
+// idem : enregistre l'advancer 'flappybar'
+import { flapGmAction } from '../games/flappybar/flapFlow.js';
+import { buildFlapPublicState } from '../games/flappybar/flapViews.js';
 import { buildGmState } from '../games/views.js';
 
 export const gameSessionRoutes = Router();
@@ -102,13 +105,17 @@ gameSessionRoutes.get('/:id/state', async (req, res) => {
     if (isAdvanceDue(session)) {
       session = await withSession(session.id, async (s) => s);
     }
-    // échecs / blackjack : rien de secret, la vue publique suffit au staff
+    // échecs / blackjack / flappy bar : rien de secret, la vue publique suffit au staff
     if (session.mode === 'chess') {
       res.json({ status: 'success', data: buildChessPublicState(session) });
       return;
     }
     if (session.mode === 'blackjack') {
       res.json({ status: 'success', data: buildBjPublicState(session) });
+      return;
+    }
+    if (session.mode === 'flappybar') {
+      res.json({ status: 'success', data: buildFlapPublicState(session) });
       return;
     }
     const players = await loadPlayers(session.id);
@@ -192,6 +199,12 @@ gameSessionRoutes.post('/:id/action', async (req, res) => {
     if (existing.mode === 'blackjack') {
       const session = await bjGmAction(existing.id, action);
       res.json({ status: 'success', data: buildBjPublicState(session) });
+      return;
+    }
+    if (existing.mode === 'flappybar') {
+      // seule action staff : terminer la partie (la manche en cours est classée)
+      const session = await flapGmAction(existing.id, action);
+      res.json({ status: 'success', data: buildFlapPublicState(session) });
       return;
     }
     const session =

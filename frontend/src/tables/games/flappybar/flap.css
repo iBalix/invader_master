@@ -1,0 +1,81 @@
+/**
+ * Animations DOM de Flappy Bar (HUD, salle, temps forts). Propriétés
+ * individuelles (scale / translate) pour composer avec les transforms
+ * Tailwind de centrage. Mode réduit (.flap-reduced) : fondus courts, pas
+ * d'onde de choc.
+ */
+
+@keyframes flap-pop {
+  0% { scale: 0.6; opacity: 0; }
+  60% { scale: 1.06; opacity: 1; }
+  100% { scale: 1; opacity: 1; }
+}
+.flap-pop { animation: flap-pop 260ms cubic-bezier(0.3, 1.2, 0.4, 1) 1 backwards; }
+
+/* bannière plein écran : entrée, maintien (--flap-hold), sortie */
+@keyframes flap-banner-in {
+  0% { scale: 0.7; opacity: 0; }
+  55% { scale: 1.05; opacity: 1; }
+  100% { scale: 1; opacity: 1; }
+}
+@keyframes flap-banner-out {
+  to { scale: 1.04; opacity: 0; }
+}
+.flap-banner {
+  animation:
+    flap-banner-in 340ms cubic-bezier(0.25, 1.2, 0.4, 1) 1 backwards,
+    flap-banner-out 300ms ease-in var(--flap-hold, 2200ms) 1 forwards;
+}
+
+/* onde de choc (record du bar) */
+@keyframes flap-shockwave {
+  0% { scale: 0.15; opacity: 0.8; }
+  100% { scale: 1; opacity: 0; }
+}
+.flap-shockwave {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1400px;
+  height: 1400px;
+  margin-left: -700px;
+  margin-top: -700px;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: flap-shockwave 800ms ease-out 1 forwards;
+}
+
+/* palier : monte et s'efface */
+@keyframes flap-float-up {
+  0% { translate: 0 12px; opacity: 0; }
+  18% { translate: 0 0; opacity: 1; }
+  78% { translate: 0 0; opacity: 1; }
+  100% { translate: 0 -18px; opacity: 0; }
+}
+.flap-float-up { animation: flap-float-up 1400ms ease-out 1 both; }
+
+/* chiffres du compte à rebours */
+@keyframes flap-count-pop {
+  0% { scale: 1.5; opacity: 0; }
+  35% { scale: 1; opacity: 1; }
+  100% { scale: 0.9; opacity: 0.85; }
+}
+.flap-count-pop { animation: flap-count-pop 900ms ease-out 1 both; }
+
+@keyframes flap-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ---- mode réduit : coupe-circuits ---------------------------------------- */
+.flap-reduced .flap-shockwave { display: none; }
+.flap-reduced .flap-pop,
+.flap-reduced .flap-count-pop,
+.flap-reduced .flap-float-up {
+  animation: flap-fade-in 160ms ease-out 1 both;
+}
+.flap-reduced .flap-banner {
+  animation:
+    flap-fade-in 160ms ease-out 1 backwards,
+    flap-banner-out 200ms ease-in var(--flap-hold, 2200ms) 1 forwards;
+}

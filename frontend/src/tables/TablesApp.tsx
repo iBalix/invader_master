@@ -17,7 +17,7 @@
  * Si aucun hostname n'est connu (URL ni localStorage), on force /table/setup.
  */
 
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import TableLayout from './components/layout/TableLayout';
 import SetupPage from './pages/SetupPage';
@@ -31,8 +31,22 @@ import ChessLobbyPage from './games/chess/pages/ChessLobbyPage';
 import ChessGamePage from './games/chess/pages/ChessGamePage';
 import BlackjackLobbyPage from './games/blackjack/pages/BlackjackLobbyPage';
 import BlackjackGamePage from './games/blackjack/pages/BlackjackGamePage';
+import FlapLobbyPage from './games/flappybar/pages/FlapLobbyPage';
+import RetroLoader from './components/ui/RetroLoader';
 import { useHostname } from './hooks/useHostname';
 import { useSansZoom } from '../hooks/useSansZoom';
+
+// La page de partie de Flappy Bar embarque Phaser : chargée à la demande pour
+// ne pas alourdir le bundle des autres écrans (le lobby, lui, reste immédiat).
+const FlapGamePage = lazy(() => import('./games/flappybar/pages/FlapGamePage'));
+
+function LazyFallback() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <RetroLoader />
+    </div>
+  );
+}
 
 function HostnameGuard({ children }: { children: React.ReactNode }) {
   const identity = useHostname();
@@ -88,6 +102,22 @@ export default function TablesApp() {
         <Route path="games/chess/:sessionId" element={<ChessGamePage />} />
         <Route path="games/blackjack" element={<BlackjackLobbyPage />} />
         <Route path="games/blackjack/:sessionId" element={<BlackjackGamePage />} />
+        <Route
+          path="games/flappybar"
+          element={
+            <Suspense fallback={<LazyFallback />}>
+              <FlapLobbyPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="games/flappybar/:sessionId"
+          element={
+            <Suspense fallback={<LazyFallback />}>
+              <FlapGamePage />
+            </Suspense>
+          }
+        />
         <Route path="in-game" element={<InGamePage />} />
         <Route path="play" element={<TablePlayPage />} />
       </Route>
