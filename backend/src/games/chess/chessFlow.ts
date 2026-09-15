@@ -29,6 +29,9 @@ import {
 import { broadcastTopic } from '../realtime.js';
 import { hasMatingMaterial, naturalResult, rebuild, tryMove } from './rules.js';
 import {
+  AI_FALLBACK_MS,
+  AI_HUMAN_DELAY_MS,
+  AI_LEVELS,
   AI_MAX_ELAPSED_MS,
   AI_THINK_MS,
   aiAcceptsDraw,
@@ -36,6 +39,7 @@ import {
   isAiLevel,
   type AiLevel,
 } from './ai.js';
+import { stockfishAvailable, stockfishBestMove, warmStockfish } from './stockfish.js';
 import {
   AI_DEVICE,
   AI_PLAYER_ID,
@@ -106,16 +110,71 @@ function aiRemainingMs(state: ChessState, aiColor: ChessColor): number {
   return base - spent;
 }
 
+/** sous ce reste de pendule, la machine se depeche, comme un humain en zeitnot */
+const AI_HURRY_BELOW_MS = 10_000;
+/** le moteur doit avoir repondu avant l'echeance de secours, avec la marge du commit */
+const AI_ENGINE_DEADLINE_MS = AI_FALLBACK_MS - 1_200;
+
 /**
- * Échéance de la prochaine transition quand c'est à la machine de jouer :
- * son délai de réflexion, sauf si son drapeau tombe avant.
+ * C'est a la machine de jouer : pose la prochaine echeance.
+ *
+ * Moteur local (niveau 1) : on affiche un temps de reflexion, l'advancer
+ * calcule et joue a l'echeance, comme toujours.
+ *
+ * Stockfish (niveaux 2 et 3) : le calcul part TOUT DE SUITE, dans le meme
+ * commit que le coup humain (un seul state_version, aucun rechargement des
+ * dalles), mais HORS verrou : on pose le marqueur aiThinking, on repousse
+ * l'echeance a AI_FALLBACK_MS et on confie le coup au processus separe via
+ * setImmediate (meme patron que flappybar). L'echeance etant dans le futur,
+ * isAdvanceDue est faux pour les appels concurrents (polling des dalles,
+ * timer, sweeper, /move illegal) : le double dispatch est impossible par
+ * construction. Si le coup n'est pas revenu a l'echeance (backend redemarre
+ * en plein calcul), l'advancer joue le coup de secours au moteur local.
  */
 function scheduleAiTurn(session: SessionRow, state: ChessState, aiColor: ChessColor): void {
   const now = Date.now();
   const remaining = aiRemainingMs(state, aiColor);
+  const level = chessConfigOf(session).ai?.level;
+  if (isAiLevel(level) && AI_LEVELS[level].engine === 'stockfish' && stockfishAvailable()) {
+    dispatchAiMove(session, state, aiColor, level, now, remaining);
+    return;
+  }
   const think = Math.min(AI_THINK_MS, remaining > 0 ? remaining : 0);
   session.phase_started_at = new Date(now).toISOString();
   session.phase_ends_at = new Date(now + think).toISOString();
+}
+
+/** confie le coup a Stockfish (sous verrou, synchrone : voir scheduleAiTurn) */
+function dispatchAiMove(
+  session: SessionRow,
+  state: ChessState,
+  aiColor: ChessColor,
+  level: AiLevel,
+  now: number,
+  remaining: number,
+): void {
+  const ply = state.moves.length;
+  state.aiThinking = { ply, startedAt: new Date(now).toISOString() };
+  session.phase_started_at = new Date(now).toISOString();
+  // l'echeance de secours, ou la chute du drapeau si elle vient avant
+  session.phase_ends_at = new Date(now + Math.min(AI_FALLBACK_MS, Math.max(0, remaining))).toISOString();
+  const cfg = AI_LEVELS[level];
+  const hurry = Number.isFinite(remaining) && remaining < AI_HURRY_BELOW_MS;
+  // Capture en memoire : le dispatch n'a pas a recharger la session, donc
+  // aucune course avec la sauvegarde encore en cours.
+  const req: AiRequest = {
+    sessionId: session.id,
+    ply,
+    movesUci: state.moves.map((m) => m.uci),
+    level,
+    aiColor,
+    startedAt: now,
+    movetimeMs: hurry ? Math.max(100, Math.min(cfg.movetimeMs, Math.floor(remaining / 10))) : cfg.movetimeMs,
+    humanDelayMs: hurry ? 0 : AI_HUMAN_DELAY_MS,
+  };
+  setImmediate(() => {
+    requestAiMove(req).catch((err) => console.error('[chess-ai] coup asynchrone', err));
+  });
 }
 
 /**
@@ -222,6 +281,8 @@ export async function createChessSession(
     const level = Number(input.ai.level);
     if (!isAiLevel(level)) throw httpErr('error_chess_bad_config', 400);
     ai = { level };
+    // le moteur compile son WebAssembly pendant que le joueur confirme
+    if (AI_LEVELS[level].engine === 'stockfish') warmStockfish();
   }
 
   const config: ChessConfig = {
@@ -404,6 +465,9 @@ function commitMove(
     state.clocks.lastMoveAt = new Date(now).toISOString();
   }
 
+  // tout coup joue clot une reflexion en cours (secours, ou marqueur perime
+  // laisse par un ancien processus pendant un deploiement)
+  delete state.aiThinking;
   state.moves.push({ san: played.san, uci: played.uci, ms: elapsed });
   state.fen = chess.fen();
   state.turn = opponentOf(color);
@@ -430,8 +494,8 @@ function commitMove(
 }
 
 /**
- * Coup de la machine, joué par l'advancer à l'échéance de réflexion. Le calcul
- * est borné (cf. ai.ts) : il ne bloque jamais l'event loop plus de ~200 ms.
+ * Coup de la machine au moteur local, synchrone, sous verrou (<= 260 ms).
+ * Chemin nominal du niveau 1, secours des niveaux Stockfish.
  */
 function playAiMove(session: SessionRow, state: ChessState, aiColor: ChessColor): boolean {
   const level = chessConfigOf(session).ai?.level;
@@ -441,8 +505,129 @@ function playAiMove(session: SessionRow, state: ChessState, aiColor: ChessColor)
   if (!choice) return false;
   const played = tryMove(chess, choice);
   if (!played) return false;
-  commitMove(session, state, chess, played, aiColor, AI_MAX_ELAPSED_MS);
+  return commitAiMoveSafely(session, state, chess, played, aiColor);
+}
+
+/**
+ * commitMove pour la machine : jamais de 409. La garde amont (aiRemainingMs)
+ * et la facturation lisent l'horloge a quelques millisecondes d'ecart, avec
+ * un calcul entre les deux : a moins de 300 ms de pendule, commitMove
+ * pourrait constater la chute du drapeau et throw. Dans l'advancer ce throw
+ * laisserait phase_ends_at dans le passe et la session en 500 pour toujours.
+ * Ici on rend false : l'appelant laisse la chute de drapeau s'appliquer.
+ */
+function commitAiMoveSafely(
+  session: SessionRow,
+  state: ChessState,
+  chess: Chess,
+  played: { san: string; uci: string },
+  aiColor: ChessColor,
+): boolean {
+  if (aiRemainingMs(state, aiColor) <= 0) return false;
+  try {
+    commitMove(session, state, chess, played, aiColor, AI_MAX_ELAPSED_MS);
+  } catch (err) {
+    if ((err as { httpStatus?: number }).httpStatus === 409) return false;
+    throw err;
+  }
   return true;
+}
+
+interface AiRequest {
+  sessionId: string;
+  /** demi-coups joues au moment de la demande : cle d'idempotence du commit */
+  ply: number;
+  movesUci: string[];
+  level: AiLevel;
+  aiColor: ChessColor;
+  /** epoch ms du dispatch */
+  startedAt: number;
+  movetimeMs: number;
+  /** plancher entre la demande et le coup joue (0 en zeitnot) */
+  humanDelayMs: number;
+}
+
+/**
+ * Tour de la machine vu par l'ADVANCER (synchrone, verrou tenu). Trois cas :
+ *  - marqueur aiThinking pour ce ply : l'echeance de secours est tombee sans
+ *    coup (backend redemarre en plein calcul, rappel perdu) : moteur local ;
+ *  - pas de marqueur et niveau Stockfish : partie en vol au deploiement
+ *    (l'ancien code posait une echeance de reflexion sans marqueur) : on
+ *    lance le cycle asynchrone ;
+ *  - sinon (niveau 1, moteur indisponible) : moteur local, comme toujours.
+ * Un marqueur d'un ply revolu vaut absence : un ancien processus a pu jouer
+ * par-dessus pendant un deploiement.
+ */
+function startOrFallbackAiMove(session: SessionRow, state: ChessState, aiColor: ChessColor): boolean {
+  const level = chessConfigOf(session).ai?.level;
+  if (!isAiLevel(level)) return false;
+  if (state.aiThinking?.ply === state.moves.length) {
+    console.warn(`[chess-ai] session=${session.id.slice(0, 8)} ply=${state.moves.length} secours a l'echeance`);
+    delete state.aiThinking;
+    return playAiMove(session, state, aiColor);
+  }
+  if (AI_LEVELS[level].engine === 'stockfish' && stockfishAvailable()) {
+    dispatchAiMove(session, state, aiColor, level, Date.now(), aiRemainingMs(state, aiColor));
+    markDirty(session);
+    return true;
+  }
+  return playAiMove(session, state, aiColor);
+}
+
+/** attend le coup de Stockfish HORS verrou, puis le commit dans une session fraiche */
+async function requestAiMove(req: AiRequest): Promise<void> {
+  const cfg = AI_LEVELS[req.level];
+  const uci = await stockfishBestMove({
+    gameId: req.sessionId,
+    movesUci: req.movesUci,
+    elo: cfg.elo ?? 1500,
+    movetimeMs: req.movetimeMs,
+    deadline: req.startedAt + AI_ENGINE_DEADLINE_MS,
+  });
+  // un coup instantane casse l'illusion : on attend le plancher, hors verrou
+  const wait = req.startedAt + req.humanDelayMs - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  // saveSession peut throw (garde optimiste, rolling deploy) : le catch de
+  // l'appelant logue, l'echeance de secours couvre le reste
+  await withSession(req.sessionId, async (session) => {
+    commitAiMove(session, req, uci);
+    return session;
+  });
+}
+
+/**
+ * Commit du coup de la machine, sur l'etat RECHARGE sous verrou. Tout est
+ * re-verifie : entre la demande et la reponse, le joueur a pu abandonner,
+ * accepter une nulle, le staff arreter la partie, le secours jouer a sa
+ * place, ou le drapeau tomber. Une seule condition manquante et on ne touche
+ * a rien. Sans coup de Stockfish (`null` : moteur mort, trop lent, coup
+ * illisible), le moteur local joue sur-le-champ plutot que d'attendre
+ * l'echeance de secours.
+ */
+function commitAiMove(session: SessionRow, req: AiRequest, uci: string | null): void {
+  if (session.mode !== 'chess' || session.status !== 'playing' || session.ended_at) return;
+  const state = chessStateOf(session);
+  if (state.result || state.turn !== req.aiColor) return;
+  if (state.moves.length !== req.ply || state.aiThinking?.ply !== req.ply) return;
+  const chess = rebuild(state.moves);
+  let played = uci
+    ? tryMove(chess, {
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci.length > 4 ? (uci[4] as PromotionPiece) : undefined,
+      })
+    : null;
+  const engineUsed = played ? 'stockfish' : 'local';
+  if (!played) {
+    const choice = chooseAiMove(chess, req.level);
+    played = choice ? tryMove(chess, choice) : null;
+  }
+  if (!played) return;
+  delete state.aiThinking;
+  if (!commitAiMoveSafely(session, state, chess, played, req.aiColor)) return;
+  console.log(
+    `[chess-ai] session=${req.sessionId.slice(0, 8)} ply=${req.ply} level=${req.level} engine=${engineUsed} total=${Date.now() - req.startedAt}ms`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -811,7 +996,7 @@ function chessAdvance(session: SessionRow): boolean {
     // c'est a la machine de jouer et il lui reste du temps : elle joue, la
     // chute de drapeau ne s'applique qu'ensuite
     if (aiColor && state.turn === aiColor && aiRemainingMs(state, aiColor) > 0) {
-      if (playAiMove(session, state, aiColor)) return true;
+      if (startOrFallbackAiMove(session, state, aiColor)) return true;
     }
     if (!state.clocks) {
       finishChess(session, state, { winner: null, reason: 'inactivity' });

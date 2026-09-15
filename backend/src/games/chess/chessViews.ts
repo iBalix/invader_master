@@ -5,7 +5,9 @@
  */
 
 import { Chess } from 'chess.js';
+import { AI_MAX_ELAPSED_MS } from './ai.js';
 import {
+  AI_PLAYER_ID,
   chessStateOf,
   opponentOf,
   seatColorOf,
@@ -62,7 +64,11 @@ export function buildChessPublicState(session: SessionRow): ChessPublicState {
     let wMs = state.clocks.wMs;
     let bMs = state.clocks.bMs;
     if (running) {
-      const elapsed = Math.max(0, now - new Date(state.clocks.lastMoveAt).getTime());
+      let elapsed = Math.max(0, now - new Date(state.clocks.lastMoveAt).getTime());
+      // la machine n'est jamais facturee plus que ce plafond (coup de secours
+      // apres une coupure) : l'affichage suit la meme regle, sinon sa pendule
+      // sauterait en arriere au moment du coup
+      if (state.seats[state.turn]?.playerId === AI_PLAYER_ID) elapsed = Math.min(elapsed, AI_MAX_ELAPSED_MS);
       if (state.turn === 'w') wMs = Math.max(0, wMs - elapsed);
       else bMs = Math.max(0, bMs - elapsed);
     }

@@ -44,26 +44,72 @@ interface LevelConfig {
    * cherche pas à perdre, elle "ne voit pas" le meilleur coup.
    */
   blunderRate: number;
+  /**
+   * Qui calcule. 'local' : ce fichier, synchrone dans l'advancer, borne par
+   * `budgetMs`. 'stockfish' : le processus separe (cf. stockfish.ts), bride
+   * par `elo`, avec `movetimeMs` de reflexion ; le moteur local ne sert alors
+   * que de secours si le processus ne repond pas.
+   */
+  engine: 'local' | 'stockfish';
+  /** force cible Stockfish (UCI_Elo, 1320 a 3190) ; null pour le moteur local */
+  elo: number | null;
+  /** temps de calcul demande a Stockfish par coup */
+  movetimeMs: number;
 }
 
+/** surcharge par variable d'environnement, pour recalibrer sans redeployer */
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  const n = raw === undefined ? NaN : Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * Trois niveaux. Le premier reste le moteur maison : il est facile, c'est son
+ * role, et ses gaffes volontaires sont credibles pour un debutant. Les deux
+ * autres passent par Stockfish : les joueurs mataient « Costaud » 3 fois sur
+ * 9, aucun moteur ne tient a 3 plis dans 260 ms. Cibles : 1500 Elo pour un
+ * joueur occasionnel qui progresse, 2100 pour que seul un tres bon joueur de
+ * bar l'emporte encore de temps en temps. `CHESS_AI_ELO_2` / `CHESS_AI_ELO_3`
+ * permettent d'ajuster apres retour terrain.
+ */
 export const AI_LEVELS: Record<AiLevel, LevelConfig> = {
-  1: { depth: 1, quiescence: 0, budgetMs: 30, blunderRate: 0.55 },
-  2: { depth: 2, quiescence: 2, budgetMs: 90, blunderRate: 0.18 },
-  3: { depth: 3, quiescence: 4, budgetMs: 260, blunderRate: 0 },
+  1: { depth: 1, quiescence: 0, budgetMs: 30, blunderRate: 0.55, engine: 'local', elo: null, movetimeMs: 0 },
+  2: { depth: 2, quiescence: 2, budgetMs: 90, blunderRate: 0.18, engine: 'stockfish', elo: envInt('CHESS_AI_ELO_2', 1500), movetimeMs: 700 },
+  3: { depth: 3, quiescence: 4, budgetMs: 260, blunderRate: 0, engine: 'stockfish', elo: envInt('CHESS_AI_ELO_3', 2100), movetimeMs: 900 },
 };
 
-/** délai de réflexion affiché : un coup instantané est déroutant */
+/**
+ * Delai de reflexion AFFICHE du moteur local : son calcul dure 30 ms, un coup
+ * instantane est deroutant. Pour Stockfish ce delai n'existe plus : le temps
+ * de reflexion est le temps de calcul reel, complete par AI_HUMAN_DELAY_MS.
+ */
 export const AI_THINK_MS = 850;
-/** plafond dur, le plus large des budgets : sert à borner la pendule */
-export const AI_TIME_CAP_MS = 260;
+/**
+ * Plancher entre la demande a Stockfish et le coup joue. Bride a 1500 Elo, il
+ * repond souvent en quelques dizaines de millisecondes : un coup qui tombe
+ * avant que la piece adverse ait fini de glisser casse l'illusion.
+ */
+export const AI_HUMAN_DELAY_MS = 600;
+/**
+ * Echeance de secours du coup asynchrone : si Stockfish n'a pas repondu, le
+ * moteur local joue a sa place (processus mort, machine saturee, redemarrage
+ * du backend en plein calcul). La partie ne se fige jamais.
+ */
+export const AI_FALLBACK_MS = 4_000;
 
 /**
  * Temps de pendule imputable à la machine pour un coup. Sans ce plafond, un
  * redémarrage du serveur pendant son tour lui ferait payer toute la coupure
  * (le temps se mesure en horloge murale) et elle perdrait au temps une partie
- * qu'elle gagnait. Elle ne paie donc que sa réflexion prévue, avec une marge.
+ * qu'elle gagnait.
+ *
+ * INVARIANT a preserver : ce plafond est STRICTEMENT superieur a l'echeance de
+ * secours. aiRemainingMs (garde amont) et commitMove (facturation) l'utilisent
+ * tous deux, et le secours part avant lui : c'est ce qui garantit que
+ * commitMove ne lance jamais son 409 sur un coup de la machine.
  */
-export const AI_MAX_ELAPSED_MS = AI_THINK_MS + AI_TIME_CAP_MS + 1_500;
+export const AI_MAX_ELAPSED_MS = AI_FALLBACK_MS + 1_000;
 
 export function isAiLevel(value: unknown): value is AiLevel {
   return value === 1 || value === 2 || value === 3;

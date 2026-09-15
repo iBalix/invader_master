@@ -125,6 +125,17 @@ export interface ChessState {
    * commentaire de ChessSessionStatus).
    */
   readyBy?: string[];
+  /**
+   * La machine reflechit (Stockfish, dans son processus). Pose quand le coup
+   * lui est confie (dans le commit du coup humain, ou par l'advancer en
+   * rattrapage), efface par tout coup joue. Persiste dans runtime.chess et
+   * non en memoire : un redemarrage du backend en plein calcul doit retomber
+   * dessus pour jouer le coup de secours a l'echeance, sinon la partie
+   * resterait figee. `ply` = nombre de demi-coups au moment de la demande, ce
+   * qui rend le commit idempotent et rejette tout resultat perime. Jamais
+   * expose aux dalles (pas un statut : cf. la lecon de readyBy).
+   */
+  aiThinking?: { ply: number; startedAt: string };
 }
 
 export function chessStateOf(session: SessionRow): ChessState {
