@@ -251,26 +251,6 @@ battleQuestionRoutes.patch('/:id/difficulty', async (req: Request, res: Response
   }
 });
 
-// ─── DELETE /clear/:difficulty — wipe all questions for a difficulty ─────────
-
-battleQuestionRoutes.delete('/clear/:difficulty', async (req: Request, res: Response) => {
-  try {
-    const { difficulty } = req.params;
-    if (!isBattleDifficulty(difficulty)) {
-      res.status(400).json({ status: 'error', message: 'Difficulté invalide' });
-      return;
-    }
-    const { error } = await supabaseAdmin
-      .from('battle_questions')
-      .delete()
-      .eq('difficulty', difficulty);
-    if (error) throw error;
-    res.json({ status: 'success', message: `Toutes les questions ${difficulty} supprimées` });
-  } catch (err) {
-    serverError(res, 'DELETE /clear/:difficulty', err);
-  }
-});
-
 // ─── POST /generate — AI question generation via OpenAI ─────────────────────
 
 battleQuestionRoutes.post('/generate', async (req: Request, res: Response) => {
@@ -297,6 +277,37 @@ battleQuestionRoutes.post('/generate', async (req: Request, res: Response) => {
     });
   } catch (err) {
     serverError(res, 'POST /generate', err);
+  }
+});
+
+// ─── PATCH /:id/usage — une question passe des archives au stock (ou l'inverse) ──
+
+battleQuestionRoutes.patch('/:id/usage', async (req: Request, res: Response) => {
+  try {
+    const { used } = req.body as { used?: unknown };
+    if (typeof used !== 'boolean') {
+      res.status(400).json({ status: 'error', message: 'used (booléen) requis' });
+      return;
+    }
+    // Une question posée est marquée used_at et ne ressort plus : c'est
+    // l'archive. La remettre en stock, c'est effacer cette marque, rien de
+    // plus (le reset global fait la même chose pour toutes d'un coup).
+    const { data, error } = await supabaseAdmin
+      .from('battle_questions')
+      .update({ used_at: used ? new Date().toISOString() : null })
+      .eq('id', req.params.id)
+      .select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      res.status(404).json({ status: 'error', message: 'Question non trouvée' });
+      return;
+    }
+    res.json({
+      status: 'success',
+      message: used ? 'Question archivée' : 'Question remise en stock',
+    });
+  } catch (err) {
+    serverError(res, 'PATCH /:id/usage', err);
   }
 });
 
