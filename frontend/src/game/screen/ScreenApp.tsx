@@ -1006,7 +1006,15 @@ function QuestionProjo({
           <p className="text-xl uppercase tracking-widest text-white/40">
             Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''} · {q.difficulty}
           </p>
-          <h1 className="mt-2 text-balance text-5xl font-black leading-tight">{q.question}</h1>
+          {/* taille selon la longueur, et un cran plus bas quand une image ou
+              l'extrait partagent l'ecran : « la question est ecrite petit en
+              haut de l'ecran », retour de soiree */}
+          <h1
+            className="mt-2 text-balance font-black leading-tight"
+            style={{ fontSize: tailleQuestionQuiz(q.question, hasImage || Boolean(q.musicUrl)) }}
+          >
+            {q.question}
+          </h1>
         </div>
         <div className="flex shrink-0 flex-col items-center gap-2">
           {remaining !== null && !locked ? (
@@ -1042,7 +1050,12 @@ function QuestionProjo({
         >
           {q.type === 'qcm' ? (
             (q.answers ?? []).map((a, i) => (
-              <div key={i} className="rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-[2.125rem] font-bold leading-snug">
+              <div
+                key={i}
+                className={`rounded-2xl border-2 border-white/15 bg-white/5 font-bold leading-snug ${
+                  hasImage || q.musicUrl ? 'px-7 py-5 text-[2.25rem]' : 'px-8 py-6 text-[2.625rem]'
+                }`}
+              >
                 <span className="mr-3 font-black text-cyan-300">{String.fromCharCode(65 + i)}</span>
                 {a}
               </div>
@@ -1065,6 +1078,24 @@ function QuestionProjo({
       )}
     </div>
   );
+}
+
+/**
+ * Taille de l'enonce du quiz au projecteur. Il etait fige en 3 rem ; il monte a
+ * 4,75 rem quand il est court et que rien ne partage l'ecran, et reste
+ * raisonnable a cote d'une image pour que les reponses tiennent dans le cadre.
+ */
+function tailleQuestionQuiz(question: string | undefined, avecMedia: boolean): string {
+  const n = (question ?? '').length;
+  if (avecMedia) {
+    if (n <= 70) return '3.75rem';
+    if (n <= 120) return '3.25rem';
+    return '3rem';
+  }
+  if (n <= 60) return '4.75rem';
+  if (n <= 100) return '4.25rem';
+  if (n <= 150) return '3.75rem';
+  return '3.25rem';
 }
 
 // --- Révélation ---------------------------------------------------------------
@@ -1576,6 +1607,21 @@ function PodiumProjo({
  */
 const LIGNES_PAR_COLONNE = 13;
 
+/**
+ * Devoilement du classement, sur l'horloge de phase. Retour de soiree : « le
+ * classement apparait d'un bloc, sans enjeu ». Il se raconte desormais comme
+ * au bar : le peloton remonte depuis la derniere place, puis une respiration,
+ * et le podium tombe marche par marche, 3e, 2e, et le 1er apres un roulement.
+ */
+const CLT_DEBUT_MS = 500;
+/** duree maximale de la remontee du peloton, quel que soit l'effectif */
+const CLT_PELOTON_MAX_MS = 3600;
+const CLT_PAS_MAX_MS = 110;
+const CLT_AVANT_PODIUM_MS = 900;
+const CLT_ENTRE_MARCHES_MS = 1100;
+/** le 1er se fait attendre un peu plus : c'est la que tombe le roulement */
+const CLT_AVANT_PREMIER_MS = 1700;
+
 function LeaderboardProjo({ state }: { state: PublicState }) {
   const standings = state.standings ?? [];
   const podium = standings.slice(0, 3);
@@ -1588,6 +1634,45 @@ function LeaderboardProjo({ state }: { state: PublicState }) {
   const surplus = reste.length - affiches.length;
   const dense = colonnes >= 3;
 
+  const [maintenant, setMaintenant] = useState(() => serverNow());
+  useEffect(() => {
+    const t = setInterval(() => setMaintenant(serverNow()), 150);
+    return () => clearInterval(t);
+  }, []);
+  const ecoule = maintenant - (state.phaseStartedAt ?? maintenant);
+
+  // le peloton remonte : la DERNIERE place d'abord
+  const pas = affiches.length > 0 ? Math.min(CLT_PAS_MAX_MS, CLT_PELOTON_MAX_MS / affiches.length) : 0;
+  const finPeloton = CLT_DEBUT_MS + affiches.length * pas;
+  const apparitionLigne = (i: number) => CLT_DEBUT_MS + (affiches.length - 1 - i) * pas;
+  // puis le podium, marche par marche
+  const t3 = finPeloton + CLT_AVANT_PODIUM_MS;
+  const t2 = t3 + CLT_ENTRE_MARCHES_MS;
+  const t1 = t2 + CLT_AVANT_PREMIER_MS;
+  const apparitionMarche = (position: number) => (position === 3 ? t3 : position === 2 ? t2 : t1);
+
+  // roulement de tambour entre le 2e et le 1er, coup de cymbale sur le 1er
+  const roulement = podium.length >= 1 && ecoule >= t2 && ecoule < t1;
+  const premierVisible = podium.length >= 1 && ecoule >= t1;
+  // la cymbale ne sonne que si on a entendu le roulement : un ecran recharge
+  // apres le devoilement ne la rejoue pas
+  const roulementEntendu = useRef(false);
+  useEffect(() => {
+    if (!roulement) return;
+    roulementEntendu.current = true;
+    gameAudio.drumrollStart();
+  }, [roulement]);
+  useEffect(() => {
+    if (premierVisible && roulementEntendu.current) gameAudio.drumrollStop(true);
+  }, [premierVisible]);
+  useEffect(() => () => gameAudio.drumrollStop(false), []);
+
+  const devoile = (a: number) => ({
+    opacity: ecoule >= a ? 1 : 0,
+    transform: ecoule >= a ? 'translateY(0) scale(1)' : 'translateY(18px) scale(0.96)',
+    transition: 'opacity 380ms ease, transform 460ms cubic-bezier(0.3, 1.25, 0.4, 1)',
+  });
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden px-12 py-6">
       <h1 className="mb-4 shrink-0 text-center text-5xl font-black uppercase tracking-widest">
@@ -1598,7 +1683,9 @@ function LeaderboardProjo({ state }: { state: PublicState }) {
       {podium.length > 0 && (
         <div className={`grid shrink-0 grid-cols-3 gap-5 ${dense ? 'mb-4' : 'mb-6'}`}>
           {podium.map((s) => (
-            <PodiumCard key={s.pseudo} s={s} compact={dense} />
+            <div key={s.pseudo} style={devoile(apparitionMarche(s.position))}>
+              <PodiumCard s={s} compact={dense} />
+            </div>
           ))}
         </div>
       )}
@@ -1615,14 +1702,16 @@ function LeaderboardProjo({ state }: { state: PublicState }) {
             gridAutoFlow: 'column',
           }}
         >
-          {affiches.map((s) => (
-            <StandingRow key={s.pseudo} s={s} big={!dense} />
+          {affiches.map((s, i) => (
+            <div key={s.pseudo} style={devoile(apparitionLigne(i))}>
+              <StandingRow s={s} big={!dense} />
+            </div>
           ))}
         </div>
       )}
 
       {surplus > 0 && (
-        <p className="mt-2 shrink-0 text-center text-xl font-bold text-white/35">
+        <p className="mt-2 shrink-0 text-center text-xl font-bold text-white/35" style={devoile(CLT_DEBUT_MS)}>
           + {surplus} autre{surplus > 1 ? 's' : ''} joueur{surplus > 1 ? 's' : ''}
         </p>
       )}
@@ -1778,13 +1867,24 @@ function valeurMention(
         : null;
     case 'bestStrike':
       return rewards.bestStrike ? { chiffre: String(rewards.bestStrike.strike) } : null;
-    case 'bestRatio':
-    case 'bonnetDane': {
-      const v = rewards[key];
+    case 'bestRatio': {
+      const v = rewards.bestRatio;
       if (!v || v.answered <= 0) return null;
       return {
         chiffre: `${Math.round((v.correct / v.answered) * 100)} %`,
         unite: `${v.correct} / ${v.answered} bonnes réponses`,
+      };
+    }
+    // Le bonnet d'âne se dit en MAUVAISES réponses : il partageait l'affichage
+    // du meilleur ratio et annonçait « 3 / 19 bonnes réponses » sous une
+    // mention censée pointer les erreurs.
+    case 'bonnetDane': {
+      const v = rewards.bonnetDane;
+      if (!v || v.answered <= 0) return null;
+      const fausses = v.answered - v.correct;
+      return {
+        chiffre: `${Math.round((fausses / v.answered) * 100)} %`,
+        unite: `${fausses} / ${v.answered} mauvaises réponses`,
       };
     }
   }

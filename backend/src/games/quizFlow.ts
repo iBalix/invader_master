@@ -299,7 +299,11 @@ export async function createQuizSession(
       correctIndex,
       difficulty,
       points,
-      theme: (q.theme as string) ?? null,
+      // Le theme d'une question est facultatif, et AUCUNE question n'en a en
+      // base (import legacy : le theme vivait sur le quiz). Les ecrans
+      // tombaient alors sur « Culture generale » pour tout, Harry Potter comme
+      // blindtest annees 90. A defaut du sien, la question prend celui du quiz.
+      theme: ((q.theme as string | null)?.trim() || (quiz.theme as string | null)?.trim()) || null,
       helpAnimator: (q.help_animator as string) ?? null,
       musicUrl: (q.music_url as string) ?? null,
       videoYoutube: (q.video_youtube as string) ?? null,
