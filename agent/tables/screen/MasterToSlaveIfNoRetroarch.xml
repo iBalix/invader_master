@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>INVADER\Administrateur</Author>
+    <Description>Filet de securite de la dalle partagee, cote master. Durci le 2026-09-28 : plus de limite d'execution d'une heure (le script est une boucle infinie, la limite le tuait et le declencheur d'ouverture de session ne le relancait jamais - TABLE08-1 a tourne sans filet), et un declencheur repete toutes les 15 minutes le relance s'il est mort (IgnoreNew le rend inoffensif tant qu'il tourne).</Description>
+    <URI>\MasterToSlaveIfNoRetroarch</URI>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <UserId>S-1-5-21-3427460614-437580183-4048201690-1112</UserId>
+      <LogonType>InteractiveToken</LogonType>
+    </Principal>
+  </Principals>
+  <Settings>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <StartWhenAvailable>true</StartWhenAvailable>
+  </Settings>
+  <Triggers>
+    <LogonTrigger>
+      <UserId>INVADER\rkiosk</UserId>
+    </LogonTrigger>
+    <CalendarTrigger>
+      <StartBoundary>2026-01-01T00:00:00</StartBoundary>
+      <Repetition>
+        <Interval>PT15M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>powershell.exe</Command>
+      <Arguments>-Windowstyle hidden -File "C:\INVADER\SCRIPTS\screen\MasterToSlaveIfNoRetroarch.ps1"</Arguments>
+    </Exec>
+  </Actions>
+</Task>
