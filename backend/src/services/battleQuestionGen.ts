@@ -231,28 +231,58 @@ Retourne UNIQUEMENT le JSON, sans markdown ni commentaire.`;
 // ---------------------------------------------------------------------------
 
 let stockJobRunning = false;
+/** un appel est arrive pendant qu'un job tournait : on repasse a la fin */
+let relanceDemandee = false;
+/** difficultes a traiter en tete au prochain passage */
+const prioritaires = new Set<BattleDifficulty>();
 
 /**
  * Regénère des questions pour chaque difficulté dont le pool DISPONIBLE
- * (used_at IS NULL) est sous le seuil. Ne tourne jamais en double.
+ * (used_at IS NULL) est sous le seuil.
+ *
+ * Seuil a 8 et plus a 5 : la file de la console en reserve deja 3 par
+ * difficulte, qui restent comptees comme disponibles en base. A 5, la partie
+ * n'avait en realite que deux questions d'avance, et une finale entierement
+ * en Difficile les avalait avant que la generation n'ait rendu.
+ *
+ * `prioritaire` passe en tete : la difficulte qu'on vient de tirer, ou celle
+ * qui manquait. Un appel pendant qu'un job tourne n'est plus perdu : il est
+ * note, et le job repasse une fois a la fin.
  */
-export async function ensureQuestionStock(minPerDifficulty = 5): Promise<void> {
-  if (stockJobRunning) return;
+export async function ensureQuestionStock(minPerDifficulty = 8, prioritaire?: string): Promise<void> {
+  if (prioritaire && isBattleDifficulty(prioritaire)) prioritaires.add(prioritaire);
+  if (stockJobRunning) {
+    relanceDemandee = true;
+    return;
+  }
   stockJobRunning = true;
   try {
-    for (const difficulty of BATTLE_DIFFICULTIES) {
-      const { count } = await supabaseAdmin
-        .from('battle_questions')
-        .select('id', { count: 'exact', head: true })
-        .eq('difficulty', difficulty)
-        .is('used_at', null);
-      const available = count ?? 0;
-      if (available >= minPerDifficulty) continue;
-      const need = Math.min(10, Math.max(5, minPerDifficulty - available));
-      console.log(`[battleGen] stock ${difficulty} bas (${available}), génération de ${need}...`);
-      const inserted = await generateBattleQuestions({ difficulty, count: need, category: 'random' });
-      console.log(`[battleGen] ${inserted} question(s) ${difficulty} ajoutée(s)`);
-    }
+    let tours = 0;
+    do {
+      relanceDemandee = false;
+      const ordre = [...new Set<BattleDifficulty>([...prioritaires, ...BATTLE_DIFFICULTIES])];
+      prioritaires.clear();
+      for (const difficulty of ordre) {
+        const { count } = await supabaseAdmin
+          .from('battle_questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('difficulty', difficulty)
+          .is('used_at', null);
+        const available = count ?? 0;
+        if (available >= minPerDifficulty) continue;
+        const need = Math.min(10, Math.max(5, minPerDifficulty - available));
+        console.log(`[battleGen] stock ${difficulty} bas (${available}), génération de ${need}...`);
+        // un echec sur une difficulte (OpenAI indisponible, reponse
+        // illisible) ne doit pas priver les autres de leur reapprovisionnement
+        try {
+          const inserted = await generateBattleQuestions({ difficulty, count: need, category: 'random' });
+          console.log(`[battleGen] ${inserted} question(s) ${difficulty} ajoutée(s)`);
+        } catch (err) {
+          console.error(`[battleGen] génération ${difficulty} impossible :`, (err as Error).message);
+        }
+      }
+      tours += 1;
+    } while (relanceDemandee && tours < 3);
   } catch (err) {
     console.error('[battleGen] ensureQuestionStock error:', err);
   } finally {

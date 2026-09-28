@@ -183,7 +183,9 @@ export const DEFAULT_CONFIG: SessionConfig = {
 
 export const DEFAULT_BATTLE_CONFIG: SessionConfig = {
   ...DEFAULT_CONFIG,
-  announceMs: 6000,
+  // l'ecran de categorie du legacy : trois secondes, le decompte 3-2-1 des
+  // la premiere et son son avec lui (first_3_sec.mp3, 3,0 s)
+  announceMs: 3000,
   questionMs: 15000,
   speedBonus: false,
   quizName: 'Battle Royale',
@@ -250,32 +252,25 @@ export const SPEED_BONUS = [2, 1, 1];
 export const AFK_MISS_LIMIT = 5;
 
 /**
- * Battle : duree minimale de la phase reveal, miroir des seuils de mise en
- * scene cote ecran (BR_REVEAL_* dans gameClient.ts). La revelation raconte
- * quelque chose : la bonne reponse, les elimines qui tombent un par un, le
- * compteur de survivants. Un animateur presse la coupait au milieu.
+ * Battle : chronologie de la revelation, miroir EXACT de gameClient.ts (les
+ * deux fichiers doivent bouger ensemble).
  *
- * Quand un palier est franchi, la prise d'ecran plein cadre (TOP 20 / 10 /
- * 5 / 3) vient APRES : la fenetre est plus longue, sinon on tuait justement
- * le moment le plus fort de la manche.
- */
-export const BR_REVEAL_MIN_MS = 13_000;
-export const BR_REVEAL_MIN_PALIER_MS = 18_000;
-
-/**
- * Seuils de la sequence d'elimination, miroir de gameClient.ts. Le serveur en
- * a besoin pour deux choses que l'ecran ne peut pas decider seul :
- *   - la fenetre du reveal quand la manche est REMPORTEE (elle s'enchaine
- *     toute seule sur la fin de manche, comme le legacy qui n'offrait plus que
- *     « Afficher fin manche ») ;
- *   - l'instant ou le bar passe au jaune, qui doit tomber pile sur l'ecran
- *     « MANCHE REMPORTEE PAR », pas 13 s avant (sinon il spoile).
+ * Calee sur le legacy (showQuestionResult puis showEliminationScreen) : la
+ * bonne reponse reste seule SIX secondes avant l'ecran des survivants, puis
+ * deux secondes de compteur avant le premier nom. Le portage enchainait tout
+ * en quatre secondes et l'animateur trouvait que « les elimines apparaissent
+ * de maniere tres brutale ».
  */
 /** instant ou l'ecran des survivants prend le cadre (compteur + noms) */
-export const BR_REVEAL_SURVIVANTS_MS = 8_600;
-export const BR_REVEAL_PREMIER_NOM_MS = 10_200;
+export const BR_REVEAL_SURVIVANTS_MS = 10_600;
+export const BR_REVEAL_PREMIER_NOM_MS = 12_600;
 export const BR_REVEAL_PAS_MS = 600;
-export const BR_VAINQUEUR_APRES_MS = 1_400;
+/**
+ * Apres le dernier nom, le legacy laissait le compteur UNE seconde et demie,
+ * puis le faisait disparaitre en fondu avant que le vainqueur n'apparaisse
+ * (fadeOut 600 ms, fadeIn 800 ms).
+ */
+export const BR_VAINQUEUR_APRES_MS = 1_600;
 /** instant ou le compteur cede la place au vainqueur de manche */
 export function brVainqueurMs(nbElimines: number): number {
   return (
@@ -284,8 +279,30 @@ export function brVainqueurMs(nbElimines: number): number {
     BR_VAINQUEUR_APRES_MS
   );
 }
-/** temps de lecture de l'ecran vainqueur avant l'enchainement automatique */
-export const BR_VAINQUEUR_DUREE_MS = 5_000;
+/**
+ * Temps de l'ecran vainqueur avant la fin de manche automatique : les neuf
+ * secondes du legacy, ou le bouton « Afficher fin manche » restait grise tout
+ * ce temps. La fanfare (5,6 s) se joue en entier.
+ */
+export const BR_VAINQUEUR_DUREE_MS = 9_000;
+
+/**
+ * Verrou de la revelation : l'animateur ne peut pas passer a la suite tant
+ * que le dernier nom n'est pas tombe. Fonction du nombre d'elimines, et plus
+ * une constante : a dix elimines la sequence dure cinq secondes de plus qu'a
+ * un seul, et un verrou fixe laissait couper les derniers noms.
+ */
+export function brRevealVerrouMs(nbElimines: number): number {
+  return BR_REVEAL_PREMIER_NOM_MS + Math.max(0, nbElimines - 1) * BR_REVEAL_PAS_MS + 1_000;
+}
+
+/**
+ * Ecran TOP 20 / 10 / 5 / 3 : il se joue au LANCEMENT de la question suivante,
+ * avant la categorie, comme dans le legacy (showTopScreen : 4 s, fondu d'une
+ * seconde, 200 ms de marge). Le portage le plaquait au milieu de la
+ * revelation, juste apres les elimines, puis revenait aux elimines.
+ */
+export const BR_TOP_MS = 5_200;
 
 /**
  * Question audio : l'extrait joue seul ce temps avant que la question ne
@@ -507,6 +524,19 @@ export interface BattleRuntime {
    * d'élimination de la manche finale.
    */
   finalRoster?: string[];
+  /**
+   * Palier (TOP 20/10/5/3) franchi à la dernière révélation, EN ATTENTE : il
+   * s'affichera au lancement de la question suivante, comme le legacy.
+   */
+  pendingMilestone?: number | null;
+  /** palier affiché pendant l'annonce EN COURS (avant la catégorie) */
+  announceMilestone?: number | null;
+  /**
+   * Repli de difficulté de la question en cours : la difficulté voulue était
+   * épuisée, une autre a été servie plutôt que de bloquer la partie. Affiché
+   * à l'animateur.
+   */
+  fallback?: { voulu: string; servi: string } | null;
 }
 
 /** runtime jsonb de game_sessions */

@@ -43,9 +43,9 @@ import { switchScreensToDefault } from './screens.js';
 import { broadcast } from './realtime.js';
 import { BATTLE_DIFFICULTIES, ensureQuestionStock } from '../services/battleQuestionGen.js';
 import {
-  BR_REVEAL_MIN_MS,
-  BR_REVEAL_MIN_PALIER_MS,
+  BR_TOP_MS,
   BR_VAINQUEUR_DUREE_MS,
+  brRevealVerrouMs,
   brVainqueurMs,
   DEFAULT_BATTLE_CONFIG,
   type AnswerRow,
@@ -102,6 +102,16 @@ function currentQuestion(session: SessionRow): QuestionSnapshot | null {
   return session.question_order[session.current_question_index] ?? null;
 }
 
+/**
+ * Duree de l'annonce : l'ecran de categorie (3 s, decompte compris), precede
+ * de l'ecran TOP 20/10/5/3 quand un palier a ete franchi a la question
+ * d'avant. Exactement le budget du legacy (baseTime + 5200 ms).
+ */
+function dureeAnnonce(session: SessionRow): number {
+  const b = battle(session);
+  return session.config.announceMs + (b.announceMilestone != null ? BR_TOP_MS : 0);
+}
+
 function httpError(message: string, status: number): Error {
   return Object.assign(new Error(message), { httpStatus: status });
 }
@@ -120,7 +130,7 @@ function assertRevealDone(session: SessionRow): void {
   // question annulee : l'ecran dit « question annulee » et c'est tout, il n'y a
   // aucune sequence a laisser se derouler
   if (b.reveal?.cancelled) return;
-  const minimum = b.reveal?.milestone != null ? BR_REVEAL_MIN_PALIER_MS : BR_REVEAL_MIN_MS;
+  const minimum = brRevealVerrouMs(b.reveal?.eliminated.length ?? 0);
   const debut = new Date(session.phase_started_at).getTime();
   if (Date.now() < debut + minimum) {
     throw Object.assign(new Error('error_reveal_sequence'), { httpStatus: 409 });
@@ -227,13 +237,32 @@ async function drawNextQuestion(session: SessionRow, forcee?: string): Promise<v
       : nextDifficultyFor(b.isFinal, n);
   await refillQueue(session, difficulty);
 
-  const item = b.queue[difficulty]?.shift();
+  // REPLI DE DIFFICULTE. La finale d'un soir de septembre s'est bloquee sur
+  // un stock Difficile a sec : « question suivante » refusee, trois survivants
+  // coinces, et un vainqueur au hasard. Mieux vaut une question un cran plus
+  // facile qu'une soiree qui s'arrete : on sert la difficulte la plus proche
+  // qui a encore du stock, l'animateur en est prevenu, et la generation de la
+  // difficulte manquante part en urgence.
+  let servie = difficulty;
+  let item = b.queue[difficulty]?.shift();
   if (!item) {
+    for (const repli of ordreDeRepli(difficulty)) {
+      await refillQueue(session, repli);
+      item = b.queue[repli]?.shift();
+      if (item) {
+        servie = repli;
+        break;
+      }
+    }
+  }
+  if (!item) {
+    void ensureQuestionStock(undefined, difficulty).catch(() => undefined);
     throw httpError(
-      `Plus de questions ${difficulty} disponibles (stock épuisé, réinitialise les questions utilisées ou génère-en)`,
+      'Plus aucune question en stock, toutes difficultés confondues : génère-en depuis la page des questions, ou termine la manche.',
       409,
     );
   }
+  b.fallback = servie !== difficulty ? { voulu: difficulty, servi: servie } : null;
 
   if (session.config.testMode) {
     // Partie de test : on ne touche pas a la base. L'exclusion est portee par
@@ -274,8 +303,16 @@ async function drawNextQuestion(session: SessionRow, forcee?: string): Promise<v
   b.roundQuestionCount = n;
   markDirty(session);
 
-  // maintien du stock en tâche de fond
-  void ensureQuestionStock().catch(() => undefined);
+  // maintien du stock en tâche de fond, la difficulte tiree en premier (et
+  // celle qui manquait, si on a du se replier)
+  void ensureQuestionStock(undefined, difficulty).catch(() => undefined);
+}
+
+/** difficultes de repli, de la plus proche a la plus eloignee */
+function ordreDeRepli(voulue: string): string[] {
+  if (voulue === 'Difficile') return ['Moyen', 'Facile'];
+  if (voulue === 'Moyen') return ['Difficile', 'Facile'];
+  return ['Moyen', 'Difficile'];
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +364,9 @@ function battleAdvance(session: SessionRow): boolean {
   if (!b) return false;
   switch (session.status) {
     case 'round_intro': {
-      setPhase(session, 'announce', session.config.announceMs);
+      // en debut de manche tout le monde est remis en jeu : aucun palier
+      b.announceMilestone = null;
+      setPhase(session, 'announce', dureeAnnonce(session));
       return true;
     }
     case 'announce': {
@@ -845,6 +884,10 @@ async function applyShowResults(session: SessionRow): Promise<void> {
     : [];
   const milestone = crossed.length > 0 ? Math.min(...crossed) : null;
   if (milestone !== null) b.lastMilestone = milestone;
+  // Il ne s'affiche PAS ici : l'ecran TOP ouvre l'annonce de la question
+  // suivante (cf. case 'next'). Au milieu de la revelation il tombait juste
+  // apres les elimines, s'imposait et renvoyait ensuite aux elimines.
+  b.pendingMilestone = milestone;
 
   // PAS de repartition des reponses en battle, contrairement au quiz : une
   // barre a 59 % sur la bonne reponse annonce le nombre de survivants avant
@@ -1007,6 +1050,9 @@ async function rollbackQuestion(session: SessionRow, forgetQuestion: boolean): P
     if (lastReveal?.milestone != null && b.lastMilestone === lastReveal.milestone) {
       b.lastMilestone = null;
     }
+    if (lastReveal?.milestone != null && b.pendingMilestone === lastReveal.milestone) {
+      b.pendingMilestone = null;
+    }
   }
 
   await supabaseAdmin
@@ -1041,6 +1087,8 @@ export interface BattleActionParams {
   questionId?: string;
   from?: number;
   to?: number;
+  /** show-results : repecher tout le monde au moment de valider */
+  repechage?: boolean;
 }
 
 /**
@@ -1073,6 +1121,9 @@ function resetRoundState(session: SessionRow): void {
   b.reveal = undefined;
   b.roundResult = undefined;
   b.roundWonPending = false;
+  b.pendingMilestone = null;
+  b.announceMilestone = null;
+  b.fallback = null;
   markDirty(session);
 }
 
@@ -1128,6 +1179,30 @@ export async function battleGmAction(
         setPhase(session, 'round_intro', session.config.roundIntroMs ?? 5000);
         break;
       }
+      case 'end-final': {
+        // SORTIE DE SECOURS de la finale : plus de question a poser, ou
+        // l'animateur juge que c'est assez. Les survivants sont departages AUX
+        // POINTS (puis au temps de reponse cumule), jamais au hasard, et la
+        // ceremonie s'ouvre avec un vrai podium.
+        assertStatus(session, ['reveal'], action);
+        if (!b.isFinal) throw httpError('Réservé à la finale', 409);
+        if (b.victoryPending) throw httpError('La finale est déjà jouée', 409);
+        const joueurs = await loadPlayers(session.id);
+        const finalStandings = computeFinalStandings(session, joueurs);
+        b.finalStandings = finalStandings;
+        const vainqueur = finalStandings[0] ?? null;
+        b.winner = vainqueur ? { playerId: vainqueur.playerId, pseudo: vainqueur.pseudo } : null;
+        session.runtime.endTexts = {
+          winnerText: session.config.endWinnerText.replace(
+            /#winner#|#pseudo_top1#/g,
+            vainqueur?.pseudo ?? '?',
+          ),
+          endText: session.config.endTextFinal,
+        };
+        b.roundWonPending = false;
+        setPhase(session, 'end', null);
+        break;
+      }
       case 'next': {
         assertStatus(session, ['reveal'], action);
         if (b.victoryPending) throw httpError('La finale est jouée', 409);
@@ -1153,11 +1228,21 @@ export async function battleGmAction(
         // le runtime, ni pour la console ni pour un rollback
         b.reveal = undefined;
         await drawNextQuestion(session, params.difficulty);
-        setPhase(session, 'announce', session.config.announceMs);
+        // le palier franchi a la question d'avant ouvre CETTE annonce (TOP X
+        // avant la categorie, comme le legacy), et une seule fois
+        b.announceMilestone = b.pendingMilestone ?? null;
+        b.pendingMilestone = null;
+        setPhase(session, 'announce', dureeAnnonce(session));
         break;
       }
       case 'show-results': {
         assertStatus(session, ['verdict'], action);
+        // « Afficher la reponse en repechant tout le monde » : un seul geste
+        // la ou l'animateur valide. Il fallait sinon activer le repechage
+        // AVANT de valider, et sans le savoir on eliminait toute la salle.
+        if (params.repechage === true && b.verdict && !b.verdict.computing) {
+          b.verdict.repechage = true;
+        }
         await applyShowResults(session);
         break;
       }
@@ -1251,7 +1336,8 @@ export async function battleGmAction(
       case 'replay-question': {
         assertStatus(session, ['announce', 'question', 'locked', 'verdict', 'reveal'], action);
         await rollbackQuestion(session, false);
-        setPhase(session, 'announce', session.config.announceMs);
+        b.announceMilestone = null;
+        setPhase(session, 'announce', dureeAnnonce(session));
         break;
       }
       case 'stop': {
@@ -1362,7 +1448,20 @@ export async function battleGmAction(
         if (idx === -1) throw httpError('Question absente de la file', 404);
         list.splice(idx, 1);
         b.excludedIds.push(params.questionId);
+        // Hors partie de test, la question jetee est ARCHIVEE : elle ne
+        // ressortira plus aucun soir (on la jette parce qu'elle est mauvaise),
+        // et surtout elle cesse de compter comme stock disponible. Le
+        // reapprovisionnement croyait sinon avoir de la marge alors que la
+        // partie n'avait plus rien a servir. Reversible en un clic depuis les
+        // archives de la page des questions.
+        if (!session.config.testMode) {
+          await supabaseAdmin
+            .from('battle_questions')
+            .update({ used_at: new Date().toISOString() })
+            .eq('id', params.questionId);
+        }
         await refillQueue(session, difficulty);
+        void ensureQuestionStock(undefined, difficulty).catch(() => undefined);
         markDirty(session);
         break;
       }

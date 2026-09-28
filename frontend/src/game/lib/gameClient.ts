@@ -182,6 +182,8 @@ export interface PublicBattle {
   finalSize: number;
   /** FINALE : les finalistes dans l'ordre de qualification, pour la grille */
   finalRoster?: string[];
+  /** ecran TOP 20/10/5/3 qui ouvre l'annonce en cours (palier franchi avant) */
+  topAnnonce?: number | null;
   verdictPending: boolean;
   reveal?: BattleRevealData;
   roundResult?: BattleRoundResult;
@@ -477,15 +479,28 @@ export interface GameEvent {
 export function subscribeToGame(
   sessionId: string,
   onEvent: (e: GameEvent) => void,
+  /**
+   * Etat du canal : vrai une fois abonne, faux sur erreur, expiration ou
+   * fermeture. Sans lui, un canal mort passait inapercu et le client ne
+   * vivait plus que de son sondage de secours de dix secondes : c'est ce qui
+   * faisait arriver la question six secondes avant la fin sur certaines
+   * dalles.
+   */
+  onStatus?: (vivant: boolean) => void,
 ): () => void {
   const client = getSupabase();
-  if (!client) return () => undefined;
+  if (!client) {
+    onStatus?.(false);
+    return () => undefined;
+  }
   const channel: RealtimeChannel = client
     .channel(`game:${sessionId}`)
     .on('broadcast', { event: '*' }, (msg) => {
       onEvent({ event: msg.event, payload: (msg.payload ?? {}) as Record<string, unknown> });
     })
-    .subscribe();
+    .subscribe((status) => {
+      onStatus?.(status === 'SUBSCRIBED');
+    });
   return () => {
     void client.removeChannel(channel);
   };
@@ -602,65 +617,79 @@ export const AUDIO_REMONTEE_MS = 3500;
 export const BR_INTRO_ACTE_CATEGORIES = 0.34;
 export const BR_INTRO_ACTE_COMBATTANTS = 0.66;
 
-/** annonce : le decompte 3-2-1 occupe les trois dernieres secondes */
+/**
+ * Annonce, sur le modele du legacy (showTopScreen puis showQuestionCategory) :
+ *
+ *   [0 .. TOP[        SEULEMENT si un palier a ete franchi a la question
+ *                     d'avant : l'ecran TOP 20/10/5/3 et les noms des
+ *                     survivants (4 s, fondu d'une seconde, 200 ms de marge).
+ *   [.. +3 s[         l'ecran de categorie. Le decompte 3-2-1 court sur TOUTE
+ *                     sa duree et son son (first_3_sec.mp3, 3,0 s) part avec
+ *                     lui. Le portage laissait trois secondes de « preparez-
+ *                     vous » muettes avant le decompte : le son tombait a
+ *                     contretemps de l'apparition de la categorie.
+ */
+export const BR_TOP_MS = 5200;
+/** le fondu de sortie de l'ecran TOP commence ici (legacy : 4 s d'affichage) */
+export const BR_TOP_FONDU_MS = 4000;
 export const BR_DECOMPTE_MS = 3000;
 
 /**
- * Revelation, au tempo du legacy, qui prenait son temps :
+ * Revelation, au tempo du legacy (showQuestionResult puis
+ * showEliminationScreen), miroir EXACT de types.ts cote serveur :
  *
- *   [0 .. SUSPENSE[            l'enonce et les quatre reponses, rien de devoile.
- *                              Le compteur de survivants est CACHE, comme dans
- *                              le legacy : il trahissait le resultat avant
- *                              l'heure.
- *   [SUSPENSE .. SURVIVANTS[   la bonne reponse s'allume, les autres tombent.
- *                              Quatre secondes pour la laisser respirer : le
- *                              legacy en laissait six.
- *   [SURVIVANTS .. PREMIER_NOM[ l'ecran des survivants, compteur au complet.
- *   [PREMIER_NOM .. [           les noms tombent un par un, PAS_MS entre chacun,
- *                              et le compteur baisse DECOMPTE_MS apres le nom.
- *   puis, si un palier est franchi, la prise d'ecran plein cadre.
- */
-/**
- * Le suspense d'abord : l'enonce et les quatre reponses, rien de devoile.
+ *   [0 .. SUSPENSE[             l'enonce et les quatre reponses, rien de
+ *                               devoile, le compteur de survivants CACHE.
+ *   [SUSPENSE .. SURVIVANTS[    la bonne reponse, seule, SIX secondes comme le
+ *                               legacy. A quatre, l'animateur trouvait que les
+ *                               elimines « apparaissent de maniere tres
+ *                               brutale ».
+ *   [SURVIVANTS .. PREMIER_NOM[ l'ecran des survivants arrive en fondu,
+ *                               compteur au complet, deux secondes.
+ *   [PREMIER_NOM .. [           les noms tombent un par un, PAS_MS entre
+ *                               chacun, le compteur baisse DECOMPTE_MS apres.
  *
- * PAS de barres de repartition ici, contrairement au quiz : une barre a 59 %
- * sur la bonne reponse annonce combien de monde survit avant que l'ecran ne le
- * raconte, et c'est justement ce que la sequence a a dire. Le legacy ne
- * montrait que la bonne reponse.
+ * PAS de barres de repartition, contrairement au quiz : une barre a 59 % sur
+ * la bonne reponse annonce le nombre de survivants avant l'ecran qui le
+ * raconte. Et PLUS d'ecran TOP ici : il ouvre l'annonce suivante.
  */
 export const BR_REVEAL_SUSPENSE_MS = 4600;
-export const BR_REVEAL_SURVIVANTS_MS = 8600;
-export const BR_REVEAL_PREMIER_NOM_MS = 10200;
+export const BR_REVEAL_SURVIVANTS_MS = 10600;
+export const BR_REVEAL_PREMIER_NOM_MS = 12600;
 /** un nom toutes les 600 ms, cadence exacte du legacy */
 export const BR_REVEAL_PAS_MS = 600;
 /** le compteur baisse ce delai apres l'apparition du nom (legacy : 400 ms) */
 export const BR_REVEAL_DECOMPTE_MS = 400;
-/** le palier arrive ce delai apres le dernier nom */
-export const BR_PALIER_APRES_MS = 1400;
-export const BR_PALIER_DUREE_MS = 4200;
+/** fondu d'entree de l'ecran des survivants (legacy : fadeIn 800 ms) */
+export const BR_REVEAL_FONDU_MS = 800;
 
-/** instant du palier, une fois connu le nombre d'elimines */
-export function brPalierMs(nbElimines: number): number {
-  return BR_REVEAL_PREMIER_NOM_MS + Math.max(0, nbElimines - 1) * BR_REVEAL_PAS_MS + BR_PALIER_APRES_MS;
+/**
+ * Apres le dernier nom, le compteur reste une seconde et demie, puis s'efface
+ * (600 ms) et le vainqueur de manche apparait en fondu (800 ms) : la
+ * transition du legacy, la ou le portage plaquait le nom d'un coup.
+ */
+export const BR_VAINQUEUR_APRES_MS = 1600;
+export const BR_VAINQUEUR_EFFACEMENT_MS = 600;
+export const BR_VAINQUEUR_APPARITION_MS = 800;
+/**
+ * Instant ou la transition vers « MANCHE REMPORTEE PAR X » commence. Miroir
+ * exact de brVainqueurMs du backend : la fanfare, le jaune du bar et la fin
+ * de manche automatique sont cales dessus.
+ */
+export function brVainqueurMs(nbElimines: number): number {
+  return BR_REVEAL_PREMIER_NOM_MS + Math.max(0, nbElimines - 1) * BR_REVEAL_PAS_MS + BR_VAINQUEUR_APRES_MS;
 }
+/** ecran vainqueur avant la fin de manche automatique (les 9 s du legacy) */
+export const BR_VAINQUEUR_DUREE_MS = 9000;
 
 /**
- * Instant ou le compteur cede la place a « MANCHE REMPORTEE PAR X », apres que
- * le dernier nom est tombe. Meme formule que le palier, et miroir exact de
- * brVainqueurMs du backend : la fanfare, le jaune du bar et la fin de manche
- * automatique sont cales dessus.
+ * Verrou de la revelation, miroir du backend : pas de « question suivante »
+ * tant que le dernier nom n'est pas tombe. Fonction du nombre d'elimines :
+ * a dix elimines la sequence dure cinq secondes de plus qu'a un seul.
  */
-export const brVainqueurMs = brPalierMs;
-/** duree de lecture de l'ecran vainqueur avant la fin de manche automatique */
-export const BR_VAINQUEUR_DUREE_MS = 5000;
-
-/**
- * Miroirs du backend : le GM ne peut pas couper la revelation avant la fin.
- * Genereux, parce que la sequence raconte quelque chose et que le legacy
- * laissait la salle la vivre en entier.
- */
-export const BR_REVEAL_MIN_MS = 13_000;
-export const BR_REVEAL_MIN_PALIER_MS = 18_000;
+export function brRevealVerrouMs(nbElimines: number): number {
+  return BR_REVEAL_PREMIER_NOM_MS + Math.max(0, nbElimines - 1) * BR_REVEAL_PAS_MS + 1000;
+}
 
 // ---------------------------------------------------------------------------
 // Compteurs d'attente (purement indicatifs, le GM garde la main)

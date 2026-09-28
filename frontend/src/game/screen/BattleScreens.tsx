@@ -12,13 +12,16 @@ import {
   BR_DECOMPTE_MS,
   BR_INTRO_ACTE_CATEGORIES,
   BR_INTRO_ACTE_COMBATTANTS,
-  BR_PALIER_DUREE_MS,
   BR_REVEAL_DECOMPTE_MS,
+  BR_REVEAL_FONDU_MS,
   BR_REVEAL_PAS_MS,
   BR_REVEAL_PREMIER_NOM_MS,
   BR_REVEAL_SURVIVANTS_MS,
   BR_REVEAL_SUSPENSE_MS,
-  brPalierMs,
+  BR_TOP_FONDU_MS,
+  BR_TOP_MS,
+  BR_VAINQUEUR_APPARITION_MS,
+  BR_VAINQUEUR_EFFACEMENT_MS,
   brVainqueurMs,
   QUESTION_REPONSES_MS,
   serverNow,
@@ -324,21 +327,97 @@ const CATEGORIES_INTRO = [
 // Annonce + question + verdict
 // ---------------------------------------------------------------------------
 
+/**
+ * Taille de l'enonce au projecteur, selon sa longueur.
+ *
+ * Les questions s'affichaient en 3 rem en haut d'ecran, et la salle le disait
+ * (« c'est ecrit tres petit »). Une question courte monte a 5 rem ; une longue
+ * reste lisible sans pousser les reponses hors du cadre de 1080 px.
+ */
+function tailleEnonce(question: string | undefined): string {
+  const n = (question ?? '').length;
+  if (n <= 60) return '5rem';
+  if (n <= 100) return '4.25rem';
+  if (n <= 150) return '3.75rem';
+  return '3.25rem';
+}
+
+/**
+ * Annonce d'une question, en deux temps comme le legacy :
+ *
+ *   1. l'ecran TOP 20/10/5/3, SEULEMENT si un palier vient d'etre franchi :
+ *      le chiffre, « il ne reste que ca », et les noms des survivants qui
+ *      arrivent l'un apres l'autre. start.mp3 et flash cyan (showTopScreen) ;
+ *   2. l'ecran de categorie : le decompte 3-2-1 court sur toute sa duree et
+ *      first_3_sec.mp3 part AVEC la categorie (showQuestionCategory). Le
+ *      portage laissait trois secondes muettes avant le decompte, et le son
+ *      tombait a contretemps.
+ */
 function BattleAnnounceProjo({ state }: { state: PublicState }) {
   const q = state.question;
   const ecoule = useEcoule(state);
-  // Reste calcule sur l'HORLOGE de phase, pas sur la propriete `remaining` du
-  // conteneur : celle-ci n'existe pas dans le laboratoire, et un ecran qui
-  // recharge doit retomber sur le bon chiffre.
+  const top = state.battle?.topAnnonce ?? null;
+  const debutCategorie = top != null ? BR_TOP_MS : 0;
+  const enTop = top != null && ecoule < BR_TOP_MS;
+  // Reste calcule sur l'HORLOGE de phase : un ecran qui recharge retombe sur
+  // le bon chiffre, et le laboratoire (sans `remaining`) aussi.
   const total =
     state.phaseEndsAt !== null && state.phaseStartedAt !== null
       ? state.phaseEndsAt - state.phaseStartedAt
-      : state.config.announceMs;
+      : debutCategorie + state.config.announceMs;
   const reste = Math.max(0, total - ecoule);
-  const enDecompte = reste <= BR_DECOMPTE_MS;
+  const enDecompte = !enTop && reste <= BR_DECOMPTE_MS;
+  useCue(enTop, () => gameAudio.sample(SON_BATTLE.palier, { volume: 0.7 }));
   useCue(enDecompte, () => gameAudio.sample(SON_BATTLE.decompte, { volume: 0.65 }));
   if (!q) return null;
-  const progress = Math.max(0, Math.min(1, reste / total));
+
+  if (enTop) {
+    const survivants = state.players.map((p) => p.pseudo);
+    const sortie = ecoule >= BR_TOP_FONDU_MS;
+    return (
+      <FullCenter>
+        <div
+          className="flex flex-col items-center"
+          style={{ opacity: sortie ? 0 : 1, transition: 'opacity 1000ms ease' }}
+        >
+          <h1
+            className="anim-stomp font-black uppercase tracking-widest text-amber-300"
+            style={{ fontSize: '13rem', lineHeight: 1 }}
+          >
+            TOP {top}
+          </h1>
+          <p
+            className="anim-fade-up mt-8 font-black uppercase tracking-[0.3em] text-white/50"
+            style={{ fontSize: '2.75rem' }}
+          >
+            Il ne reste que ça
+          </p>
+          {survivants.length > 0 && (
+            <div className="mt-14 flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-6">
+              {survivants.map((pseudo, i) => (
+                <span
+                  key={pseudo}
+                  className="font-black text-white/90"
+                  style={{
+                    fontSize: '3.25rem',
+                    lineHeight: 1,
+                    // un nom toutes les 200 ms, comme le legacy
+                    opacity: ecoule >= 400 + i * 200 ? 1 : 0,
+                    transform: ecoule >= 400 + i * 200 ? 'scale(1)' : 'scale(0.75)',
+                    transition: 'opacity 340ms ease, transform 400ms cubic-bezier(0.3, 1.3, 0.4, 1)',
+                  }}
+                >
+                  {pseudo}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </FullCenter>
+    );
+  }
+
+  const progress = Math.max(0, Math.min(1, reste / Math.max(1, total - debutCategorie)));
   const decompte = enDecompte ? Math.max(1, Math.ceil(reste / 1000)) : null;
   return (
     <FullCenter>
@@ -346,18 +425,19 @@ function BattleAnnounceProjo({ state }: { state: PublicState }) {
         {state.battle?.isFinal ? 'Finale' : `Manche ${state.battle?.roundNumber}`} · Question{' '}
         {state.battle?.questionInRound ?? q.index + 1}
       </p>
-      <h1 className="anim-pop mt-6 text-balance text-center text-7xl font-black">{q.theme ?? 'Culture générale'}</h1>
+      <h1 className="anim-pop mt-6 text-balance text-center font-black" style={{ fontSize: '5.5rem', lineHeight: 1.05 }}>
+        {q.theme ?? 'Culture générale'}
+      </h1>
       <div className="mt-8 flex items-center gap-4">
         <DifficultyBadge difficulty={q.difficulty} className="!px-6 !py-2 !text-2xl" />
         <span className="rounded-full border border-cyan-400/50 bg-cyan-400/15 px-6 py-2 text-2xl font-black text-cyan-300">
           {state.battle?.survivorCount} SURVIVANT{(state.battle?.survivorCount ?? 0) > 1 ? 'S' : ''}
         </span>
       </div>
-      {/* Les trois dernieres secondes deviennent un decompte, comme le legacy :
-          la salle sait EXACTEMENT quand la question tombe et personne ne rate
-          le depart du chrono. */}
       {decompte !== null ? (
-        <p className="anim-pop mt-10 text-[9rem] font-black leading-none tabular-nums text-cyan-300">
+        // la cle relance l'animation a CHAQUE chiffre : 3, 2, 1 pulsent
+        // chacun, comme le countdown-pulse du legacy
+        <p key={decompte} className="anim-pop mt-10 text-[10rem] font-black leading-none tabular-nums text-cyan-300">
           {decompte}
         </p>
       ) : (
@@ -397,7 +477,11 @@ function BattleQuestionProjo({
           <p className="text-2xl font-bold uppercase tracking-widest text-white/50">
             {q.difficulty} · {state.battle?.survivorCount} survivant{(state.battle?.survivorCount ?? 0) > 1 ? 's' : ''} · {answeredCount} réponse{answeredCount > 1 ? 's' : ''}
           </p>
-          <h1 className="mt-2 text-balance text-5xl font-black leading-tight">{q.question}</h1>
+          {/* taille selon la longueur : les retours de soiree disaient la
+              question « ecrite tres petit » en haut de l'ecran */}
+          <h1 className="mt-2 text-balance font-black leading-tight" style={{ fontSize: tailleEnonce(q.question) }}>
+            {q.question}
+          </h1>
         </div>
         <div className="flex shrink-0 flex-col items-center gap-2">
           {/* ZERO, et il y reste. La phase de grace dure quelques secondes
@@ -406,7 +490,7 @@ function BattleQuestionProjo({
               qui donnait a la salle l'impression d'un second temps de reponse
               offert. Le chrono se fige a zero, comme au quiz. */}
           {remaining !== null ? (
-            <TimerRing remainingMs={grace ? 0 : remaining} totalMs={totalMs} size={110} />
+            <TimerRing remainingMs={grace ? 0 : remaining} totalMs={totalMs} size={150} />
           ) : (
             <span className="rounded-full bg-rose-500/20 px-5 py-2 text-2xl font-black text-rose-300">STOP</span>
           )}
@@ -422,7 +506,7 @@ function BattleQuestionProjo({
         }}
       >
         {(q.answers ?? []).map((a, i) => (
-          <div key={i} className="rounded-2xl border-2 border-white/15 bg-white/5 px-7 py-5 text-[2.125rem] font-bold leading-snug">
+          <div key={i} className="rounded-2xl border-2 border-white/15 bg-white/5 px-8 py-6 text-[2.75rem] font-bold leading-snug">
             <span className="mr-3 font-black text-cyan-300">{String.fromCharCode(65 + i)}</span>
             {a}
           </div>
@@ -490,19 +574,21 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
 
   const elimines = reveal?.eliminated ?? [];
   const repechage = Boolean(reveal?.repechage);
-  const palier = reveal?.milestone ?? null;
   const annule = Boolean(reveal?.cancelled);
 
   const reponseVisible = ecoule >= BR_REVEAL_SUSPENSE_MS;
   const survivantsVisible = ecoule >= BR_REVEAL_SURVIVANTS_MS;
   /**
-   * L'instant ou le compteur cede la place a « MANCHE REMPORTEE PAR X », une
-   * fois le dernier nom tombe. Le legacy attendait la fin de son animation
-   * d'elimination pour le faire, et c'est aussi la que partent la fanfare et
-   * le jaune du bar : plus tot, ils annoncent le dernier debout avant l'ecran.
+   * La transition vers « MANCHE REMPORTEE PAR X », en deux temps comme le
+   * legacy : le compteur s'efface (600 ms), puis le vainqueur apparait en
+   * fondu (800 ms). Le portage plaquait le nom d'un coup, juste apres le
+   * dernier elimine, et l'animateur trouvait la fin de manche « tres abrupte ».
    */
-  const vainqueurMs = brVainqueurMs(reveal?.eliminated?.length ?? 0);
-  const vainqueurVisible = ecoule >= vainqueurMs;
+  const vainqueurMs = brVainqueurMs(elimines.length);
+  const compteurSEfface = ecoule >= vainqueurMs;
+  const vainqueurApparu = ecoule >= vainqueurMs + BR_VAINQUEUR_EFFACEMENT_MS;
+  /** opacite 0..1 d'un fondu qui commence a `depuis`, sur l'horloge serveur */
+  const fondu = (depuis: number, duree: number) => Math.max(0, Math.min(1, (ecoule - depuis) / duree));
 
   // Combien de noms sont deja tombes, et de combien le compteur a baisse. Deux
   // valeurs distinctes : le compteur suit le nom de BR_REVEAL_DECOMPTE_MS,
@@ -528,26 +614,18 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
     return ecoule >= t && ecoule < t + 500;
   })();
 
-  const palierMs = brPalierMs(elimines.length);
-  const palierPlein = palier !== null && ecoule >= palierMs && ecoule < palierMs + BR_PALIER_DUREE_MS;
-
-  // Sons du legacy, aux memes instants que l'image.
+  // Sons du legacy, aux memes instants que l'image, sur UN seul canal (un son
+  // coupe le precedent). AUCUN son par elimine : le legacy n'en avait pas, le
+  // compteur qui encaisse fait le spectacle. Le portage jouait
+  // question_wrong.mp3 a chaque chute, « une musique facon Qui veut gagner des
+  // millions » a chaque elimine : retire.
   useCue(!annule && reponseVisible, () => gameAudio.sample(SON_BATTLE.bonneReponse, { volume: 0.7 }));
   useCue(!annule && survivantsVisible, () => gameAudio.sample(SON_BATTLE.survivants, { volume: 0.5 }));
-  useCue(!annule && !repechage && elimines.length > 0 && tombes >= 1, () =>
-    gameAudio.sample(SON_BATTLE.elimination, { volume: 0.7 }),
-  );
-  useCue(!annule && repechage && survivantsVisible, () =>
-    gameAudio.sample(SON_BATTLE.transition, { volume: 0.7 }),
-  );
-  useCue(palierPlein, () => gameAudio.sample(SON_BATTLE.palier, { volume: 0.7 }));
-  // Manche remportee : le legacy jouait end_round_win.mp3 quand le compteur
-  // cedait la place au nom du vainqueur, pas a l'ouverture de l'ecran des
-  // survivants. Le jouer trop tot le faisait tomber en meme temps que
-  // waiting.mp3 et le son d'elimination : trois sons empiles.
-  // En FINALE, pas de fanfare de manche : la ceremonie prend la main (end.mp3).
+  // Manche remportee : end_round_win.mp3 au moment ou le compteur cede la
+  // place, comme le legacy. En FINALE, pas de fanfare de manche : la ceremonie
+  // prend la main (end.mp3).
   useCue(
-    !annule && Boolean(reveal?.roundWinner) && !reveal?.victory && vainqueurVisible,
+    !annule && Boolean(reveal?.roundWinner) && !reveal?.victory && compteurSEfface,
     () => gameAudio.sample(SON_BATTLE.vainqueurManche, { volume: 0.75 }),
   );
 
@@ -566,63 +644,25 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
     );
   }
 
-  // PALIER : prise d'ecran plein cadre, les ecrans TOP X du legacy.
-  if (palierPlein) {
-    const dans = ecoule - palierMs;
-    const survivants = (state.battle?.generalStandings ?? [])
-      .filter((e) => !e.isSpectator)
-      .slice(0, palier ?? 0);
-    return (
-      <FullCenter>
-        <h1
-          className="anim-stomp font-black uppercase tracking-widest text-amber-300"
-          style={{ fontSize: '13rem', lineHeight: 1 }}
-        >
-          TOP {palier}
-        </h1>
-        <p className="anim-fade-up mt-8 font-black uppercase tracking-[0.3em] text-white/50" style={{ fontSize: '2.75rem' }}>
-          Il ne reste que ça
-        </p>
-        {survivants.length > 0 && (
-          <div className="mt-14 flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-6">
-            {survivants.map((e, i) => (
-              <span
-                key={e.pseudo}
-                className="font-black text-white/90"
-                style={{
-                  fontSize: '3.25rem',
-                  lineHeight: 1,
-                  opacity: dans >= 400 + i * 140 ? 1 : 0,
-                  transform: dans >= 400 + i * 140 ? 'scale(1)' : 'scale(0.75)',
-                  transition: 'opacity 340ms ease, transform 400ms cubic-bezier(0.3, 1.3, 0.4, 1)',
-                }}
-              >
-                {e.pseudo}
-              </span>
-            ))}
-          </div>
-        )}
-      </FullCenter>
-    );
-  }
-
   // TEMPS 3 : les survivants. Plein ecran, le compteur est le heros.
   if (survivantsVisible) {
     const dans = ecoule - BR_REVEAL_SURVIVANTS_MS;
     // FINALE : la grille des finalistes, pas le nuage de badges. Le legacy
     // avait un ecran a lui (showFinalRoundEliminationScreen) ou l'on voit les
-    // dix noms rougir un par un — c'est ce qui rend la finale lisible.
+    // dix noms rougir un par un : c'est ce qui rend la finale lisible.
     const roster = state.battle?.finalRoster ?? [];
     const enFinale = Boolean(state.battle?.isFinal) && roster.length > 0;
     const dejaSortis = new Set(reveal.outBefore ?? []);
     const chute = new Map(elimines.map((e, i) => [e.pseudo, i]));
-    // DERNIER DEBOUT. Le legacy remplacait le compteur par « MANCHE REMPORTEE
-    // PAR X » une fois tous les noms tombes, dans TOUTE manche. En finale il
-    // n'affichait rien de tel : la ceremonie enchaine directement.
+    // DERNIER DEBOUT, dans toute manche sauf la finale (la ceremonie suit)
     const vainqueur = reveal.roundWinner;
-    const boxVainqueur = Boolean(vainqueur) && !reveal.victory && vainqueurVisible;
+    const avecVainqueur = Boolean(vainqueur) && !reveal.victory;
     return (
-      <div className="flex flex-1 flex-col items-center justify-center px-12 py-6">
+      <div
+        className="flex flex-1 flex-col items-center justify-center px-12 py-6"
+        // l'ecran des survivants arrive en FONDU (legacy : fadeIn 800 ms)
+        style={{ opacity: fondu(BR_REVEAL_SURVIVANTS_MS, BR_REVEAL_FONDU_MS), transition: 'opacity 180ms linear' }}
+      >
         {enFinale && (
           <p
             className="mb-3 font-black uppercase tracking-[0.45em] text-amber-300"
@@ -632,27 +672,40 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
           </p>
         )}
 
-        {boxVainqueur ? (
-          <div className="anim-stomp flex flex-col items-center">
-            <div className="anim-breathe" style={{ fontSize: '5rem', lineHeight: 1 }}>
+        {avecVainqueur && vainqueurApparu ? (
+          <div
+            className="flex flex-col items-center"
+            style={{
+              opacity: fondu(vainqueurMs + BR_VAINQUEUR_EFFACEMENT_MS, BR_VAINQUEUR_APPARITION_MS),
+              transform: `scale(${0.92 + 0.08 * fondu(vainqueurMs + BR_VAINQUEUR_EFFACEMENT_MS, BR_VAINQUEUR_APPARITION_MS)})`,
+              transition: 'opacity 180ms linear, transform 180ms linear',
+            }}
+          >
+            <div className="anim-breathe" style={{ fontSize: '5.5rem', lineHeight: 1 }}>
               🏆
             </div>
             <p
-              className="mt-3 font-black uppercase tracking-[0.4em] text-amber-300/70"
-              style={{ fontSize: '1.9rem' }}
+              className="mt-4 font-black uppercase tracking-[0.4em] text-amber-300/70"
+              style={{ fontSize: '2rem' }}
             >
               Manche remportée par
             </p>
             <h1
-              className="mt-2 font-black uppercase text-amber-300"
-              style={{ fontSize: '7.5rem', lineHeight: 1 }}
+              className="mt-3 font-black uppercase text-amber-300"
+              style={{ fontSize: '8rem', lineHeight: 1 }}
             >
               {vainqueur}
             </h1>
           </div>
         ) : (
-          <>
-            {/* Le cercle du legacy : bordure cyan qui respire, 340 px. C'est LUI
+          <div
+            className="flex flex-col items-center"
+            style={{
+              opacity: avecVainqueur && compteurSEfface ? 0 : 1,
+              transition: `opacity ${BR_VAINQUEUR_EFFACEMENT_MS}ms ease`,
+            }}
+          >
+            {/* Le cercle du legacy : bordure qui respire, 340 px. C'est LUI
                 qu'on regarde pendant que les noms tombent. En finale il est
                 jaune, comme le compteur de finalistes du legacy. */}
             <div
@@ -684,7 +737,7 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
             >
               {enFinale ? 'Finalistes restants' : `Survivant${compteur > 1 ? 's' : ''}`}
             </p>
-          </>
+          </div>
         )}
 
         {enFinale ? (
@@ -715,7 +768,7 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
                 );
               })}
             </div>
-            {vainqueurVisible && (repechage || elimines.length === 0) && (
+            {compteurSEfface && (repechage || elimines.length === 0) && (
               <p
                 className={`anim-fade-up mt-8 font-black uppercase ${
                   repechage ? 'text-amber-300' : 'text-emerald-300'
@@ -738,7 +791,7 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
             ) : elimines.length === 0 ? (
               <div
                 className="text-center"
-                style={{ opacity: dans >= 300 ? 1 : 0, transition: 'opacity 360ms ease' }}
+                style={{ opacity: dans >= 1200 ? 1 : 0, transition: 'opacity 360ms ease' }}
               >
                 <h2 className="font-black uppercase text-emerald-300" style={{ fontSize: '5rem', lineHeight: 1 }}>
                   Aucun éliminé
@@ -776,20 +829,18 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
   // TEMPS 1 et 2 : le suspense, puis la reponse. Le compteur de survivants
   // n'apparait pas : il dirait combien tombent avant qu'on le raconte.
   return (
-    <div className="flex flex-1 flex-col px-16 py-12">
+    <div className="flex flex-1 flex-col px-16 py-10">
       <p className="text-3xl font-black uppercase tracking-[0.35em] text-white/40">
         {state.battle?.isFinal ? 'Finale' : `Manche ${state.battle?.roundNumber}`} · Question{' '}
         {state.battle?.questionInRound ?? ''}
       </p>
-      <h1 className="mt-4 text-balance font-black leading-tight" style={{ fontSize: '4rem' }}>
+      <h1 className="mt-4 text-balance font-black leading-tight" style={{ fontSize: tailleEnonce(q?.question) }}>
         {q?.question}
       </h1>
 
-      {/* LES QUATRE REPONSES, neutres, puis la bonne qui s'allume.
-          AUCUNE repartition en %, contrairement au quiz : la barre de la bonne
-          reponse dirait combien de monde survit avant que la sequence ne le
-          raconte, et c'est tout son sujet. Le legacy se contentait d'allumer
-          la bonne reponse en vert. */}
+      {/* LES QUATRE REPONSES, neutres, puis la bonne qui s'allume. AUCUNE
+          repartition en % : la barre de la bonne reponse dirait combien de
+          monde survit avant que la sequence ne le raconte. */}
       <div className="mt-auto grid grid-cols-2 gap-6">
         {(q?.answers ?? []).map((a, i) => {
           const juste = i === reveal.correctIndex;
@@ -803,7 +854,7 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
                     ? 'anim-shine border-emerald-400 bg-emerald-400/20 text-emerald-200'
                     : 'border-white/10 bg-white/5 opacity-30'
               }`}
-              style={{ fontSize: '2.375rem' }}
+              style={{ fontSize: '2.75rem' }}
             >
               <span className={`relative mr-4 font-black ${reponseVisible && juste ? 'text-emerald-300' : 'text-cyan-300'}`}>
                 {String.fromCharCode(65 + i)}
@@ -816,11 +867,11 @@ function BattleRevealProjo({ state }: { state: PublicState }) {
 
       <div className="mt-10 flex min-h-[80px] items-center justify-center">
         {reponseVisible ? (
-          <p className="anim-pop font-black uppercase tracking-[0.3em] text-emerald-300" style={{ fontSize: '3rem' }}>
+          <p className="anim-pop font-black uppercase tracking-[0.3em] text-emerald-300" style={{ fontSize: '3.25rem' }}>
             ✔ {reveal.correctAnswer}
           </p>
         ) : (
-          <p className="anim-suspense font-black uppercase tracking-[0.4em] text-white/50" style={{ fontSize: '2.5rem' }}>
+          <p className="anim-suspense font-black uppercase tracking-[0.4em] text-white/50" style={{ fontSize: '2.75rem' }}>
             Qui a bon ?
           </p>
         )}
@@ -914,12 +965,40 @@ function ClosingProjo() {
   );
 }
 
+/**
+ * Ceremonie de fin : un VRAI podium, comme showEventEnd() du legacy.
+ *
+ * L'ecran d'avant alignait le classement en deux colonnes, sans podium, et un
+ * soir ou la finale s'etait bloquee il avait couronne un finaliste au hasard.
+ * Le vainqueur vient desormais toujours du classement final (departage aux
+ * points si la finale a du etre arretee), et a defaut du premier du general.
+ *
+ * Le podium se devoile sur l'horloge de phase : le 3e, le 2e, puis le 1er, et
+ * le reste du classement ensuite.
+ */
 function BattleEndProjo({ state }: { state: PublicState }) {
   const b = state.battle;
+  const ecoule = useEcoule(state);
   const standings = b?.finalStandings ?? b?.generalStandings ?? [];
-  const winner = b?.winner;
+  const winner = b?.winner ?? (standings[0] ? { pseudo: standings[0].pseudo } : null);
+  const finale = Boolean(b?.finalStandings);
+  const podium = standings.slice(0, 3);
+  const reste = standings.slice(3, 13);
+  // ordre d'apparition : 3e a 0,8 s, 2e a 1,4 s, 1er a 2,0 s (le suspense
+  // monte vers le haut), puis le peloton
+  const apparition = [2000, 1400, 800];
+  const hauteurs = ['h-72', 'h-56', 'h-44'];
+  const medailles = ['🥇', '🥈', '🥉'];
+  const teintes = [
+    'border-amber-300 bg-amber-400/20 text-amber-200',
+    'border-slate-300/70 bg-slate-300/10 text-slate-100',
+    'border-orange-400/70 bg-orange-500/15 text-orange-200',
+  ];
+  // disposition classique : 2e a gauche, 1er au centre, 3e a droite
+  const ordreVisuel = [1, 0, 2].filter((i) => podium[i]);
+
   return (
-    <div className="relative flex flex-1 flex-col px-14 py-10">
+    <div className="relative flex flex-1 flex-col px-14 py-8">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         {Array.from({ length: 24 }).map((_, i) => (
           <span
@@ -934,18 +1013,68 @@ function BattleEndProjo({ state }: { state: PublicState }) {
           </span>
         ))}
       </div>
+
       <div className="flex flex-col items-center">
-        <span className="anim-stomp text-8xl">👑</span>
-        <h1 className="anim-pop mt-4 text-balance text-center text-7xl font-black text-amber-300">
+        <p className="font-black uppercase tracking-[0.4em] text-amber-300/70" style={{ fontSize: '1.9rem' }}>
+          Vainqueur de la battle
+        </p>
+        <h1 className="anim-pop mt-2 text-balance text-center font-black text-amber-300" style={{ fontSize: '6rem', lineHeight: 1 }}>
           {winner?.pseudo ?? '?'}
         </h1>
-        <p className="mt-4 text-balance text-center text-3xl text-white/80">{state.endTexts?.winnerText}</p>
+        {state.endTexts?.winnerText && (
+          <p className="mt-3 text-balance text-center text-3xl text-white/80">{state.endTexts.winnerText}</p>
+        )}
       </div>
-      <div className="mx-auto mt-10 grid w-full max-w-6xl flex-1 grid-cols-2 gap-x-12 gap-y-1.5 content-start overflow-hidden">
-        {standings.slice(0, 20).map((s) => (
-          <BattleStandingRow key={s.pseudo} s={{ ...s, qualifiedForFinal: false }} big={s.position <= 3} />
-        ))}
+
+      {/* LE PODIUM */}
+      <div className="mt-8 flex items-end justify-center gap-8">
+        {ordreVisuel.map((i) => {
+          const s = podium[i];
+          const visible = ecoule >= apparition[i];
+          return (
+            <div
+              key={s.pseudo}
+              className="flex w-[380px] flex-col items-center"
+              style={{
+                opacity: visible ? 1 : 0,
+                transform: visible ? 'translateY(0)' : 'translateY(40px)',
+                transition: 'opacity 500ms ease, transform 600ms cubic-bezier(0.3, 1.2, 0.4, 1)',
+              }}
+            >
+              {i === 0 && <span className="anim-breathe mb-2 text-7xl">👑</span>}
+              <span className="text-6xl">{medailles[i]}</span>
+              <span
+                className="mt-2 max-w-full truncate text-center font-black text-white"
+                style={{ fontSize: i === 0 ? '3.25rem' : '2.5rem', lineHeight: 1.1 }}
+              >
+                {s.pseudo}
+              </span>
+              <div
+                className={`mt-3 flex w-full items-start justify-center rounded-t-2xl border-2 pt-4 ${hauteurs[i]} ${teintes[i]}`}
+              >
+                <span className="font-black tabular-nums" style={{ fontSize: '2.5rem' }}>
+                  {finale && s.qualifiedForFinal ? 'FINALE' : `${s.score} pts`}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* le peloton : 4e a 13e */}
+      {reste.length > 0 && (
+        <div
+          className="mx-auto mt-6 grid w-full max-w-7xl grid-cols-5 gap-3"
+          style={{ opacity: ecoule >= 2800 ? 1 : 0, transition: 'opacity 600ms ease' }}
+        >
+          {reste.map((s) => (
+            <div key={s.pseudo} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              <span className="w-8 shrink-0 text-center text-2xl font-black tabular-nums text-white/40">{s.position}</span>
+              <span className="min-w-0 flex-1 truncate text-2xl font-bold">{s.pseudo}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

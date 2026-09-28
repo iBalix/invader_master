@@ -16,7 +16,7 @@
 
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendLightCue, type LightCue, type SceneName } from '../websocket/agent-bridge.js';
-import { brVainqueurMs, type SessionRow } from './types.js';
+import { BR_TOP_MS, brVainqueurMs, type SessionRow } from './types.js';
 
 /** marge avant la fin de la question pour l'alerte rouge */
 const WARN_BEFORE_MS = 3000;
@@ -158,6 +158,8 @@ interface BattleRuntimeLike {
   isFinal?: boolean;
   roundQuestionCount?: number;
   reveal?: { milestone?: number | null; victory?: boolean; repechage?: boolean; roundWinner?: string };
+  /** ecran TOP qui ouvre l'annonce en cours */
+  announceMilestone?: number | null;
 }
 
 function battleOf(session: SessionRow): BattleRuntimeLike {
@@ -242,6 +244,20 @@ export function computeCue(session: SessionRow): ComputedCue | null {
       );
 
     case 'announce':
+      // L'ecran TOP 20/10/5/3 ouvre l'annonce quand un palier vient d'etre
+      // franchi : flash cyan puis la couleur de la difficulte (legacy
+      // flashTopXLights). La scene de categorie suit en cue DIFFERE, a
+      // l'instant ou l'ecran de categorie prend le relais.
+      if (mode === 'battle' && b.announceMilestone != null) {
+        return base(
+          'milestone',
+          {
+            milestone: b.announceMilestone as 3 | 5 | 10 | 20,
+            difficulty: currentDifficulty(session),
+          },
+          `top${b.announceMilestone}`,
+        );
+      }
       return base(
         'category',
         { difficulty: currentDifficulty(session), isFinal: b.isFinal },
@@ -283,7 +299,6 @@ export function computeCue(session: SessionRow): ComputedCue | null {
 
     case 'reveal': {
       if (mode === 'battle') {
-        const r = b.reveal ?? {};
         // MANCHE REMPORTEE : le jaune de setRoundWinnerLights() ne part pas
         // ici. Le legacy l'allumait a la fin de son animation d'elimination,
         // au moment ou le compteur cede la place a « MANCHE REMPORTEE PAR X ».
@@ -291,10 +306,8 @@ export function computeCue(session: SessionRow): ComputedCue | null {
         // salle qu'il ne reste qu'un survivant avant que l'ecran ne le
         // raconte. Il partira en cue DIFFERE (cf. planifieCueDiffere).
         // En finale, le legacy n'y touchait pas du tout : c'est la ceremonie
-        // qui prend la main juste apres.
-        if (r.milestone != null) {
-          return base('milestone', { milestone: r.milestone as 3 | 5 | 10 | 20 }, `m${r.milestone}`);
-        }
+        // qui prend la main juste apres. Le palier, lui, n'eclaire plus la
+        // revelation : il ouvre l'annonce de la question suivante.
         return base('reveal', { difficulty: currentDifficulty(session) });
       }
       const special = (runtime.reveal as { special?: string | null } | undefined)?.special;
@@ -405,18 +418,14 @@ export async function onSessionCommitted(session: SessionRow): Promise<void> {
  * pas se desynchroniser.
  */
 function planifieCueDiffere(session: SessionRow, cle: string): void {
-  if (session.mode !== 'battle' || session.status !== 'reveal') return;
+  if (session.mode !== 'battle') return;
   if (cuesDifferes.has(session.id)) return;
-  // deja joue pour cette revelation : une reemission de la meme scene (agent
+  // deja joue pour cette scene : une reemission de la meme scene (agent
   // qui revient, sauvegarde d'etat sans changement) ne le rejoue pas
   if (differesJoues.get(session.id) === cle) return;
-  const b = battleOf(session);
-  const r = b.reveal;
-  // en finale, le legacy ne mettait pas le bar en jaune : la ceremonie suit
-  if (!r?.roundWinner || r.victory) return;
-  const debut = session.phase_started_at ? new Date(session.phase_started_at).getTime() : Date.now();
-  const nbElimines = (r as { eliminated?: unknown[] }).eliminated?.length ?? 0;
-  const dans = debut + brVainqueurMs(nbElimines) - Date.now();
+  const differe = cueDiffereDe(session);
+  if (!differe) return;
+  const dans = differe.a - Date.now();
   const sessionId = session.id;
   const timer = setTimeout(
     () => {
@@ -428,16 +437,45 @@ function planifieCueDiffere(session: SessionRow, cle: string): void {
         v: 1,
         seq,
         epoch: cueEpoch,
-        scene: 'round_winner',
-        params: {},
+        scene: differe.scene,
+        params: differe.params,
       });
-      console.log(`[lights] cue=round_winner (differe) session=${sessionId.slice(0, 8)} seq=${seq} sent=${sent}`);
+      console.log(`[lights] cue=${differe.scene} (differe) session=${sessionId.slice(0, 8)} seq=${seq} sent=${sent}`);
     },
     Math.max(0, dans),
   );
   // ne jamais retenir le process pour une lumiere
   timer.unref?.();
   cuesDifferes.set(sessionId, { cle, timer });
+}
+
+/**
+ * Le cue qui doit tomber AU MILIEU de la phase en cours, s'il y en a un :
+ *   - revelation d'une manche remportee : le jaune, quand l'ecran affiche
+ *     « MANCHE REMPORTEE PAR X » (jamais en finale, la ceremonie suit) ;
+ *   - annonce ouverte par un ecran TOP : la couleur de la categorie, quand
+ *     l'ecran de categorie prend le relais du TOP.
+ * Les instants viennent des memes constantes que les ecrans.
+ */
+function cueDiffereDe(
+  session: SessionRow,
+): { a: number; scene: SceneName; params: LightCue['params'] } | null {
+  const b = battleOf(session);
+  const debut = session.phase_started_at ? new Date(session.phase_started_at).getTime() : Date.now();
+  if (session.status === 'reveal') {
+    const r = b.reveal;
+    if (!r?.roundWinner || r.victory) return null;
+    const nbElimines = (r as { eliminated?: unknown[] }).eliminated?.length ?? 0;
+    return { a: debut + brVainqueurMs(nbElimines), scene: 'round_winner', params: {} };
+  }
+  if (session.status === 'announce' && b.announceMilestone != null) {
+    return {
+      a: debut + BR_TOP_MS,
+      scene: 'category',
+      params: { difficulty: currentDifficulty(session), isFinal: b.isFinal },
+    };
+  }
+  return null;
 }
 
 /** Cue ponctuel hors partie (bouton Tester, extinction manuelle) */

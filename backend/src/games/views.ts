@@ -105,6 +105,10 @@ function battleRuntimeFields(session: SessionRow): Record<string, unknown> | und
     questionInRound: b.roundQuestionCount,
     finalSize: session.config.finalSize ?? 10,
     verdictPending: session.status === 'verdict',
+    // l'ecran TOP 20/10/5/3 qui ouvre cette annonce (palier franchi a la
+    // question d'avant), comme le legacy : avant la categorie, jamais au
+    // milieu de la revelation
+    topAnnonce: session.status === 'announce' ? b.announceMilestone ?? null : undefined,
     // les dix finalistes dans l'ordre de qualification : la grille de l'ecran
     // d'elimination de la finale se dessine avec, comme en legacy
     finalRoster: b.isFinal ? b.finalRoster : undefined,
@@ -375,6 +379,10 @@ function gmBattle(session: SessionRow, players: PlayerRow[]): Record<string, unk
     finalStandings: b.finalStandings ?? null,
     winner: b.winner ?? null,
     victoryPending: b.victoryPending ?? false,
+    // difficulte servie a la place d'une difficulte epuisee (question en cours)
+    fallback: b.fallback ?? null,
+    // palier franchi, montre a la question suivante (l'animateur le sait)
+    pendingMilestone: b.pendingMilestone ?? null,
   };
 }
 

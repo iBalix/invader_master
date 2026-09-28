@@ -348,6 +348,7 @@
     },
     "milestone": {
       "priority": "accent",
+      "comment": "Ecran TOP 20/10/5/3, joue au lancement de la question suivante : flash CYAN instantane puis retour a la couleur de la DIFFICULTE a 500 ms, comme flashTopXLights() du legacy. Revenait au saumon du repos, ce qui faisait clignoter le bar hors partie en pleine manche.",
       "steps": [
         {
           "atMs": 0,
@@ -366,17 +367,17 @@
           "on": true
         },
         {
-          "atMs": 600,
+          "atMs": 500,
           "target": "BAR_TOP",
-          "color": "REPOS_TOP",
+          "color": "$difficulty",
           "bri": 254,
           "transition": 5
         },
         {
-          "atMs": 600,
+          "atMs": 500,
           "target": "BAR_BOTTOM",
-          "color": "REPOS_BOTTOM",
-          "bri": 254,
+          "color": "BLANC",
+          "bri": 127,
           "transition": 5
         }
       ]

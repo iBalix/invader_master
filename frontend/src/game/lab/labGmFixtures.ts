@@ -245,6 +245,29 @@ export const GM_BATTLE: LabGmScenario[] = [
       ),
   },
   {
+    cle: 'gm-br-finale-reveal',
+    label: 'Finale en cours',
+    description: 'Question suivante, et la sortie de secours « Terminer la finale ».',
+    state: () =>
+      base(
+        { status: 'reveal', phaseStartedAt: Date.now() - 30000, playerCount: 4 },
+        {
+          isFinal: true,
+          roundNumber: 4,
+          nextDifficulty: 'Difficile',
+          fallback: { voulu: 'Difficile', servi: 'Moyen' },
+          reveal: {
+            correctAnswer: 'Hayao Miyazaki',
+            eliminated: [{ pseudo: 'Nina', reason: 'wrong' }],
+            repechage: false,
+            survivorsBefore: 5,
+            survivorsAfter: 4,
+            milestone: null,
+          },
+        },
+      ),
+  },
+  {
     cle: 'gm-br-fin-manche',
     label: 'Fin de manche',
     description: 'Classement général, manche suivante ou finale.',

@@ -1184,13 +1184,14 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'battle',
     surface: 'projo',
     label: 'Annonce + d\u00e9compte',
-    description: 'Cat\u00e9gorie, difficult\u00e9, puis 3-2-1.',
+    description: 'La catégorie, et le 3-2-1 avec son son dès son apparition (legacy).',
     sauts: [
-      ['Cat\u00e9gorie', 500],
-      ['D\u00e9compte', 3200],
+      ['3', 300],
+      ['2', 1300],
+      ['1', 2300],
     ],
     state: () =>
-      baseBattle({ status: 'announce', phaseEndsAt: serverNow() + 6000, question: QUESTION_BATTLE }),
+      baseBattle({ status: 'announce', phaseEndsAt: serverNow() + 3000, question: QUESTION_BATTLE }),
   },
   {
     cle: 'br-projo-question',
@@ -1219,12 +1220,12 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'battle',
     surface: 'projo',
     label: 'R\u00e9v\u00e9lation (projo)',
-    description: 'Suspense, la bonne réponse, puis le compteur qui encaisse.',
+    description: 'Suspense, la bonne réponse seule 6 s, puis le compteur qui encaisse.',
     sauts: [
       ['Suspense', 1600],
-      ['R\u00e9ponse', 5400],
-      ['Survivants', 9200],
-      ['Noms', 11600],
+      ['Réponse', 5400],
+      ['Survivants', 11400],
+      ['Noms', 14200],
     ],
     state: () =>
       baseBattle({ status: 'reveal', question: QUESTION_BATTLE }, { survivorCount: 14, reveal: revealBattle() }),
@@ -1234,21 +1235,22 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'battle',
     surface: 'projo',
     label: 'Palier TOP 10',
-    description: 'La prise d\u2019\u00e9cran plein cadre du legacy.',
+    description: 'Ouvre l\u2019annonce de la question suivante, comme le legacy.',
     sauts: [
-      ['R\u00e9ponse', 5400],
-      ['Survivants', 9200],
-      ['Noms', 11600],
-      ['Palier', 13600],
+      ['TOP', 600],
+      ['Noms', 2600],
+      ['Fondu', 4300],
+      ['Catégorie', 5500],
     ],
     state: () =>
       baseBattle(
-        { status: 'reveal', question: QUESTION_BATTLE },
         {
-          survivorCount: 10,
-          reveal: { ...revealBattle(), milestone: 10, survivorsBefore: 13, survivorsAfter: 10 },
-          generalStandings: standingsBattle(12),
+          status: 'announce',
+          phaseEndsAt: serverNow() + 8200,
+          question: QUESTION_BATTLE,
+          players: PSEUDOS.slice(0, 10).map((pseudo) => ({ pseudo, device: 'mobile' })),
         },
+        { survivorCount: 10, topAnnonce: 10 },
       ),
   },
   {
@@ -1270,10 +1272,10 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Dernier debout (manche)',
     description: 'Un seul survivant : la manche est jou\u00e9e, pas de question suivante.',
     sauts: [
-      ['Suspense', 1600],
       ['Réponse', 5400],
-      ['Survivants', 8800],
-      ['Manche remportée', 12600],
+      ['Survivants', 11400],
+      ['Transition', 14900],
+      ['Manche remportée', 16400],
     ],
     state: () =>
       baseBattle(
@@ -1300,10 +1302,9 @@ export const SCENARIOS: LabScenario[] = [
     label: 'Finale : grille des dix',
     description: 'Les finalistes rougissent un par un, deux etaient deja sortis.',
     sauts: [
-      ['Suspense', 1600],
       ['Réponse', 5400],
-      ['Grille', 8800],
-      ['Fin de grille', 12400],
+      ['Grille', 11400],
+      ['Fin de grille', 14400],
     ],
     state: () =>
       baseBattle(
@@ -1335,8 +1336,8 @@ export const SCENARIOS: LabScenario[] = [
     description: 'La grille se vide, la ceremonie enchaine toute seule apres.',
     sauts: [
       ['Réponse', 5400],
-      ['Grille', 8800],
-      ['Fin de grille', 12200],
+      ['Grille', 11400],
+      ['Fin de grille', 14000],
     ],
     state: () =>
       baseBattle(

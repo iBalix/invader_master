@@ -211,7 +211,7 @@ function BattleAnnounceScreen({ state }: { state: PublicState }) {
   );
 }
 
-function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: BattleProps) {
+function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded }: BattleProps) {
   const remaining = usePhaseCountdown(state.phaseEndsAt);
   const q = state.question;
   const grace = state.status === 'locked';
@@ -288,28 +288,32 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
       : state.config.questionMs;
 
   return (
-    <div className="flex flex-1 flex-col px-4 py-4">
+    // Sur une DALLE (embedded), les tailles du quiz : enonce en 3xl, reponses
+    // en grille 2x2. La battle gardait les tailles du telephone, et sous le
+    // zoom de la borne la question faisait 25 px vue de biais : « c'est ecrit
+    // tres petit », disait l'equipe.
+    <div className={`flex min-h-0 flex-1 flex-col ${embedded ? 'px-8 py-6' : 'px-4 py-4'}`}>
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-widest text-white/40">
+          <p className={`uppercase tracking-widest text-white/40 ${embedded ? 'text-base' : 'text-xs'}`}>
             {q.difficulty} · 1 pt · {state.battle?.survivorCount} en vie
           </p>
-          <h2 className="text-balance text-lg font-bold leading-snug">{q.question}</h2>
+          <h2 className={`text-balance font-bold leading-snug ${embedded ? 'text-3xl' : 'text-lg'}`}>{q.question}</h2>
         </div>
         {remaining !== null && !grace && (
-          <TimerRing remainingMs={remaining} totalMs={totalMs} size={60} />
+          <TimerRing remainingMs={remaining} totalMs={totalMs} size={embedded ? 88 : 60} />
         )}
       </div>
 
       {/* cf. le projecteur : la tolerance reseau reste, elle ne s'annonce pas */}
       {grace && !answered && (
-        <p className="anim-pop mb-2 text-center text-sm font-black uppercase text-rose-300">
+        <p className={`anim-pop mb-2 text-center font-black uppercase text-rose-300 ${embedded ? 'text-2xl' : 'text-sm'}`}>
           Temps écoulé !
         </p>
       )}
 
       <div
-        className="grid flex-1 content-start gap-2.5"
+        className={`grid min-h-0 flex-1 ${embedded ? 'grid-cols-2 grid-rows-2 gap-5' : 'content-start gap-2.5'}`}
         style={{
           opacity: reponsesVisibles ? 1 : 0,
           transform: reponsesVisibles ? 'translateY(0)' : 'translateY(12px)',
@@ -328,7 +332,9 @@ function BattleQuestionScreen({ state, you, sessionRef, playerToken, refresh }: 
               gameAudio.sample(SON_BATTLE.choix, { volume: 0.5 });
               void send(i);
             }}
-            className={`rounded-xl border-2 px-4 py-3.5 text-left text-base font-semibold leading-snug transition-transform active:scale-[0.98] ${
+            className={`rounded-xl border-2 text-left font-semibold leading-snug transition-transform active:scale-[0.98] ${
+              embedded ? 'flex items-center px-8 py-6 text-3xl' : 'px-4 py-3.5 text-base'
+            } ${
               selected === i ? 'border-white bg-white/20' : ANSWER_COLORS[i % 4]
             } ${answered && selected !== i ? 'opacity-40' : ''}`}
           >

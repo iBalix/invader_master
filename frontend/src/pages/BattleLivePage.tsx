@@ -45,7 +45,7 @@ import { api } from '../lib/api';
 import { useConfirmation } from '../game/hooks/useConfirmation';
 import { Link } from 'react-router-dom';
 import { QrCanvas } from '../game/ui/bits';
-import { BR_REVEAL_MIN_MS, BR_REVEAL_MIN_PALIER_MS } from '../game/lib/gameClient';
+import { brRevealVerrouMs } from '../game/lib/gameClient';
 import LightsBadge from '../components/Live/LightsBadge';
 
 // ---------------------------------------------------------------------------
@@ -128,6 +128,10 @@ export interface GmBattle {
   finalStandings: BattleStanding[] | null;
   winner: { pseudo: string } | null;
   victoryPending: boolean;
+  /** difficulte servie a la place d'une difficulte epuisee (question en cours) */
+  fallback?: { voulu: string; servi: string } | null;
+  /** palier franchi, qui s'affichera au lancement de la question suivante */
+  pendingMilestone?: number | null;
 }
 
 export interface GmState {
@@ -141,6 +145,8 @@ export interface GmState {
   phaseEndsAt: number | null;
   currentQuestionIndex: number;
   playerCount: number;
+  /** partie cloturee (apres le fondu de fin) */
+  ended?: boolean;
   config: { musicVolume?: number; sfxVolume?: number; mediaVolume?: number; wifiSsid: string; testMode?: boolean };
   gm: {
     currentQuestion: {
@@ -569,105 +575,138 @@ function Header({
 
   const bouton = 'inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold';
 
+  const statut = (
+    <>
+      <span
+        className={`min-w-0 truncate rounded-full px-2.5 py-0.5 text-[11px] font-bold lg:text-xs ${
+          state.status === 'verdict' ? 'bg-rose-500/20 text-rose-300' : 'bg-indigo-500/20 text-indigo-300'
+        }`}
+      >
+        {STATUS_LABELS[state.status] ?? state.status}
+      </span>
+      {b?.isFinal && (
+        <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold text-amber-300">
+          👑
+          <span className="ml-1 hidden lg:inline">FINALE</span>
+        </span>
+      )}
+      {state.config.testMode && (
+        <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
+          🧪
+          <span className="ml-1 hidden lg:inline">TEST</span>
+        </span>
+      )}
+    </>
+  );
+
+  const meta = (
+    <p className="mt-0.5 truncate text-[11px] text-slate-400 lg:text-xs">
+      {b && b.roundNumber > 0 && `M${b.roundNumber} · Q${b.roundQuestionCount} · `}
+      <span className="font-bold text-slate-200">{state.playerCount}</span> en vie ·{' '}
+      {b?.eliminatedCount ?? 0} éliminé{(b?.eliminatedCount ?? 0) > 1 ? 's' : ''}
+      {(b?.waitingCount ?? 0) > 0 && ` · ${b?.waitingCount} en attente`}
+      {(b?.spectatorCount ?? 0) > 0 && ` · ${b?.spectatorCount} spect.`}
+      {' · '}
+      <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
+    </p>
+  );
+
+  const outils = (
+    <>
+      <button
+        type="button"
+        onClick={onRefresh}
+        title="Rafraîchir"
+        aria-label="Rafraîchir"
+        className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+      >
+        <RefreshCw size={15} />
+      </button>
+      <button
+        type="button"
+        onClick={() => setQrOuvert(true)}
+        title="QR code de la console"
+        aria-label="QR code de la console"
+        className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+      >
+        <QrCode size={15} />
+        <span className={etroit ? 'hidden' : 'hidden lg:inline'}>QR console</span>
+      </button>
+      <a
+        href={`${window.location.origin}/play/${state.joinCode}`}
+        target="_blank"
+        rel="noreferrer"
+        title="Ouvrir la page joueur"
+        className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+      >
+        <Smartphone size={15} />
+        <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Joueur ↗</span>
+      </a>
+      <a
+        href={`${window.location.origin}/screen/PROJO`}
+        target="_blank"
+        rel="noreferrer"
+        title="Ouvrir le projecteur"
+        className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
+      >
+        <MonitorPlay size={15} />
+        <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Projo ↗</span>
+      </a>
+    </>
+  );
+
+  // Arret toujours a portee, et TOUJOURS libelle : une icone carree seule ne se
+  // lisait pas comme « arreter le jeu », l'animateur ne trouvait pas la sortie.
+  const arret = (
+    <button
+      type="button"
+      onClick={async () => {
+        if (!(await demander('Arrêter la battle ? Les écrans font un fondu puis reviennent à l\'accueil.'))) return;
+        await action('stop');
+        onClosed();
+        toast.success('Battle terminée (fondu en cours)');
+      }}
+      title="Arrêter la battle"
+      aria-label="Arrêter la battle"
+      className={`${bouton} shrink-0 border-rose-400/40 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20`}
+    >
+      <Square size={15} />
+      <span>Arrêter</span>
+    </button>
+  );
+
   return (
     <div className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-slate-950/95 px-3 py-2.5 backdrop-blur sm:-mx-5 sm:px-5">
       {dialogue}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h1 className="truncate text-sm font-black lg:text-lg">{state.quizName}</h1>
-            <span
-              className={`shrink-0 truncate rounded-full px-2.5 py-0.5 text-[11px] font-bold lg:text-xs ${
-                state.status === 'verdict'
-                  ? 'bg-rose-500/20 text-rose-300'
-                  : 'bg-indigo-500/20 text-indigo-300'
-              }`}
-            >
-              {STATUS_LABELS[state.status] ?? state.status}
-            </span>
-            {b?.isFinal && (
-              <span className="shrink-0 rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-bold text-amber-300">
-                👑
-                <span className="ml-1 hidden lg:inline">FINALE</span>
-              </span>
-            )}
-            {state.config.testMode && (
-              <span className="shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-bold text-white">
-                🧪
-                <span className="ml-1 hidden lg:inline">TEST</span>
-              </span>
-            )}
+      {etroit ? (
+        // TELEPHONE : deux rangees. Le statut et « Arrêter » d'abord, les
+        // chiffres et les outils ensuite. Sur une seule rangee, le statut
+        // finissait sous les icones.
+        <>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">{statut}</div>
+            {arret}
           </div>
-          <p className="mt-0.5 truncate text-[11px] text-slate-400 lg:text-xs">
-            {b && b.roundNumber > 0 && `M${b.roundNumber} · Q${b.roundQuestionCount} · `}
-            <span className="font-bold text-slate-200">{state.playerCount}</span> en vie ·{' '}
-            {b?.eliminatedCount ?? 0} éliminé{(b?.eliminatedCount ?? 0) > 1 ? 's' : ''}
-            {(b?.waitingCount ?? 0) > 0 && ` · ${b?.waitingCount} en attente`}
-            {(b?.spectatorCount ?? 0) > 0 && ` · ${b?.spectatorCount} spect.`}
-            {' · '}
-            <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
-          </p>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">{meta}</div>
+            <div className="flex shrink-0 items-center gap-1.5">{outils}</div>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-sm font-black lg:text-lg">{state.quizName}</h1>
+              {statut}
+            </div>
+            {meta}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {outils}
+            {arret}
+          </div>
         </div>
-
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onRefresh}
-            title="Rafraîchir"
-            aria-label="Rafraîchir"
-            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
-          >
-            <RefreshCw size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setQrOuvert(true)}
-            title="QR code de la console"
-            aria-label="QR code de la console"
-            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
-          >
-            <QrCode size={15} />
-            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>QR console</span>
-          </button>
-          <a
-            href={`${window.location.origin}/play/${state.joinCode}`}
-            target="_blank"
-            rel="noreferrer"
-            title="Ouvrir la page joueur"
-            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
-          >
-            <Smartphone size={15} />
-            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Joueur ↗</span>
-          </a>
-          <a
-            href={`${window.location.origin}/screen/PROJO`}
-            target="_blank"
-            rel="noreferrer"
-            title="Ouvrir le projecteur"
-            className={`${bouton} border-white/15 text-slate-300 hover:bg-white/5`}
-          >
-            <MonitorPlay size={15} />
-            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Projo ↗</span>
-          </a>
-          {/* Arret toujours a portee : une soiree qui doit s'arreter ne laisse
-              pas le temps de faire defiler jusqu'en bas de page. */}
-          <button
-            type="button"
-            onClick={async () => {
-              if (!(await demander('Arrêter la battle ? Les écrans font un fondu puis reviennent à l\'accueil.'))) return;
-              await action('stop');
-              onClosed();
-              toast.success('Battle terminée (fondu en cours)');
-            }}
-            title="Arrêter la battle"
-            aria-label="Arrêter la battle"
-            className={`${bouton} border-rose-400/40 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20`}
-          >
-            <Square size={15} />
-            <span className={etroit ? 'hidden' : 'hidden lg:inline'}>Arrêter</span>
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Ce qui reste en piste, en une barre : elle fond a chaque question. */}
       {inscrits > 0 && (
@@ -766,8 +805,8 @@ function ControlPanel({
     const i = setInterval(() => setMaintenant(Date.now()), 400);
     return () => clearInterval(i);
   }, [s]);
-  const minimumReveal =
-    b?.reveal?.milestone != null ? BR_REVEAL_MIN_PALIER_MS : BR_REVEAL_MIN_MS;
+  // miroir du verrou serveur : fonction du nombre d'elimines a faire tomber
+  const minimumReveal = brRevealVerrouMs(b?.reveal?.eliminated?.length ?? 0);
   const verrouMs =
     s === 'reveal' && state.phaseStartedAt !== null && !b?.victoryPending && !b?.reveal?.cancelled
       ? Math.max(0, state.phaseStartedAt + minimumReveal - (maintenant + (state.serverNow - Date.now())))
@@ -923,10 +962,33 @@ function ControlPanel({
                     </button>
                   ))}
                 </div>
-                {!b?.isFinal && (
+                {!b?.isFinal ? (
                   <Btn disabled={busy || verrou} onClick={() => void action('end-round', {}, 'Terminer la manche et distribuer les bonus ?')}>
                     <Flag size={15} /> Fin de manche
                   </Btn>
+                ) : (
+                  /* La finale n'avait AUCUNE sortie : un soir ou le stock
+                     Difficile s'est vide, trois finalistes sont restes
+                     coinces. On peut desormais la conclure, les survivants
+                     etant departages aux points. */
+                  <Btn
+                    variant="warn"
+                    disabled={busy || verrou}
+                    onClick={() =>
+                      void action(
+                        'end-final',
+                        {},
+                        'Terminer la finale maintenant ? Les survivants sont départagés aux points et la cérémonie s\'affiche.',
+                      )
+                    }
+                  >
+                    <Crown size={15} /> Terminer la finale
+                  </Btn>
+                )}
+                {b?.pendingMilestone != null && (
+                  <span className="inline-flex items-center rounded-lg bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-200">
+                    TOP {b.pendingMilestone} au lancement de la question suivante
+                  </span>
                 )}
               </>
             )}
@@ -974,10 +1036,33 @@ function ControlPanel({
           </span>
         )}
 
-        {s === 'end' && b?.winner && (
-          <span className="inline-flex items-center rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-300">
-            👑 Vainqueur : {b.winner.pseudo}
-          </span>
+        {s === 'end' && (
+          <>
+            {b?.winner && (
+              <span className="inline-flex items-center rounded-lg bg-amber-500/15 px-4 py-2.5 text-sm font-bold text-amber-300">
+                👑 Vainqueur : {b.winner.pseudo}
+              </span>
+            )}
+            {/* La cérémonie reste à l'écran tant qu'on veut. Pour rendre le
+                bar à son affichage normal, ce bouton-ci : l'animateur ne
+                trouvait pas comment « quitter le jeu ». Une fois la partie
+                close, il n'y a plus rien à arrêter. */}
+            {state.ended ? (
+              <span className="inline-flex items-center rounded-lg bg-white/10 px-4 py-2.5 text-sm font-semibold text-slate-300">
+                Soirée terminée : les écrans sont revenus à l'accueil.
+              </span>
+            ) : (
+            <Btn
+              variant="danger"
+              disabled={busy}
+              onClick={() =>
+                void action('stop', {}, 'Terminer la soirée ? Les écrans font un fondu puis reviennent à l\'accueil du bar.')
+              }
+            >
+              <Square size={15} /> Terminer la soirée, rendre le bar
+            </Btn>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -1010,40 +1095,23 @@ function VerdictPanel({
   }
 
   const zeroSurvivors = v.survivorsAfter <= 0 && v.survivorsBefore > 0;
+  const nbElim = v.pending.filter((p) => !p.overturned).length;
 
   return (
     <div className="rounded-xl border-2 border-rose-400/40 bg-white/5 p-5 shadow-sm">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-bold text-slate-100">
-          Verdict · {v.pending.filter((p) => !p.overturned).length} élimination{v.pending.filter((p) => !p.overturned).length > 1 ? 's' : ''} provisoire{v.pending.filter((p) => !p.overturned).length > 1 ? 's' : ''}
+          Verdict · {nbElim} élimination{nbElim > 1 ? 's' : ''} provisoire{nbElim > 1 ? 's' : ''}
         </h2>
         <span className="rounded-full bg-white/10 px-3 py-1 font-mono text-sm font-bold text-slate-200">
           {v.survivorsBefore} → {v.repechage ? v.survivorsBefore : v.survivorsAfter} survivant{(v.repechage ? v.survivorsBefore : v.survivorsAfter) > 1 ? 's' : ''}
         </span>
       </div>
 
-      {zeroSurvivors && !v.repechage && (
-        <div className="mb-4 rounded-lg border border-rose-400/40 bg-rose-500/15 p-3">
-          <p className="mb-2 font-bold text-rose-200">
-            ⚠️ ZÉRO SURVIVANT : tout le monde tombe sur cette question. Deux choix :
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Btn variant="warn" disabled={busy} onClick={() => void action('verdict-revive-group')}>
-              <LifeBuoy size={15} /> Repêchage général (tout le monde survit)
-            </Btn>
-            {!isFinal && (
-              <Btn variant="danger" disabled={busy} onClick={() => void action('verdict-end-round-tie', {}, 'Terminer la manche avec tous les joueurs co-vainqueurs (rang 1 partagé) ?')}>
-                <Flag size={15} /> Fin de manche, co-vainqueurs
-              </Btn>
-            )}
-          </div>
-        </div>
-      )}
-
       {v.repechage && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-400/40 bg-amber-500/15 p-3">
-          <p className="flex items-center gap-2 font-bold text-amber-200">
-            <LifeBuoy size={15} /> REPÊCHAGE GÉNÉRAL activé : personne n'est éliminé.
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/40 bg-amber-500/15 p-3">
+          <p className="flex items-center gap-2 font-bold text-amber-100">
+            <LifeBuoy size={16} /> Repêchage général : personne n'est éliminé.
           </p>
           <Btn variant="secondary" disabled={busy} onClick={() => void action('verdict-revive-group')}>
             Annuler le repêchage
@@ -1051,37 +1119,43 @@ function VerdictPanel({
         </div>
       )}
 
-      <div className="space-y-1.5">
+      {/* Les eliminations provisoires, corrigeables une par une. Boutons a
+          taille de doigt et lisibles sur le fond sombre : ils etaient en
+          texte vert clair sur fond vert clair, 24 px de haut. */}
+      <div className="space-y-2">
         {v.pending.map((p) => (
           <div
             key={p.playerId}
-            className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
+            className={`rounded-xl border px-3 py-2.5 ${
               v.repechage || p.overturned
-                ? 'border-emerald-400/40 bg-emerald-500/15'
-                : 'border-rose-400/40 bg-rose-500/15'
+                ? 'border-emerald-400/40 bg-emerald-500/10'
+                : 'border-rose-400/40 bg-rose-500/10'
             }`}
           >
-            <span>
-              <span className="font-bold">{p.pseudo}</span>
-              <span className="text-slate-300">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="text-base font-bold text-slate-100">{p.pseudo}</span>
+              <span className="text-sm text-slate-300">
                 {p.reason === 'timeout'
-                  ? ' · pas de réponse'
-                  : ` · réponse ${p.choice !== null ? String.fromCharCode(65 + p.choice) : '?'}`}
-                {p.elapsedMs !== null && ` · ${(p.elapsedMs / 1000).toFixed(1)}s`}
+                  ? 'pas de réponse'
+                  : `réponse ${p.choice !== null ? String.fromCharCode(65 + p.choice) : '?'}`}
+                {p.elapsedMs !== null && ` · ${(p.elapsedMs / 1000).toFixed(1)} s`}
               </span>
-              {p.overturned === 'correct' && <span className="ml-2 font-bold text-emerald-300">✔ compté bonne réponse (+1)</span>}
-              {p.overturned === 'revived' && <span className="ml-2 font-bold text-emerald-300">ressuscité (sans point)</span>}
-            </span>
+            </div>
+            {p.overturned && (
+              <p className="mt-1 text-sm font-bold text-emerald-300">
+                {p.overturned === 'correct' ? '✔ Compté bonne réponse (+1 point)' : '↩ Ressuscité, sans point'}
+              </p>
+            )}
             {!v.repechage && (
-              <span className="flex gap-1.5">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 {p.overturned ? (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void action('verdict-reset', { playerId: p.playerId })}
-                    className="rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-300 hover:bg-white/10"
+                    className="col-span-2 min-h-[44px] rounded-lg border border-white/20 bg-white/5 px-3 text-sm font-bold text-slate-200 hover:bg-white/10 disabled:opacity-40"
                   >
-                    Annuler
+                    Annuler la correction
                   </button>
                 ) : (
                   <>
@@ -1089,21 +1163,21 @@ function VerdictPanel({
                       type="button"
                       disabled={busy}
                       onClick={() => void action('verdict-mark-correct', { playerId: p.playerId })}
-                      className="rounded-md border border-emerald-300 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-200"
+                      className="min-h-[44px] rounded-lg border border-emerald-400/60 bg-emerald-500/20 px-3 text-sm font-bold text-emerald-100 hover:bg-emerald-500/30 disabled:opacity-40"
                     >
-                      ✔ Bonne réponse
+                      ✔ Bonne réponse (+1)
                     </button>
                     <button
                       type="button"
                       disabled={busy}
                       onClick={() => void action('verdict-revive', { playerId: p.playerId })}
-                      className="inline-flex items-center gap-1 rounded-md border border-amber-400/40 bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-200"
+                      className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg border border-amber-400/60 bg-amber-500/20 px-3 text-sm font-bold text-amber-100 hover:bg-amber-500/30 disabled:opacity-40"
                     >
-                      <LifeBuoy size={13} /> Ressusciter
+                      <LifeBuoy size={15} /> Ressusciter
                     </button>
                   </>
                 )}
-              </span>
+              </div>
             )}
           </div>
         ))}
@@ -1112,15 +1186,44 @@ function VerdictPanel({
         )}
       </div>
 
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-slate-400">
         {v.answeredCount} réponse{v.answeredCount > 1 ? 's' : ''} reçue{v.answeredCount > 1 ? 's' : ''} ·
         bons répondeurs : {v.correctPseudos.length > 0 ? v.correctPseudos.join(', ') : 'aucun'}
       </p>
 
+      {/* LA VALIDATION. Quand tout le monde s'est trompe, le choix se fait ICI,
+          au moment de valider : l'animateur devait sinon activer le repechage
+          AVANT, et sans le savoir il eliminait toute la salle. */}
       <div className="mt-4">
-        <Btn variant="primary" disabled={busy} onClick={() => void action('show-results')}>
-          <Eye size={15} /> Afficher les résultats à la salle
-        </Btn>
+        {zeroSurvivors && !v.repechage ? (
+          <div className="space-y-2 rounded-xl border border-rose-400/50 bg-rose-500/10 p-3">
+            <p className="font-bold text-rose-100">⚠️ Tout le monde s'est trompé. Que montre-t-on à la salle ?</p>
+            <Btn variant="primary" disabled={busy} onClick={() => void action('show-results', { repechage: true })}>
+              <LifeBuoy size={15} /> Afficher la réponse en repêchant tout le monde
+            </Btn>
+            {!isFinal ? (
+              <Btn
+                variant="danger"
+                disabled={busy}
+                onClick={() => void action('verdict-end-round-tie', {}, 'Terminer la manche, tous les joueurs co-vainqueurs (rang 1 partagé) ?')}
+              >
+                <Flag size={15} /> Fin de manche : tout le monde co-vainqueur
+              </Btn>
+            ) : (
+              <Btn
+                variant="danger"
+                disabled={busy}
+                onClick={() => void action('show-results', {}, 'Afficher les résultats sans repêcher : tout le monde tombe, le plus rapide l\'emporte. Continuer ?')}
+              >
+                <Eye size={15} /> Afficher sans repêcher (le plus rapide gagne)
+              </Btn>
+            )}
+          </div>
+        ) : (
+          <Btn variant="primary" disabled={busy} onClick={() => void action('show-results')}>
+            <Eye size={15} /> Afficher les résultats à la salle
+          </Btn>
+        )}
       </div>
     </div>
   );
@@ -1142,6 +1245,12 @@ function QuestionCard({ state }: { state: GmState }) {
         </h2>
         <span className="text-sm text-slate-400">{q.difficulty} · {q.theme}</span>
       </div>
+      {b?.fallback && (
+        <p className="mb-3 rounded-lg border border-amber-400/50 bg-amber-500/15 px-3 py-2 text-sm font-semibold text-amber-100">
+          Stock {b.fallback.voulu} épuisé : question {b.fallback.servi} servie à la place, la génération est
+          relancée.
+        </p>
+      )}
       <p className="text-lg font-semibold text-slate-100">{q.question}</p>
       <div className="mt-3 grid grid-cols-1 gap-1.5 md:grid-cols-2">
         {q.answers.map((a, i) => (
@@ -1157,11 +1266,19 @@ function QuestionCard({ state }: { state: GmState }) {
           </div>
         ))}
       </div>
-      {q.helpAnimator && (
-        <p className="mt-3 rounded-lg bg-indigo-500/15 px-3 py-2 text-sm text-indigo-800">
-          💡 <span className="font-semibold">Anecdote :</span> {q.helpAnimator}
-        </p>
-      )}
+      {/* L'anecdote a lire au micro. Elle etait ecrite en indigo FONCE sur le
+          fond sombre de la console : invisible, l'animateur croyait qu'elle
+          n'existait plus. */}
+      {q.helpAnimator && <Anecdote texte={q.helpAnimator} />}
+    </div>
+  );
+}
+
+function Anecdote({ texte }: { texte: string }) {
+  return (
+    <div className="mt-3 rounded-xl border border-amber-300/40 bg-amber-400/10 px-4 py-3">
+      <p className="mb-1 text-xs font-black uppercase tracking-[0.2em] text-amber-300">💡 Anecdote à lire</p>
+      <p className="text-base leading-snug text-amber-50">{texte}</p>
     </div>
   );
 }
@@ -1233,6 +1350,9 @@ function RevealPanel({ state }: { state: GmState }) {
           ✔ {r.correctAnswer}
         </p>
       )}
+      {/* l'anecdote se lit PENDANT la revelation : elle est ici, en haut, sans
+          avoir a descendre jusqu'a la carte de la question sur un telephone */}
+      {state.gm.currentQuestion?.helpAnimator && <Anecdote texte={state.gm.currentQuestion.helpAnimator} />}
       <p className="mt-3 text-sm text-slate-300">
         <span className="font-mono font-bold text-slate-100">{r.survivorsBefore}</span> →{' '}
         <span className="font-mono font-bold text-indigo-300">{r.survivorsAfter}</span> survivant
@@ -1391,16 +1511,38 @@ function PlayersPanel({
       </div>
 
       {selected && (
-        <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3">
-          <p className="mb-2 text-sm font-bold">
+        // panneau sombre et lisible : il etait blanc casse sur la console
+        // sombre, texte clair sur fond clair
+        <div className="mt-3 rounded-xl border border-indigo-400/40 bg-indigo-500/10 p-3">
+          <p className="mb-2 text-sm font-bold text-slate-100">
             {selected.pseudo} · {selected.score} pts · {PLAYER_STATUS_BADGES[selected.status]} {selected.status}
           </p>
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            {[1, -1].map((n) => (
+              <button
+                key={n}
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void action('give-points', { pseudo: selected.pseudo, points: n });
+                  toast.success(`${n > 0 ? '+' : ''}${n} pt pour ${selected.pseudo}`);
+                }}
+                className={`min-h-[44px] rounded-lg border text-base font-black disabled:opacity-40 ${
+                  n > 0
+                    ? 'border-emerald-400/60 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30'
+                    : 'border-rose-400/60 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25'
+                }`}
+              >
+                {n > 0 ? '+1 point' : '−1 point'}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center gap-2">
             <input
               type="number"
               value={points}
               onChange={(e) => setPoints(e.target.value)}
-              className="w-20 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-slate-100"
+              className="min-h-[44px] w-20 rounded-lg border border-white/15 bg-white/5 px-2 text-sm text-slate-100"
             />
             <button
               type="button"
@@ -1411,7 +1553,7 @@ function PlayersPanel({
                   toast.success(`${n > 0 ? '+' : ''}${n} pts pour ${selected.pseudo}`);
                 }
               }}
-              className="rounded-lg bg-indigo-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-400"
+              className="min-h-[44px] rounded-lg bg-indigo-500 px-3 text-sm font-semibold text-white hover:bg-indigo-400"
             >
               <Plus size={13} className="inline" /> Points
             </button>
@@ -1421,7 +1563,7 @@ function PlayersPanel({
                 void action('kick', { playerId: selected.id }, `Retirer ${selected.pseudo} de la partie ?`);
                 setSelected(null);
               }}
-              className="rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 py-1.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/25"
+              className="min-h-[44px] rounded-lg border border-rose-400/40 bg-rose-500/15 px-3 text-sm font-semibold text-rose-300 hover:bg-rose-500/25"
             >
               <UserX size={13} className="inline" /> Retirer
             </button>

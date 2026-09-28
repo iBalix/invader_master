@@ -302,8 +302,8 @@ export default function GameLabPage() {
                       ? ([
                           ['Suspense', 1600],
                           ['Réponse', 5400],
-                          ['Survivants', 8800],
-                          ['Noms', 11000],
+                          ['Survivants', 11400],
+                          ['Noms', 14200],
                         ] as Array<[string, number]>)
                       : ([
                           ['Verdict', 4800],
