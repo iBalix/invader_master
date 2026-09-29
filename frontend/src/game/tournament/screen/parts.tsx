@@ -9,6 +9,7 @@ import { QrCanvas } from '../../ui/bits';
 import {
   currentRoundOf,
   fmtScore,
+  hasResults,
   pseudoOf,
   rankLabel,
   roundLabel,
@@ -303,15 +304,22 @@ export function StandingLine({ s, state, big }: { s: TStanding; state: Tournamen
     round?.matches.some((m) => m.status === 'playing' && (m.a === s.playerId || m.b === s.playerId));
   const waiting = state.phase === 'round' && round?.waiting === s.playerId;
   const gone = s.status !== 'active';
+  // avant le premier résultat, tout le monde est 1er ex æquo : ni médaille ni « = »
+  const ranked = hasResults(state);
+  const podium = ranked && s.rank <= 3 && !gone;
   return (
     <div
       className={`flex items-center rounded-xl border ${big ? 'gap-5 px-6 py-3' : 'gap-4 px-5 py-2.5'} ${
-        s.rank <= 3 && !gone ? 'border-amber-300/30 bg-amber-300/[0.06]' : 'border-white/10 bg-white/5'
+        podium ? 'border-amber-300/30 bg-amber-300/[0.06]' : 'border-white/10 bg-white/5'
       } ${gone ? 'opacity-45' : ''}`}
     >
-      <span className={`shrink-0 text-center font-black ${big ? 'w-16 text-4xl' : 'w-14 text-3xl'} ${s.rank <= 3 ? 'text-amber-300' : 'text-white/45'}`}>
-        <Medal rank={s.rank} />
-        {s.tied && <span className="ml-0.5 align-top text-xl text-white/45">=</span>}
+      <span
+        className={`inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap font-black ${big ? 'w-24 text-4xl' : 'w-20 text-3xl'} ${
+          podium ? 'text-amber-300' : 'text-white/45'
+        }`}
+      >
+        {ranked ? <Medal rank={s.rank} /> : <span className="text-white/25">·</span>}
+        {ranked && s.tied && <span className="text-xl text-white/45">=</span>}
       </span>
       <span className={`min-w-0 flex-1 truncate font-black ${big ? 'text-4xl' : 'text-3xl'}`}>
         {s.pseudo}
@@ -436,19 +444,28 @@ const FEED_ICON: Record<TFeed['kind'], string> = {
 export function FeedToasts({ state }: { state: TournamentPublicState }) {
   const lastSeen = useRef<number | null>(null);
   const [shown, setShown] = useState<TFeed[]>([]);
+  // minuteries de retrait gardées hors de l'effet : chaque instantané reçu
+  // (sync, sondage) recrée state.feed et relance l'effet ; nettoyer la
+  // minuterie à ce moment-là laissait les bandeaux affichés pour toujours
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
   useEffect(() => {
     const maxSeq = state.feed.reduce((m, f) => Math.max(m, f.seq), 0);
     if (lastSeen.current === null) {
       lastSeen.current = maxSeq;
       return;
     }
-    const fresh = state.feed.filter((f) => f.seq > (lastSeen.current ?? 0) && f.kind !== 'round');
-    lastSeen.current = maxSeq;
+    const since = lastSeen.current;
+    const fresh = state.feed.filter((f) => f.seq > since && f.kind !== 'round');
+    lastSeen.current = Math.max(since, maxSeq);
     if (fresh.length === 0) return;
     setShown((prev) => [...prev, ...fresh].slice(-4));
     const ids = fresh.map((f) => f.seq);
-    const t = window.setTimeout(() => setShown((prev) => prev.filter((f) => !ids.includes(f.seq))), 6500);
-    return () => window.clearTimeout(t);
+    const t = window.setTimeout(() => {
+      setShown((prev) => prev.filter((f) => !ids.includes(f.seq)));
+      timers.current = timers.current.filter((x) => x !== t);
+    }, 6500);
+    timers.current.push(t);
   }, [state.feed]);
   if (shown.length === 0) return null;
   return (

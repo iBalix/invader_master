@@ -190,6 +190,11 @@ export function fmtPoints(n: number): string {
   return `${s} pt${Math.abs(n) > 1 ? 's' : ''}`;
 }
 
+/** tant qu'aucun match n'est joué, tout le monde est 1er ex æquo : on ne l'affiche pas */
+export function hasResults(state: Pick<TournamentPublicState, 'standings'>): boolean {
+  return state.standings.some((x) => x.played > 0 || x.byes > 0 || x.adjustment !== 0);
+}
+
 export function rankLabel(rank: number): string {
   return rank === 1 ? '1er' : `${rank}e`;
 }

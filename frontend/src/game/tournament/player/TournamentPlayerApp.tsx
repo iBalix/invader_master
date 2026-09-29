@@ -19,6 +19,7 @@ import {
   fmtPoints,
   fmtScore,
   formatSummary,
+  hasResults,
   loadTournamentIdentity,
   myColor,
   myCurrentMatch,
@@ -230,11 +231,6 @@ export function TournamentPlayerScreen(props: TournamentPlayerScreenProps) {
       <TabBar tab={tab} onTab={setTab} />
     </div>
   );
-}
-
-/** tant qu'aucun match n'est joué, tout le monde est 1er ex æquo : on ne l'affiche pas */
-function hasResults(state: TournamentPublicState): boolean {
-  return state.standings.some((x) => x.played > 0 || x.byes > 0 || x.adjustment !== 0);
 }
 
 function StatusBar({ state, playerId, pseudo }: { state: TournamentPublicState; playerId: string; pseudo: string }) {
