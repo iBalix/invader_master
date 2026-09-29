@@ -151,7 +151,7 @@ function base(over: Partial<TournamentPublicState>, anchor: number): TournamentP
       match: { games: 1, decide: 'best_of', scoring: 'match' },
       points: POINTS,
       byePolicy: 'floater',
-      display: { standingsMs: 30_000, roundMs: 30_000, liveMs: 180_000 },
+      display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 60_000 },
       wifiSsid: 'INVADER BAR',
       wifiPassword: 'retrogaming',
       texts: { winner: 'Bravo #winner#, champion des échecs du jeudi !' },
@@ -366,12 +366,12 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
   {
     cle: 't-projo-rotation', surface: 'projo', label: 'Rotation de ronde', description: 'Classement, matchs, direct (vrai tempo)',
     state: (a) => afterDraw(midTournament(a, a, 13), a),
-    sauts: [['Classement', 0], ['Matchs', 31_000], ['Direct', 61_000]],
+    sauts: [['Classement', 0], ['Matchs', 8_500], ['Direct 1', 16_500], ['Direct 2', 76_500]],
   },
   {
     cle: 't-projo-40', surface: 'projo', label: '40 joueurs', description: 'Classement et matchs sur deux pages',
     state: (a) => afterDraw(bigTournament(a), a),
-    sauts: [['Classement 1', 0], ['Classement 2', 16_000], ['Matchs 1', 31_000], ['Matchs 2', 46_000], ['Direct', 61_000]],
+    sauts: [['Classement 1', 0], ['Classement 2', 8_500], ['Matchs 1', 16_500], ['Matchs 2', 24_500], ['Direct', 32_500]],
   },
   {
     cle: 't-projo-fin-ronde', surface: 'projo', label: 'Fin de ronde', description: 'Résultats et classement, attente du GM',
@@ -380,7 +380,7 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
       s.rounds[2].finishedAt = a;
       return s;
     },
-    sauts: [['Résultats', 0], ['Classement', 31_000]],
+    sauts: [['Résultats', 0], ['Classement', 8_500]],
   },
   { cle: 't-projo-final', surface: 'projo', label: 'Podium final', description: '3e, 2e puis 1er', state: (a) => finalState(a), sauts: [['3e', 1_600], ['2e', 4_100], ['1er', 8_100], ['Classement', 17_000]] },
   // ---- TV du bar

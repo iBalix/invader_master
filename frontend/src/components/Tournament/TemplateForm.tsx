@@ -166,15 +166,15 @@ export default function TemplateForm({
         </Card>
 
         <Card title="Projecteur">
-          <p className="mb-3 text-xs text-slate-500">Rotation pendant une ronde, durées en secondes : classement, puis matchs de la ronde, puis un match en direct.</p>
+          <p className="mb-3 text-xs text-slate-500">Rotation pendant une ronde, durées en secondes : classement et matchs de la ronde (par page), puis chaque partie en cours, l'une après l'autre.</p>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Classement">
-              <NumberInput value={cfg.display.standingsMs / 1000} min={10} max={300} onChange={(v) => set('display', { ...cfg.display, standingsMs: Math.round(Math.min(300, Math.max(10, v))) * 1000 })} />
+              <NumberInput value={cfg.display.standingsMs / 1000} min={5} max={300} onChange={(v) => set('display', { ...cfg.display, standingsMs: Math.round(Math.min(300, Math.max(5, v))) * 1000 })} />
             </Field>
             <Field label="Matchs">
-              <NumberInput value={cfg.display.roundMs / 1000} min={10} max={300} onChange={(v) => set('display', { ...cfg.display, roundMs: Math.round(Math.min(300, Math.max(10, v))) * 1000 })} />
+              <NumberInput value={cfg.display.roundMs / 1000} min={5} max={300} onChange={(v) => set('display', { ...cfg.display, roundMs: Math.round(Math.min(300, Math.max(5, v))) * 1000 })} />
             </Field>
-            <Field label="En direct" hint="0 = jamais">
+            <Field label="Direct / partie" hint="0 = jamais">
               <NumberInput value={cfg.display.liveMs / 1000} min={0} max={900} onChange={(v) => set('display', { ...cfg.display, liveMs: Math.round(Math.min(900, Math.max(0, v))) * 1000 })} />
             </Field>
           </div>

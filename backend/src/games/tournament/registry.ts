@@ -118,8 +118,8 @@ export function normalizeTournamentConfig(input: unknown, base: TournamentConfig
     },
     byePolicy,
     display: {
-      standingsMs: int(display.standingsMs, 10_000, 300_000, base.display.standingsMs, 'display.standingsMs'),
-      roundMs: int(display.roundMs, 10_000, 300_000, base.display.roundMs, 'display.roundMs'),
+      standingsMs: int(display.standingsMs, 5_000, 300_000, base.display.standingsMs, 'display.standingsMs'),
+      roundMs: int(display.roundMs, 5_000, 300_000, base.display.roundMs, 'display.roundMs'),
       liveMs: int(display.liveMs, 0, 900_000, base.display.liveMs, 'display.liveMs'),
     },
     wifiSsid: text(src.wifiSsid, 40, base.wifiSsid),

@@ -27,6 +27,7 @@ import {
   MATCHES_PER_PAGE,
   STANDINGS_PER_PAGE,
   projoView,
+  type RoundCycle,
   stableHash,
   type LiveCandidate,
   type ProjoView,
@@ -56,7 +57,9 @@ export interface TournamentProjoProps {
 }
 
 export default function TournamentProjo({ state, now, renderLive }: TournamentProjoProps) {
-  const rotation = projoView(state, now);
+  // position du tour de ronde, gardée d'un rendu à l'autre (cf. rotation.ts)
+  const cycle = useRef<RoundCycle | null>(null);
+  const rotation = projoView(state, now, cycle);
   const { view, key, endsAt } = rotation;
   // début de l'écran courant (progression) : mémorisé à chaque bascule
   const startRef = useRef<{ key: string; at: number }>({ key, at: now });

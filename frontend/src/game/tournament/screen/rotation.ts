@@ -8,14 +8,23 @@
  * exactement au même endroit du cycle, et le labo peut sauter à n'importe
  * quel instant.
  *
- * Ronde en cours (demande de Romain) :
- *   tirage animé, puis en boucle : classement 30 s, matchs de la ronde 30 s,
- *   un match en direct 3 min (tiré parmi les parties en cours).
+ * Ronde en cours (demande de Romain, revue au premier tournoi du 29/09) :
+ *   tirage animé, puis en boucle : classement, matchs de la ronde, puis
+ *   CHAQUE partie en cours l'une après l'autre (liveMs par partie ; une
+ *   partie qui se termine montre son résultat 10 s puis laisse la suivante).
+ *   Classement et matchs durent standingsMs / roundMs PAR PAGE.
+ *   Exception à la règle « fonction pure » : la longueur du tour dépend du
+ *   nombre de parties en cours, qui change pendant la ronde. Déduite de la
+ *   seule horloge, elle ferait sauter l'écran à chaque partie qui démarre ou
+ *   finit. Le projecteur garde donc sa position (RoundCycle) ; au montage
+ *   (rechargement, labo), elle est rejouée depuis la fin du tirage.
  * Fin de ronde : résultats et classement en alternance, en attendant le GM.
  * Final : podium, puis classement complet.
  */
 
 import type { TMatch, TournamentPublicState, TRound } from '../tournamentTypes';
+
+type Display = TournamentPublicState['config']['display'];
 
 /** une partie qui vient de finir reste montrée ce temps-là */
 export const LIVE_RESULT_HOLD_MS = 10_000;
@@ -80,13 +89,88 @@ function pages(count: number, perPage: number): number {
   return Math.max(1, Math.ceil(count / perPage));
 }
 
-/** page courante d'un écran paginé qui dure `durationMs` */
-function pageAt(pos: number, durationMs: number, pageCount: number): number {
-  if (pageCount <= 1) return 0;
-  return Math.min(pageCount - 1, Math.floor(pos / (durationMs / pageCount)));
+/** page courante d'un écran paginé, chaque page durant `pageMs` */
+function pageAt(pos: number, pageMs: number, pageCount: number): number {
+  if (pageCount <= 1 || pageMs <= 0) return 0;
+  return Math.min(pageCount - 1, Math.max(0, Math.floor(pos / pageMs)));
 }
 
-export function projoView(state: TournamentPublicState, now: number): RotationResult {
+// ---------------------------------------------------------------------------
+// Tour d'une ronde en cours
+// ---------------------------------------------------------------------------
+
+export interface RoundCycle {
+  round: number;
+  step: 'standings' | 'round' | 'live';
+  /** début de l'étape */
+  at: number;
+  /** numéro du tour (clés d'écran) */
+  idx: number;
+  /** parties à montrer une par une (id de match), figées au début du direct */
+  queue: string[];
+  pos: number;
+}
+
+interface CycleCtx {
+  round: TRound;
+  d: Display;
+  standingsPages: number;
+  roundPages: number;
+}
+
+function stepEnd(c: RoundCycle, x: CycleCtx): number {
+  if (c.step === 'standings') return c.at + x.d.standingsMs * x.standingsPages;
+  if (c.step === 'round') return c.at + x.d.roundMs * x.roundPages;
+  const m = x.round.matches.find((mm) => mm.id === c.queue[c.pos]);
+  if (!m) return c.at;
+  const full = c.at + x.d.liveMs;
+  if (m.live) return full;
+  // partie terminée : son résultat reste LIVE_RESULT_HOLD_MS, puis la suivante
+  const last = m.games[m.games.length - 1];
+  if (last?.at) return Math.max(c.at, Math.min(full, last.at + LIVE_RESULT_HOLD_MS));
+  return c.at;
+}
+
+function nextStep(c: RoundCycle, x: CycleCtx, at: number): RoundCycle {
+  if (c.step === 'standings') return { ...c, step: 'round', at, queue: [], pos: 0 };
+  if (c.step === 'round') {
+    const queue =
+      x.d.liveMs > 0
+        ? liveCandidates(x.round, at)
+            .filter((k) => !k.finished)
+            .sort((p, q) => p.match.board - q.match.board)
+            .map((k) => k.match.id)
+        : [];
+    if (queue.length > 0) return { ...c, step: 'live', at, queue, pos: 0 };
+    return { ...c, step: 'standings', at, idx: c.idx + 1, queue: [], pos: 0 };
+  }
+  if (c.pos + 1 < c.queue.length) return { ...c, at, pos: c.pos + 1 };
+  return { ...c, step: 'standings', at, idx: c.idx + 1, queue: [], pos: 0 };
+}
+
+/** position du tour à l'instant `now` (idempotent : rappeler avec le même now ne change rien) */
+export function advanceRoundCycle(prev: RoundCycle | null, x: CycleCtx, drawEnd: number, now: number): RoundCycle {
+  let c: RoundCycle =
+    prev && prev.round === x.round.number
+      ? prev
+      : { round: x.round.number, step: 'standings', at: drawEnd, idx: 0, queue: [], pos: 0 };
+  for (let guard = 0; guard < 100_000; guard += 1) {
+    const end = stepEnd(c, x);
+    if (now < end) break;
+    c = nextStep(c, x, end);
+  }
+  return c;
+}
+
+/**
+ * `memo` : position mémorisée du tour de ronde (le projecteur la garde d'un
+ * rendu à l'autre). Absente, le tour est rejoué depuis la fin du tirage.
+ */
+export function projoView(
+  state: TournamentPublicState,
+  now: number,
+  memo?: { current: RoundCycle | null },
+): RotationResult {
   const round = state.rounds[state.rounds.length - 1] ?? null;
   const d = state.config.display;
   const standingsPages = pages(state.standings.length, STANDINGS_PER_PAGE);
@@ -102,15 +186,16 @@ export function projoView(state: TournamentPublicState, now: number): RotationRe
       return { view: { kind: 'final_podium', elapsed: t }, key: 'final-podium', endsAt: start + FINAL_PODIUM_MS };
     }
     // podium et classement complet en alternance
-    const cycle = 20_000 + d.standingsMs;
+    const standingsTotal = d.standingsMs * standingsPages;
+    const cycle = 20_000 + standingsTotal;
     const pos = (t - FINAL_PODIUM_MS) % cycle;
     const idx = Math.floor((t - FINAL_PODIUM_MS) / cycle);
-    if (pos < d.standingsMs) {
+    if (pos < standingsTotal) {
       const page = pageAt(pos, d.standingsMs, standingsPages);
       return {
         view: { kind: 'final_standings', page, pages: standingsPages },
         key: `final-standings-${idx}-${page}`,
-        endsAt: now - pos + d.standingsMs,
+        endsAt: now - pos + (page + 1) * d.standingsMs,
       };
     }
     return { view: { kind: 'final_podium', elapsed: FINAL_PODIUM_MS }, key: `final-podium-${idx}`, endsAt: now - pos + cycle };
@@ -121,23 +206,24 @@ export function projoView(state: TournamentPublicState, now: number): RotationRe
   if (state.phase === 'round_done') {
     const start = round.finishedAt ?? now;
     const t = Math.max(0, now - start);
-    const cycle = d.roundMs + d.standingsMs;
+    const roundTotal = d.roundMs * roundPages;
+    const cycle = roundTotal + d.standingsMs * standingsPages;
     const pos = t % cycle;
     const idx = Math.floor(t / cycle);
-    if (pos < d.roundMs) {
+    if (pos < roundTotal) {
       const page = pageAt(pos, d.roundMs, roundPages);
       return {
         view: { kind: 'round', round, page, pages: roundPages },
         key: `done-round-${idx}-${page}`,
-        endsAt: now - pos + d.roundMs,
+        endsAt: now - pos + (page + 1) * d.roundMs,
       };
     }
-    const p2 = pos - d.roundMs;
+    const p2 = pos - roundTotal;
     const page = pageAt(p2, d.standingsMs, standingsPages);
     return {
       view: { kind: 'standings', page, pages: standingsPages, note: `Ronde ${round.number} terminée` },
       key: `done-standings-${idx}-${page}`,
-      endsAt: now - p2 + d.standingsMs,
+      endsAt: now - p2 + (page + 1) * d.standingsMs,
     };
   }
 
@@ -168,53 +254,37 @@ export function projoView(state: TournamentPublicState, now: number): RotationRe
     };
   }
 
-  const cycle = d.standingsMs + d.roundMs + d.liveMs;
-  const t = now - (start + drawMs);
-  const idx = Math.floor(t / cycle);
-  const pos = t - idx * cycle;
-  if (pos < d.standingsMs) {
-    const page = pageAt(pos, d.standingsMs, standingsPages);
+  const x: CycleCtx = { round, d, standingsPages, roundPages };
+  const c = advanceRoundCycle(memo?.current ?? null, x, start + drawMs, now);
+  if (memo) memo.current = c;
+  if (c.step === 'standings') {
+    const page = pageAt(now - c.at, d.standingsMs, standingsPages);
     return {
       view: { kind: 'standings', page, pages: standingsPages, note: null },
-      key: `standings-${idx}-${page}`,
-      endsAt: now - pos + d.standingsMs,
+      key: `standings-${c.idx}-${page}`,
+      endsAt: c.at + (page + 1) * d.standingsMs,
     };
   }
-  if (pos < d.standingsMs + d.roundMs) {
-    const p2 = pos - d.standingsMs;
-    const page = pageAt(p2, d.roundMs, roundPages);
+  if (c.step === 'round') {
+    const page = pageAt(now - c.at, d.roundMs, roundPages);
     return {
       view: { kind: 'round', round, page, pages: roundPages },
-      key: `round-${idx}-${page}`,
-      endsAt: now - p2 + d.roundMs,
+      key: `round-${c.idx}-${page}`,
+      endsAt: c.at + (page + 1) * d.roundMs,
     };
   }
-  const p3 = pos - d.standingsMs - d.roundMs;
-  const candidates = liveCandidates(round, now);
-  if (candidates.length > 0) {
-    return {
-      view: { kind: 'live', round, candidates, slotKey: `live-${round.number}-${idx}`, pinnedMatchId: null },
-      key: `live-${round.number}-${idx}`,
-      endsAt: now - p3 + d.liveMs,
-    };
-  }
-  // aucune partie à montrer : le créneau alterne classement et matchs
-  const sub = d.standingsMs + d.roundMs;
-  const q = p3 % sub;
-  const j = Math.floor(p3 / sub);
-  if (q < d.standingsMs) {
-    const page = pageAt(q, d.standingsMs, standingsPages);
-    return {
-      view: { kind: 'standings', page, pages: standingsPages, note: null },
-      key: `fill-standings-${idx}-${j}-${page}`,
-      endsAt: now - q + d.standingsMs,
-    };
-  }
-  const page = pageAt(q - d.standingsMs, d.roundMs, roundPages);
+  const matchId = c.queue[c.pos];
+  const slotKey = `live-${round.number}-${c.idx}-${c.pos}`;
   return {
-    view: { kind: 'round', round, page, pages: roundPages },
-    key: `fill-round-${idx}-${j}-${page}`,
-    endsAt: now - (q - d.standingsMs) + d.roundMs,
+    view: {
+      kind: 'live',
+      round,
+      candidates: liveCandidates(round, now).filter((k) => k.match.id === matchId),
+      slotKey,
+      pinnedMatchId: null,
+    },
+    key: slotKey,
+    endsAt: stepEnd(c, x),
   };
 }
 

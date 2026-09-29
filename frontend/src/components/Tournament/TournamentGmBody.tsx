@@ -672,7 +672,7 @@ function ScreensTab({ state, busy, action, readOnly }: { state: TournamentGmStat
       <Card title="Projecteur">
         <p className="text-sm text-slate-400">
           Rotation automatique : classement {d.standingsMs / 1000} s, matchs {d.roundMs / 1000} s
-          {d.liveMs > 0 ? `, un match en direct ${Math.round(d.liveMs / 1000)} s` : ''}.
+          {d.liveMs > 0 ? `, puis chaque partie en cours ${Math.round(d.liveMs / 1000)} s, l'une après l'autre` : ''}.
         </p>
         {pinned && (
           <p className="mt-2 text-sm font-semibold text-indigo-200">

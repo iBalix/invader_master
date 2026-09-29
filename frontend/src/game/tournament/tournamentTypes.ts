@@ -179,7 +179,7 @@ export const DEFAULT_TOURNAMENT_INPUT: TournamentConfigInput = {
   match: { games: 1, decide: 'best_of', scoring: 'match' },
   points: { win: 2, draw: 1, loss: 0, forfeit: 2, bye: 2 },
   byePolicy: 'floater',
-  display: { standingsMs: 30_000, roundMs: 30_000, liveMs: 180_000 },
+  display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 60_000 },
   wifiSsid: 'INVADER BAR',
   wifiPassword: '',
   texts: { winner: 'Bravo #winner# !' },
