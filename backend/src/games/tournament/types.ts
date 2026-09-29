@@ -76,7 +76,7 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   match: { games: 1, decide: 'best_of', scoring: 'match' },
   points: { win: 2, draw: 1, loss: 0, forfeit: 2, bye: 2 },
   byePolicy: 'floater',
-  display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 60_000 },
+  display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 45_000 },
   wifiSsid: DEFAULT_CONFIG.wifiSsid,
   wifiPassword: DEFAULT_CONFIG.wifiPassword,
   texts: { winner: 'Bravo #winner# !' },

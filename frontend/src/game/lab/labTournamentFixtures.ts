@@ -151,7 +151,7 @@ function base(over: Partial<TournamentPublicState>, anchor: number): TournamentP
       match: { games: 1, decide: 'best_of', scoring: 'match' },
       points: POINTS,
       byePolicy: 'floater',
-      display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 60_000 },
+      display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 45_000 },
       wifiSsid: 'INVADER BAR',
       wifiPassword: 'retrogaming',
       texts: { winner: 'Bravo #winner#, champion des échecs du jeudi !' },
@@ -366,7 +366,7 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
   {
     cle: 't-projo-rotation', surface: 'projo', label: 'Rotation de ronde', description: 'Classement, matchs, direct (vrai tempo)',
     state: (a) => afterDraw(midTournament(a, a, 13), a),
-    sauts: [['Classement', 0], ['Matchs', 8_500], ['Direct 1', 16_500], ['Direct 2', 76_500]],
+    sauts: [['Classement', 0], ['Matchs', 8_500], ['Direct 1', 16_500], ['Direct 2', 61_500]],
   },
   {
     cle: 't-projo-40', surface: 'projo', label: '40 joueurs', description: 'Classement et matchs sur deux pages',
