@@ -9,6 +9,7 @@ import { useT } from '../../../i18n/useT';
 import ThemePreview from './ThemePreview';
 import { getTheme } from '../themes';
 import { clockLabel, type ChessLobbyItem } from '../lib/chessTypes';
+import { LobbyTournamentChip } from './TournamentBadge';
 
 interface Props {
   item: ChessLobbyItem;
@@ -17,9 +18,11 @@ interface Props {
   onJoin: () => void;
   onResume: () => void;
   onWatch: () => void;
+  /** tournoi : le créateur attend cet adversaire (sa partie comptera) */
+  tournamentOpponent?: string | null;
 }
 
-export default function LobbyGameCard({ item, isMine, onJoin, onResume, onWatch }: Props) {
+export default function LobbyGameCard({ item, isMine, onJoin, onResume, onWatch, tournamentOpponent = null }: Props) {
   const t = useT();
   const theme = getTheme(item.theme);
   const cadence = clockLabel(item.clock) ?? t('table.chess.create.noClock');
@@ -59,6 +62,7 @@ export default function LobbyGameCard({ item, isMine, onJoin, onResume, onWatch 
               {t(`table.chess.create.ai.level${item.ai}`)}
             </span>
           )}
+          {tournamentOpponent && <LobbyTournamentChip opponent={tournamentOpponent} />}
           {item.status === 'playing' && (
             <span className="text-table-ink-muted">
               {t('table.chess.lobby.moves')} {Math.ceil(item.moveCount / 2)}

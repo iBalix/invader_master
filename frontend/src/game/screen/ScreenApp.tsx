@@ -46,6 +46,7 @@ import {
   SPEED_BONUS,
 } from '../lib/gameClient';
 import { BattleProjectorBody } from './BattleScreens';
+import TournamentScreen from '../tournament/screen/TournamentScreen';
 import QuizRules from '../player/QuizRules';
 import '../game.css';
 
@@ -64,15 +65,27 @@ export default function ScreenApp() {
   const { hostname = 'PROJO' } = useParams<{ hostname: string }>();
   useSansZoom();
   const isProjector = !hostname.toUpperCase().startsWith('BAR');
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [current, setCurrent] = useState<{ sessionId: string; mode: string } | null>(null);
+  // QA : ?tournament=<id> force l'affichage d'un tournoi (de test compris,
+  // qu'aucune découverte automatique ne sert)
+  const [forcedTournament] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('tournament');
+    } catch {
+      return null;
+    }
+  });
+  const tournamentId = forcedTournament ?? (current?.mode === 'tournament' ? current.sessionId : null);
+  // le moteur quiz / battle ne suit jamais un tournoi (ses routes le refusent)
+  const sessionId = tournamentId ? null : current?.sessionId ?? null;
 
   // Découverte de la session active (poll léger tant qu'idle)
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
       try {
-        const current = await gameApi.current();
-        if (!cancelled) setSessionId(current?.sessionId ?? null);
+        const found = await gameApi.current({ withTournament: true });
+        if (!cancelled) setCurrent(found ? { sessionId: found.sessionId, mode: found.mode } : null);
       } catch {
         /* backend momentanément injoignable : on garde l'état courant */
       }
@@ -179,6 +192,15 @@ export default function ScreenApp() {
     etaitActive.current = Boolean(active);
   }, [active]);
 
+  if (tournamentId) {
+    return (
+      <TournamentScreen
+        sessionId={tournamentId}
+        isProjector={isProjector}
+        idle={<IdleScreen hostname={hostname} />}
+      />
+    );
+  }
   if (!active) {
     return <IdleScreen hostname={hostname} />;
   }
@@ -615,6 +637,37 @@ export function FullCenter({ children }: { children: React.ReactNode }) {
  */
 export function EtapesConnexion({ state }: { state: PublicState }) {
   return (
+    <EtapesConnexionVue
+      wifiSsid={state.config.wifiSsid}
+      wifiPassword={state.config.wifiPassword}
+      url={playUrl(state.joinCode)}
+    />
+  );
+}
+
+/**
+ * Les memes deux etapes, sans l'etat du quiz : le tournoi les reprend avec son
+ * propre lien d'inscription (/tournoi/:code) et, s'il le demande, le code en
+ * clair sous le QR (on peut aussi le taper).
+ */
+export function EtapesConnexionVue({
+  wifiSsid,
+  wifiPassword,
+  url,
+  titreQr = 'Scanne pour jouer',
+  texteQr = "Choisis ton pseudo et c'est parti !",
+  code,
+  qrSize = 230,
+}: {
+  wifiSsid: string;
+  wifiPassword: string;
+  url: string;
+  titreQr?: string;
+  texteQr?: string;
+  code?: string;
+  qrSize?: number;
+}) {
+  return (
     <div className="flex w-full max-w-4xl flex-col gap-6">
       <div className="anim-fade-up flex items-center gap-8 rounded-3xl border border-white/10 bg-white/5 px-10 py-7">
         <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full border-4 border-cyan-400/60 bg-cyan-400/10 text-4xl font-black text-cyan-300">
@@ -622,10 +675,10 @@ export function EtapesConnexion({ state }: { state: PublicState }) {
         </span>
         <div className="min-w-0 text-left">
           <h2 className="text-3xl font-bold">Connecte-toi au WiFi</h2>
-          <p className="mt-2 text-4xl font-black text-cyan-300">{state.config.wifiSsid}</p>
-          {state.config.wifiPassword && (
+          <p className="mt-2 text-4xl font-black text-cyan-300">{wifiSsid}</p>
+          {wifiPassword && (
             <p className="mt-1 text-2xl text-white/70">
-              mot de passe <span className="font-black text-white">{state.config.wifiPassword}</span>
+              mot de passe <span className="font-black text-white">{wifiPassword}</span>
             </p>
           )}
         </div>
@@ -639,13 +692,19 @@ export function EtapesConnexion({ state }: { state: PublicState }) {
           2
         </span>
         <div className="min-w-0 flex-1 text-left">
-          <h2 className="text-3xl font-bold">Scanne pour jouer</h2>
-          <p className="mt-2 text-2xl text-white/70">
-            Choisis ton pseudo et c'est parti !
-          </p>
+          <h2 className="text-3xl font-bold">{titreQr}</h2>
+          <p className="mt-2 text-2xl text-white/70">{texteQr}</p>
+          {code && (
+            <p className="mt-4 text-xl text-white/50">
+              ou tape le code{' '}
+              <span className="rounded-lg border border-violet-300/40 bg-violet-400/10 px-3 py-1 font-mono text-3xl font-black tracking-[0.3em] text-violet-200">
+                {code}
+              </span>
+            </p>
+          )}
         </div>
         <div className="shrink-0">
-          <QrCanvas value={playUrl(state.joinCode)} size={230} />
+          <QrCanvas value={url} size={qrSize} />
         </div>
       </div>
     </div>

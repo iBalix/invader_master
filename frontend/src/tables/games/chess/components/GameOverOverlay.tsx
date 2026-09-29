@@ -7,6 +7,7 @@
  * on voit d'abord le plateau conclure, ensuite le bilan.
  */
 
+import { type ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import { Crown, Scale } from 'lucide-react';
 import ArcadeButton from '../../../components/ui/ArcadeButton';
@@ -31,6 +32,8 @@ interface Props {
   onBackToLobby: () => void;
   /** absent quand la partie n'a pas de coups a rejouer (abandon avant depart) */
   onAnalyse?: () => void;
+  /** ligne tournoi (résultat transmis, points, partie suivante) */
+  tournament?: ReactNode;
 }
 
 function titleOf(state: ChessPublicState, t: TFunction): string {
@@ -120,6 +123,7 @@ export default function GameOverOverlay({
   onSpectateRematch,
   onBackToLobby,
   onAnalyse,
+  tournament,
 }: Props) {
   const t = useT();
   const result = state.result;
@@ -219,6 +223,12 @@ export default function GameOverOverlay({
             <div className="text-base text-table-ink-soft">{reasonOf(state, t)}</div>
           )}
         </motion.div>
+
+        {tournament && (
+          <motion.div {...step(0.12)} className="w-full">
+            {tournament}
+          </motion.div>
+        )}
 
         {/* récap : les deux camps */}
         {!aborted && (

@@ -200,7 +200,9 @@ export default function BattleLivePage() {
   useEffect(() => {
     void (async () => {
       try {
-        const { data } = await api.get('/api/game');
+        // filtre par mode : sans lui, les parties des tables (une session par
+        // partie d'echecs) repoussaient la battle hors des 20 dernieres
+        const { data } = await api.get('/api/game', { params: { mode: 'battle', active: 1, limit: 5 } });
         const sessions = (data.items ?? []) as Array<{ id: string; mode: string; endedAt: string | null }>;
         const active = sessions.find((s) => !s.endedAt && s.mode === 'battle');
         if (active) setSessionId(active.id);
@@ -293,12 +295,13 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
     void loadStats();
   }, [loadStats]);
 
-  const launch = async (testMode = false) => {
+  const launch = async (testMode = false, force = false) => {
     setLaunching(true);
     try {
       const { data } = await api.post('/api/game', {
         mode: 'battle',
         ...(testMode ? { config: { testMode: true } } : {}),
+        ...(force ? { force: true } : {}),
       });
       toast.success(
         testMode
@@ -308,6 +311,14 @@ function BattleLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
       onLaunched(data.data.id);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      // un tournoi occupe les ecrans du bar : on ne le coupe que sur confirmation
+      if (msg === 'error_tournament_active') {
+        setLaunching(false);
+        if (await demander('Un tournoi est en cours sur les écrans du bar. Le clore et lancer la battle ?')) {
+          await launch(testMode, true);
+        }
+        return;
+      }
       toast.error(msg ?? 'Erreur au lancement');
     } finally {
       setLaunching(false);

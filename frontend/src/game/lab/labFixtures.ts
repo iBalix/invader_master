@@ -128,13 +128,15 @@ function revealBase(): RevealData {
 }
 
 /** les deux moteurs de soiree : le quiz (blindtest compris) et la battle */
-export type LabJeu = 'quiz' | 'battle';
+export type LabJeu = 'quiz' | 'battle' | 'tournoi';
 /** les trois surfaces d'une soiree : le telephone, l'ecran, la console */
 export type LabSurface = 'joueur' | 'projo' | 'gm';
 
 export const JEUX: Array<{ cle: LabJeu; label: string; emoji: string }> = [
   { cle: 'quiz', label: 'Quiz & Blindtest', emoji: '🎬' },
   { cle: 'battle', label: 'Battle Royale', emoji: '⚔️' },
+  // ses scenarios vivent a part (labTournamentFixtures) : autre etat, autres surfaces
+  { cle: 'tournoi', label: 'Tournoi', emoji: '♞' },
 ];
 
 export const SURFACES: Array<{ cle: LabSurface; label: string }> = [

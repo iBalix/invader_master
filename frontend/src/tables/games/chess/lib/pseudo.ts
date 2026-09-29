@@ -4,10 +4,10 @@
  * serveur reste l'arbitre.
  */
 
-const PSEUDO_REGEX = /^[a-zA-Z0-9_éàèêëïîôùûüç' -]+$/;
+const PSEUDO_REGEX = /^[a-zA-Z0-9_éàèêëïîôùûüçÉÀÈÊËÏÎÔÙÛÜÇ' -]+$/;
 
 export function isValidPseudo(pseudo: string): boolean {
   const trimmed = pseudo.trim();
   if (!trimmed || trimmed.length > 16) return false;
-  return PSEUDO_REGEX.test(trimmed) && /[a-zA-Zéàèêëïîôùûüç]/.test(trimmed);
+  return PSEUDO_REGEX.test(trimmed) && /[a-zA-ZéàèêëïîôùûüçÉÀÈÊËÏÎÔÙÛÜÇ]/.test(trimmed);
 }

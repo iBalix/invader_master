@@ -212,6 +212,31 @@ export function registerSyncPayload(mode: string, fn: SyncPayloadFn): void {
 }
 
 /**
+ * Écouteurs de commit, TOUS modes confondus : appelés après chaque sauvegarde
+ * réussie, avec le statut d'avant la mutation. C'est ce qui permet à un
+ * module d'observer un autre jeu sans le modifier (le tournoi lit les fins de
+ * partie d'échecs).
+ *
+ * Contrat, car on est encore sous le verrou de la session :
+ *   - synchrone et en O(1) : chaque coup d'échecs est un commit ;
+ *   - ne JAMAIS muter `session` (c'est l'objet rendu à l'appelant) : copier
+ *     ce qui sert avant tout travail asynchrone ;
+ *   - tout travail asynchrone part en fire-and-forget, sans jamais attendre
+ *     le verrou de CETTE session (interblocage).
+ * Une exception d'écouteur est journalisée et ne casse jamais le commit.
+ */
+export interface CommitBefore {
+  status: string;
+  endedAt: string | null;
+}
+type CommitListener = (session: SessionRow, before: CommitBefore) => void;
+const commitListeners: CommitListener[] = [];
+
+export function registerCommitListener(fn: CommitListener): void {
+  commitListeners.push(fn);
+}
+
+/**
  * Une transition auto est-elle due ? Check pur, sans effet de bord.
  * À utiliser dans les routes de lecture : si true, passer par withSession()
  * pour appliquer (et persister) la transition. Ne JAMAIS appeler advanceIfDue
@@ -293,6 +318,7 @@ export async function withSession<T>(
     const session = await loadSession(sessionId);
     if (!session) throw Object.assign(new Error('Session introuvable'), { httpStatus: 404 });
     const beforeVersion = session.state_version;
+    const before: CommitBefore = { status: session.status, endedAt: session.ended_at };
     const autoMutated = advanceIfDue(session);
     const result = await fn(session);
     // fn signale une mutation en incrémentant runtime._dirty ou en modifiant l'état ;
@@ -322,6 +348,13 @@ export async function withSession<T>(
       // Cue lumière : fire-and-forget STRICT. Jamais await, jamais de rejet
       // remonté — une panne de lumière ne doit ni casser ni ralentir une partie.
       void onSessionCommitted(session).catch(() => undefined);
+      for (const listener of commitListeners) {
+        try {
+          listener(session, before);
+        } catch (err) {
+          console.error('[game] commit listener error', err);
+        }
+      }
     }
     return result;
   });
@@ -363,13 +396,16 @@ export function generatePlayerToken(): string {
   return crypto.randomBytes(24).toString('base64url');
 }
 
-export const PSEUDO_REGEX = /^[a-zA-Z0-9_éàèêëïîôùûüç' -]+$/;
+// majuscules accentuées acceptées : « Élodie » avec la majuscule automatique
+// du clavier d'un téléphone était refusé, alors que l'unicité et la
+// comparaison des pseudos ignorent déjà la casse
+export const PSEUDO_REGEX = /^[a-zA-Z0-9_éàèêëïîôùûüçÉÀÈÊËÏÎÔÙÛÜÇ' -]+$/;
 
 export function validatePseudo(pseudo: string): string | null {
   const trimmed = pseudo.trim();
   if (!trimmed || trimmed.length === 0) return 'error_player_invalid_name';
   if (trimmed.length > 16) return 'error_player_name_too_long';
-  if (!PSEUDO_REGEX.test(trimmed) || !/[a-zA-Zéàèêëïîôùûüç]/.test(trimmed)) {
+  if (!PSEUDO_REGEX.test(trimmed) || !/[a-zA-ZéàèêëïîôùûüçÉÀÈÊËÏÎÔÙÛÜÇ]/.test(trimmed)) {
     return 'error_player_invalid_name';
   }
   return null;

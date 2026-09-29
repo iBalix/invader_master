@@ -15,6 +15,16 @@ const ALL_PAGE_KEYS = [
   'contenus/traductions',
   'contenus/quiz',
   'evenements/battle-questions',
+  // Consoles d'animation et pages ajoutees apres coup. Elles DOIVENT etre ici,
+  // miroir de ALL_PAGES (frontend/src/hooks/usePermissions.tsx) : le PUT d'un
+  // role supprime toutes ses lignes puis ne reinsere que les cles de cette
+  // liste. Absentes, enregistrer les permissions d'un role lui retirait en
+  // silence l'acces aux consoles quiz / battle.
+  'evenements/quiz-live',
+  'evenements/battle-live',
+  'evenements/gestionnaire',
+  'site-web/parametres',
+  'tables-tactiles/preview',
   'utilitaires/import-finances',
   'utilitaires/comptabilite',
   'tables-tactiles/devices',

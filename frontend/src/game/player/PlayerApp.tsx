@@ -13,7 +13,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { tournamentApi } from '../tournament/tournamentClient';
 import {
   ApiError,
   AUDIO_PREROLL_MS,
@@ -91,6 +92,7 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
   const [sessionRef, setSessionRef] = useState<string | null>(code ?? null);
   const [playerToken, setPlayerToken] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
+  const navigate = useNavigate();
 
   // Résolution de la session : code d'URL, sinon session active
   useEffect(() => {
@@ -102,6 +104,11 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
         try {
           const current = await gameApi.current();
           if (!cancelled && current) setSessionRef(current.sessionId);
+          // pas de quiz ni de battle : un tournoi a peut-etre les ecrans
+          if (!cancelled && !current && !embedded) {
+            const tournoi = await tournamentApi.current().catch(() => null);
+            if (!cancelled && tournoi) navigate(`/tournoi/${tournoi.joinCode}`, { replace: true });
+          }
         } catch {
           /* écran "pas de partie" */
         }
@@ -132,7 +139,29 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
     refreshRef.current();
   }, []);
 
-  const { state, you, youAbsent, refresh, setYou } = useGameSession(sessionRef, { playerToken, onEvent });
+  const { state, you, youAbsent, refresh, setYou, error: sessionError } = useGameSession(sessionRef, { playerToken, onEvent });
+
+  // Code inconnu du moteur quiz / battle : c'etait un spinner infini. Si c'est
+  // celui d'un tournoi (QR imprime, lien partage), on y va ; sinon on le dit.
+  const [introuvable, setIntrouvable] = useState(false);
+  useEffect(() => {
+    if (!sessionError || state || !sessionRef) return;
+    let cancelled = false;
+    void tournamentApi
+      .state(sessionRef)
+      .then((t) => {
+        if (cancelled) return;
+        // dans une borne, on ne quitte jamais l'interface de la table
+        if (embedded) setIntrouvable(true);
+        else navigate(`/tournoi/${t.state.joinCode}`, { replace: true });
+      })
+      .catch(() => {
+        if (!cancelled) setIntrouvable(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionError, state, sessionRef, navigate, embedded]);
   refreshRef.current = refresh;
   audienceArme.current =
     state?.status === 'question' && (you?.jokerPlays ?? []).some((p) => p.type === 'audience');
@@ -185,6 +214,18 @@ export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppPr
             <p className="text-white/60">
               {state?.ended ? 'La partie est terminée, merci d\'avoir joué !' : 'Aucune partie en cours pour le moment.'}
             </p>
+          </div>
+        </Center>
+      </Shell>
+    );
+  }
+  if (!state && introuvable) {
+    return (
+      <Shell {...shellProps}>
+        <Center>
+          <div className="anim-fade-up text-center">
+            <h1 className="mb-3 text-3xl font-black text-white">INVADER</h1>
+            <p className="text-white/60">Partie introuvable. Rescanne le QR affiché sur les écrans du bar.</p>
           </div>
         </Center>
       </Shell>

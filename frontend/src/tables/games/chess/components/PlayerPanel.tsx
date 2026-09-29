@@ -33,6 +33,8 @@ interface Props {
   capturedHiddenIds: ReadonlySet<string>;
   advantage: number;
   moveCount: number;
+  /** rangée dédiée sous l'identité (pastille « Tournoi · Ronde 2 ») */
+  badge?: ReactNode;
   children?: ReactNode;
 }
 
@@ -59,6 +61,7 @@ export default function PlayerPanel({
   capturedHiddenIds,
   advantage,
   moveCount,
+  badge,
   children,
 }: Props) {
   const t = useT();
@@ -92,6 +95,8 @@ export default function PlayerPanel({
           </div>
         </div>
       </div>
+
+      {badge}
 
       {clockBaseline ? (
         <ChessClock

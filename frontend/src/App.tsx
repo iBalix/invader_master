@@ -38,6 +38,8 @@ import ScreenApp from './game/screen/ScreenApp';
 import GameLabPage from './game/lab/GameLabPage';
 import QuizLivePage from './pages/QuizLivePage';
 import BattleLivePage from './pages/BattleLivePage';
+import TournamentLivePage from './pages/TournamentLivePage';
+import TournamentPlayerApp from './game/tournament/player/TournamentPlayerApp';
 
 export default function App() {
   return (
@@ -56,6 +58,9 @@ export default function App() {
         */}
         <Route path="/play" element={<PlayerApp />} />
         <Route path="/play/:code" element={<PlayerApp />} />
+        {/* tournoi : le QR des TV du bar pointe ici (surface joueur dediee) */}
+        <Route path="/tournoi" element={<TournamentPlayerApp />} />
+        <Route path="/tournoi/:code" element={<TournamentPlayerApp />} />
         <Route path="/screen/:hostname" element={<ScreenApp />} />
         {/* laboratoire des ecrans du quiz : donnees factices, aucun effet */}
         <Route path="/game-lab" element={<GameLabPage />} />
@@ -125,6 +130,14 @@ export default function App() {
                     element={
                       <ProtectedRoute>
                         <BattleLivePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="evenements/gestionnaire"
+                    element={
+                      <ProtectedRoute>
+                        <TournamentLivePage />
                       </ProtectedRoute>
                     }
                   />

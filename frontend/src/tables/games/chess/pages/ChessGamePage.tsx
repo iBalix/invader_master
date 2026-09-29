@@ -30,6 +30,8 @@ import AnalysisOverlay from '../components/AnalysisOverlay';
 import ReadyOverlay from '../components/ReadyOverlay';
 import WaitingOverlay from '../components/WaitingOverlay';
 import { useBoardInteraction } from '../hooks/useBoardInteraction';
+import { useChessTournamentContext } from '../hooks/useTournamentLookup';
+import { TournamentGameBadge, TournamentResultLine } from '../components/TournamentBadge';
 import { useChessSession } from '../hooks/useChessSession';
 import { useDemoChess } from '../hooks/useDemoChess';
 import { chessApi, chessErrorKey } from '../lib/chessApi';
@@ -85,6 +87,14 @@ export default function ChessGamePage() {
 
   const state = isDemo ? demo.state : online.state;
   const you = isDemo ? demo.you : online.you;
+  // tournoi : cette partie oppose-t-elle deux joueurs appariés ? (lu, jamais
+  // écrit : le jeu d'échecs ne connaît pas le tournoi)
+  const bothSeated = Boolean(state?.seats.w && state?.seats.b && state?.config.ai === null);
+  const tournamentCtx = useChessTournamentContext(
+    isDemo ? null : sessionId,
+    bothSeated,
+    Boolean(state?.result),
+  );
   const theme = useMemo(() => getTheme(state?.config.theme), [state?.config.theme]);
 
   // ----- géométrie
@@ -387,6 +397,7 @@ export default function ChessGamePage() {
       capturedHiddenIds={hiddenIds}
       advantage={advantageOf(side)}
       moveCount={displayMoves.length}
+      badge={tournamentCtx ? <TournamentGameBadge ctx={tournamentCtx} /> : undefined}
     >
       {side === mySide && isSeatedViewer && !isDemo && playing && (
         <>
@@ -528,6 +539,7 @@ export default function ChessGamePage() {
           }
           onBackToLobby={backToLobby}
           onAnalyse={state.moves.length > 0 ? () => setAnalyseOpen(true) : undefined}
+          tournament={tournamentCtx ? <TournamentResultLine ctx={tournamentCtx} state={state} /> : undefined}
         />
       )}
 
@@ -536,6 +548,7 @@ export default function ChessGamePage() {
         busy={busy}
         onClose={() => setJoinOpen(false)}
         onJoin={handleJoin}
+        opponentPseudo={state.seats.w?.pseudo ?? state.seats.b?.pseudo ?? null}
       />
 
       <ArcadeModal open={quitConfirm} onClose={() => setQuitConfirm(false)} title={t('table.chess.quit')} size="md">

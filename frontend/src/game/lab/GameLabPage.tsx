@@ -23,6 +23,7 @@ import BattleRules, { NB_CHAPITRES_BATTLE } from '../player/BattleRules';
 import { JEUX, SCENARIOS, SURFACES, type LabJeu } from './labFixtures';
 import { GM_BATTLE } from './labGmFixtures';
 import { BattleGmBody } from '../../pages/BattleLivePage';
+import { TournamentLabScene, TournamentScenarioList, tournamentScenario } from './TournamentLab';
 import '../game.css';
 
 type Gabarit = 'mini' | 'phone' | 'table' | 'projo';
@@ -68,6 +69,9 @@ export default function GameLabPage() {
    * et on croit a tort qu'ils ne sont pas branches.
    */
   const [sonActif, setSonActif] = useState(gameAudio.enabled);
+  /** tournoi : scenario choisi (ses etats ne sont pas des PublicState de quiz) */
+  const [tCle, setTCle] = useState('t-projo-lobby');
+  const tScenario = tournamentScenario(tCle);
 
   // DEVERROUILLAGE AU PREMIER GESTE, n'importe lequel : choisir un scenario
   // suffit. C'est le pattern du kiosque (ScreenApp) ; le bouton dedie restait
@@ -147,7 +151,7 @@ export default function GameLabPage() {
           </p>
 
           {/* axe 1 : le jeu */}
-          <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-white/10 p-1">
+          <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-white/10 p-1">
             {JEUX.map((j) => (
               <button
                 key={j.cle}
@@ -155,6 +159,11 @@ export default function GameLabPage() {
                 onClick={() => {
                   setJeu(j.cle);
                   setGmCle(null);
+                  if (j.cle === 'tournoi') {
+                    setSautMs(0);
+                    setRunId((v) => v + 1);
+                    return;
+                  }
                   const premier = SCENARIOS.find((s) => s.jeu === j.cle);
                   if (premier) {
                     setScenarioCle(premier.cle);
@@ -172,6 +181,17 @@ export default function GameLabPage() {
               </button>
             ))}
           </div>
+
+          {jeu === 'tournoi' && (
+            <TournamentScenarioList
+              selected={tCle}
+              onSelect={(cle) => {
+                setTCle(cle);
+                setSautMs(0);
+                setRunId((v) => v + 1);
+              }}
+            />
+          )}
 
           {/* axe 2 : la surface */}
           {SURFACES.map((surface) => {
@@ -239,6 +259,59 @@ export default function GameLabPage() {
 
         {/* scene */}
         <main className="min-w-0 flex-1 overflow-y-auto pb-6 lg:h-full">
+          {jeu === 'tournoi' ? (
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                {(tScenario.surface === 'joueur' || tScenario.surface === 'gm') &&
+                  GABARITS.filter((g) => g.cle === 'mini' || g.cle === 'phone' || (tScenario.surface === 'gm' && g.cle === 'table')).map((g) => (
+                    <button
+                      key={g.cle}
+                      type="button"
+                      onClick={() => setGabarit(g.cle)}
+                      className={`rounded-lg px-3 py-1.5 text-sm font-bold ${gabarit === g.cle ? 'bg-white/15' : 'text-white/50 hover:bg-white/5'}`}
+                    >
+                      {g.cle === 'table' ? '🖥 Bureau' : g.label} <span className="text-[10px] font-normal text-white/40">{g.cle === 'table' ? 'large' : g.note}</span>
+                    </button>
+                  ))}
+                {tScenario.sauts && (
+                  <span className="flex items-center gap-1 rounded-lg border border-white/10 px-1 py-1">
+                    <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-white/40">Aller à</span>
+                    {tScenario.sauts.map(([lbl, ms]) => (
+                      <button
+                        key={lbl}
+                        type="button"
+                        onClick={() => {
+                          setSautMs(ms);
+                          setRunId((v) => v + 1);
+                        }}
+                        className={`rounded px-2 py-1 text-xs font-bold ${sautMs === ms ? 'bg-white/15' : 'text-white/50 hover:bg-white/5'}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSautMs(0);
+                    setRunId((v) => v + 1);
+                  }}
+                  className="ml-auto rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-4 py-1.5 text-sm font-bold text-cyan-200 hover:bg-cyan-400/20"
+                >
+                  ↻ Rejouer la séquence
+                </button>
+              </div>
+              <TournamentLabScene
+                key={`${tCle}-${runId}`}
+                scenario={tScenario}
+                sautMs={sautMs}
+                phoneHeight={gabarit === 'phone' ? HAUTEURS.phone : HAUTEURS.mini}
+                gmPhone={gabarit !== 'table'}
+              />
+            </>
+          ) : (
+          <>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             {GABARITS.map((g) => (
               <button
@@ -415,6 +488,8 @@ export default function GameLabPage() {
                 </div>
               )}
             </CadreLarge>
+          )}
+          </>
           )}
         </main>
       </div>

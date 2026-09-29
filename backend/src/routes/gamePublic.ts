@@ -18,6 +18,7 @@ import { audienceCounts, playJoker, joinSession, submitAnswer } from '../games/q
 import { joinBattleSession, submitBattleAnswer } from '../games/battleFlow.js';
 import { buildPublicState, buildYou } from '../games/views.js';
 import type { PlayerRow, SessionRow } from '../games/types.js';
+import { inScope } from '../games/tournament/registry.js';
 
 export const gamePublicRoutes = Router();
 
@@ -50,20 +51,32 @@ async function hasAnswered(session: SessionRow, player: PlayerRow): Promise<bool
   return (count ?? 0) > 0;
 }
 
-/** Session active courante (pour les écrans et la bascule des tables) */
-gamePublicRoutes.get('/current', async (_req, res) => {
+/**
+ * Session active courante (pour les écrans et la bascule des tables).
+ *
+ * `?with=tournament` : le tournoi occupe aussi les écrans. Réservé à
+ * ScreenApp : sans ce paramètre la réponse ne change pas, et c'est voulu.
+ * Les dalles gardent leur bundle en cache et traiteraient tout mode inconnu
+ * comme un quiz (bandeau LIVE, bouton « Rejoindre » vers un 404). Un tournoi
+ * de test n'est servi que par un backend dont le périmètre l'inclut.
+ */
+gamePublicRoutes.get('/current', async (req, res) => {
   try {
+    const withTournament = req.query.with === 'tournament';
     const { data, error } = await supabaseAdmin
       .from('game_sessions')
-      .select('id, join_code, mode, status, created_at')
+      .select('id, join_code, mode, status, created_at, config')
       .is('ended_at', null)
       // événements projo uniquement : une partie d'échecs sur une table ne
       // doit jamais devenir "la" session courante du bar
-      .in('mode', ['quiz', 'battle'])
+      .in('mode', withTournament ? ['quiz', 'battle', 'tournament'] : ['quiz', 'battle'])
       .order('created_at', { ascending: false })
-      .limit(1);
+      .limit(5);
     if (error) throw error;
-    const session = data?.[0] ?? null;
+    const session =
+      (data ?? []).find(
+        (s) => s.mode !== 'tournament' || inScope((s.config ?? {}) as { testMode?: boolean }),
+      ) ?? null;
     res.json({
       status: 'success',
       data: session

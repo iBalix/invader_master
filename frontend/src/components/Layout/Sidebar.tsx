@@ -26,6 +26,7 @@ import {
   Sparkles,
   Radio,
   Globe,
+  Trophy,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -102,6 +103,7 @@ const SIDEBAR_MENU: SidebarItem[] = [
       { title: 'Quiz live', icon: Radio, disabled: false, path: '/evenements/quiz-live', pageKey: 'evenements/quiz-live', badgeText: 'V2' },
       { title: 'Battle Royal', icon: Swords, disabled: false, path: '/evenements/battle-questions', pageKey: 'evenements/battle-questions' },
       { title: 'Battle live', icon: Radio, disabled: false, path: '/evenements/battle-live', pageKey: 'evenements/battle-live', badgeText: 'V2' },
+      { title: "Gestionnaire d'événements", icon: Trophy, disabled: false, path: '/evenements/gestionnaire', pageKey: 'evenements/gestionnaire', badgeText: 'NEW' },
     ],
   },
   {

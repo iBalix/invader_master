@@ -4,7 +4,7 @@
  * déplie ses 6 teintes). Tout est visible, pas de wizard.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, Minus, Plus, Users } from 'lucide-react';
 import ArcadeButton from '../../../components/ui/ArcadeButton';
 import ArcadeModal from '../../../components/ui/ArcadeModal';
@@ -14,6 +14,8 @@ import { DUO_TINTS, DUO_TINT_LIST, THEME_CHOICES, duoTheme, getTheme } from '../
 import { PieceGlyph } from '../themes/pieces/StandardPieceSet';
 import { getLastPseudo } from '../lib/identity';
 import { isValidPseudo } from '../lib/pseudo';
+import { useTournamentLookup } from '../hooks/useTournamentLookup';
+import { TournamentPseudoHint } from './TournamentBadge';
 import type { ChessAiLevel, ChessColor, CreateChessGameInput } from '../lib/chessTypes';
 import type { DuoTint } from '../themes';
 
@@ -57,6 +59,21 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
 
   const themeValue = themeBase === 'duo' ? `duo:${duoTint}` : themeBase;
   const pseudoOk = isValidPseudo(pseudo);
+
+  // Tournoi en cours : le pseudo est-il un participant ? La couleur conseillée
+  // par le tirage est pré-sélectionnée une fois (le joueur reste libre de la
+  // changer : l'événement n'impose rien aux parties).
+  const tournament = useTournamentLookup(pseudo, open);
+  const presetFor = useRef<string | null>(null);
+  useEffect(() => {
+    const m = tournament?.match;
+    if (!m || tournament?.hint !== 'play' || !m.color) return;
+    const key = `${m.id}:${m.games}`;
+    if (presetFor.current === key) return;
+    presetFor.current = key;
+    setColor(m.color);
+    setOpponent('human');
+  }, [tournament]);
 
   const clock = useMemo(() => {
     if (clockChoice === 'none') return null;
@@ -119,13 +136,20 @@ export default function CreateGameModal({ open, busy, onClose, onCreate }: Props
           <div className="mb-2 font-display text-sm uppercase tracking-[0.25em] text-table-cyan/85">
             {t('table.chess.create.pseudo')}
           </div>
-          <input
-            value={pseudo}
-            onChange={(e) => setPseudo(e.target.value)}
-            maxLength={16}
-            placeholder={t('table.chess.create.pseudoPlaceholder')}
-            className="w-full rounded-2xl border border-white/15 bg-black/40 px-5 py-3.5 text-xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
-          />
+          {/* la pastille tournoi se glisse A COTE du champ : la modale ne
+              grandit pas (elle doit tenir sans défilement sur une dalle) */}
+          <div className="flex items-stretch gap-3">
+            <input
+              value={pseudo}
+              onChange={(e) => setPseudo(e.target.value)}
+              maxLength={16}
+              placeholder={t('table.chess.create.pseudoPlaceholder')}
+              className="min-w-0 flex-1 rounded-2xl border border-white/15 bg-black/40 px-5 py-3.5 text-xl text-table-ink outline-none placeholder:text-table-ink-muted focus:border-table-cyan/70"
+            />
+            {tournament && (
+              <TournamentPseudoHint lookup={tournament} onUsePseudo={setPseudo} className="w-[30rem] shrink-0" />
+            )}
+          </div>
         </section>
 
         {/* adversaire : c'est le choix qui conditionne tous les autres */}

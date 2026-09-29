@@ -2,7 +2,7 @@
  * Moteur de jeu — types partagés (modes quiz / battle / chess)
  */
 
-export type GameMode = 'quiz' | 'battle' | 'chess' | 'blackjack' | 'flappybar';
+export type GameMode = 'quiz' | 'battle' | 'chess' | 'blackjack' | 'flappybar' | 'tournament';
 
 export type QuizStatus =
   | 'lobby'

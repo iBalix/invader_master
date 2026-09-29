@@ -214,7 +214,9 @@ export default function QuizLivePage() {
   useEffect(() => {
     void (async () => {
       try {
-        const { data } = await api.get('/api/game');
+        // filtre par mode : sans lui, les parties des tables (une session par
+        // partie d'echecs) repoussaient la session du quiz hors des 20 dernieres
+        const { data } = await api.get('/api/game', { params: { mode: 'quiz', active: 1, limit: 5 } });
         const sessions = (data.items ?? []) as Array<{ id: string; mode: string; endedAt: string | null }>;
         const active = sessions.find((s) => !s.endedAt && s.mode === 'quiz');
         if (active) setSessionId(active.id);
@@ -365,6 +367,7 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
   const [quizzes, setQuizzes] = useState<QuizChoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [launching, setLaunching] = useState<string | null>(null);
+  const { demander, dialogue } = useConfirmation();
 
   useEffect(() => {
     void (async () => {
@@ -379,14 +382,22 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
     })();
   }, []);
 
-  const launch = async (quizId: string) => {
+  const launch = async (quizId: string, force = false) => {
     setLaunching(quizId);
     try {
-      const { data } = await api.post('/api/game', { quizId });
+      const { data } = await api.post('/api/game', { quizId, ...(force ? { force: true } : {}) });
       toast.success(`Session créée ! Code : ${data.data.joinCode}`);
       onLaunched(data.data.id);
     } catch (err) {
       const msg = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+      // un tournoi occupe les ecrans du bar : on ne le coupe que sur confirmation
+      if (msg === 'error_tournament_active') {
+        setLaunching(null);
+        if (await demander('Un tournoi est en cours sur les écrans du bar. Le clore et lancer le quiz ?')) {
+          await launch(quizId, true);
+        }
+        return;
+      }
       toast.error(msg ?? 'Erreur au lancement');
     } finally {
       setLaunching(null);
@@ -397,6 +408,7 @@ function SessionLauncher({ onLaunched }: { onLaunched: (id: string) => void }) {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
+      {dialogue}
       <h1 className="text-2xl font-black">Quiz live</h1>
       <p className="mt-1 text-sm text-slate-400">
         Lance une session : le projecteur et les écrans du bar basculent automatiquement.

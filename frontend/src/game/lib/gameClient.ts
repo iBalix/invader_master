@@ -300,9 +300,14 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs?: number):
 const ANSWER_TIMEOUT_MS = 5000;
 
 export const gameApi = {
-  current: () =>
+  /**
+   * `withTournament` : le tournoi occupe aussi les écrans. Réservé aux écrans
+   * du bar (ScreenApp) : les dalles et les téléphones gardent la réponse
+   * historique quiz / battle, qu'ils savent interpréter.
+   */
+  current: (opts: { withTournament?: boolean } = {}) =>
     request<{ sessionId: string; joinCode: string; mode: string; gameStatus: string } | null>(
-      '/public/game/current',
+      `/public/game/current${opts.withTournament ? '?with=tournament' : ''}`,
     ),
   state: (idOrCode: string, playerToken?: string) =>
     request<{ state: PublicState; you: You | null }>(

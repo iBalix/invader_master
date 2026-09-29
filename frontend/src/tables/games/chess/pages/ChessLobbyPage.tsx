@@ -17,6 +17,7 @@ import CreateGameModal from '../components/CreateGameModal';
 import JoinPseudoModal from '../components/JoinPseudoModal';
 import LobbyGameCard from '../components/LobbyGameCard';
 import { useChessLobby } from '../hooks/useChessLobby';
+import { useLobbyTournamentInfo } from '../hooks/useTournamentLookup';
 import { chessApi, chessErrorKey } from '../lib/chessApi';
 import { getChessIdentity, saveChessIdentity, saveLastPseudo } from '../lib/identity';
 import type { ChessLobbyItem, CreateChessGameInput } from '../lib/chessTypes';
@@ -83,6 +84,12 @@ export default function ChessLobbyPage() {
 
   const waiting = items.filter((i) => i.status === 'lobby');
   const running = items.filter((i) => i.status === 'playing');
+  // tournoi : le créateur d'une partie en attente a-t-il un match à jouer ?
+  const creators = waiting
+    .filter((i) => i.ai === null)
+    .map((i) => i.seats.w ?? i.seats.b)
+    .filter((p): p is string => Boolean(p));
+  const tournamentInfo = useLobbyTournamentInfo(creators);
 
   return (
     <div className="relative flex h-full w-full flex-col px-8 py-6">
@@ -141,6 +148,11 @@ export default function ChessLobbyPage() {
                         onJoin={() => setJoinTarget(item)}
                         onResume={() => navigate(`/table/games/chess/${item.sessionId}`)}
                         onWatch={() => navigate(`/table/games/chess/${item.sessionId}`)}
+                        tournamentOpponent={(() => {
+                          const creator = item.seats.w ?? item.seats.b;
+                          const info = creator ? tournamentInfo[creator] : null;
+                          return info && info.hint === 'play' ? info.opponent : null;
+                        })()}
                       />
                     </AnimatedGridItem>
                   ))}
@@ -182,6 +194,7 @@ export default function ChessLobbyPage() {
         busy={busy}
         onClose={() => setJoinTarget(null)}
         onJoin={(pseudo) => joinTarget && void handleJoin(joinTarget, pseudo)}
+        opponentPseudo={joinTarget ? joinTarget.seats.w ?? joinTarget.seats.b : null}
       />
     </div>
   );

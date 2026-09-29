@@ -26,6 +26,7 @@ export const ALL_PAGES: PageDef[] = [
   // renvoyait false et redirigeait aussitot -> le clic "ne faisait rien".
   { key: 'evenements/quiz-live', label: 'Quiz live (console GM)' },
   { key: 'evenements/battle-live', label: 'Battle live (console GM)' },
+  { key: 'evenements/gestionnaire', label: "Gestionnaire d'événements (console GM)" },
   { key: 'utilitaires/import-finances', label: 'Import finances' },
   { key: 'utilitaires/comptabilite', label: 'Comptabilite' },
   { key: 'tables-tactiles/coupons', label: 'Tables tactiles - Codes promo' },
