@@ -65,6 +65,13 @@ const V1_URL_BY_SCREEN: Record<string, string> = {
  */
 const V2_ORIGIN = 'https://invadermaster-frontend-production.up.railway.app';
 const V2_PROJO_URL = `${V2_ORIGIN}/screen/PROJO`;
+/**
+ * Meme ecran, entree dediee aux evenements du Gestionnaire (tournoi) : il suit
+ * deja l'evenement en cours, mais l'animateur le cherche sous ce nom. Le
+ * parametre, ignore par l'ecran, ne sert qu'a distinguer l'option dans la liste
+ * (deux options de meme valeur se confondraient dans le select).
+ */
+const V2_PROJO_EVENT_URL = `${V2_ORIGIN}/screen/PROJO?vue=evenement`;
 const V2_BAR_URL = `${V2_ORIGIN}/screen/BAR`;
 /**
  * Retour a l'ecran de demarrage du poste (kioskURL.txt), resolu par le script
@@ -85,6 +92,7 @@ const PROJO_MODES: ScreenMode[] = [
   { label: 'TV', value: 'http://localhost/tv.php?type=projecteur&hostname=PROJO' },
   { label: 'Stand Up', value: 'http://localhost/standup.php?type=projecteur&hostname=PROJO' },
   { label: 'V2 · Quiz + Battle (Invader Master)', value: V2_PROJO_URL },
+  { label: 'V2 · Événement / tournoi (Invader Master)', value: V2_PROJO_EVENT_URL },
 ];
 
 /** TV du bar (BAR01 / BAR02) : ecran par defaut ou page permanente du quiz */
@@ -710,6 +718,16 @@ export default function MachineActionModal({ machine, tableNames = [], agentConn
                           lancée depuis « Quiz live » ou « Battle live », et affiche un écran
                           d'attente entre deux parties. Lancer ou arrêter une session bascule
                           désormais le projecteur et les TV du bar automatiquement.
+                        </p>
+                      </div>
+                    )}
+                    {selectedScreenMode === V2_PROJO_EVENT_URL && (
+                      <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-800">
+                        <p className="font-semibold">Affiche l'événement en cours sur le projecteur.</p>
+                        <p className="mt-1">
+                          Inscriptions, tirage, classement et podium du tournoi lancé depuis le
+                          « Gestionnaire d'événements ». Écran d'attente s'il n'y a pas d'événement.
+                          Pas de son, donc aucun clic nécessaire sur le projecteur.
                         </p>
                       </div>
                     )}
