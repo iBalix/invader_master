@@ -231,7 +231,7 @@ export const JOKER_WEIGHTS: Record<JokerType, number> = { fifty: 40, audience: 3
 /**
  * All-In : multiplicateur des points en cas de bonne reponse (la mauvaise
  * reponse coute toujours la valeur de la question). Passe de 3 a 2 en
- * octobre 2026 : a 3, un All-In gagne renversait trop le classement.
+ * octobre 2026, a la demande de Romain.
  * Miroir cote ecrans : ALL_IN_MULTIPLICATEUR dans gameClient.ts.
  */
 export const ALL_IN_MULTIPLICATEUR = 2;
