@@ -24,6 +24,7 @@ import { useEffect, useRef, useState } from 'react';
 import confetti from 'canvas-confetti';
 import JokerWheel from '../components/JokerWheel';
 import {
+  ALL_IN_MULTIPLICATEUR,
   JOKER_DEFS,
   JOKER_HAND_MAX,
   REVEAL_JOUEUR_MS,
@@ -219,7 +220,7 @@ function VerdictScreen({
       <Seuil visible={dans >= 320}>
         <p className={`mt-2 font-black tabular-nums ${grand ? 'text-4xl' : 'text-2xl'}`}>
           +{mine.points} point{Math.abs(mine.points) > 1 ? 's' : ''}
-          {mine.allIn && <span className="text-fuchsia-300"> 🎰 ×3 !</span>}
+          {mine.allIn && <span className="text-fuchsia-300"> 🎰 ×{ALL_IN_MULTIPLICATEUR} !</span>}
         </p>
       </Seuil>
       {monRang >= 0 && (

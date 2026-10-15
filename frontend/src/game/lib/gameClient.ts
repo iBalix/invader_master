@@ -26,6 +26,13 @@ export type QuestionType = 'qcm' | 'estimation' | 'free_text';
 export type JokerType = 'all_in' | 'audience' | 'fifty';
 
 /**
+ * All-In : multiplicateur des points sur une bonne reponse. Miroir de
+ * ALL_IN_MULTIPLICATEUR cote serveur (types.ts) : tous les ecrans qui
+ * l'annoncent le lisent ici, jamais en dur.
+ */
+export const ALL_IN_MULTIPLICATEUR = 2;
+
+/**
  * Catalogue unique des jokers : joueur, projecteur, regles, console GM et
  * laboratoire consomment tous CE tableau. Une reformulation se fait ici.
  */
@@ -38,7 +45,7 @@ export const JOKER_DEFS: Record<
     emoji: '🎰',
     couleur: '#FF2BD6',
     ombre: 'rgba(255, 43, 214, 0.45)',
-    description: 'Points x3 si tu as bon... mais tu perds la valeur de la question si tu as faux.',
+    description: `Points x${ALL_IN_MULTIPLICATEUR} si tu as bon... mais tu perds la valeur de la question si tu as faux.`,
   },
   audience: {
     label: 'Avis du public',

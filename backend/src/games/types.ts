@@ -228,6 +228,13 @@ export const JOKER_DRAW_BASE = 0.05;
 export const JOKER_DRAW_SLOPE = 0.25;
 /** ponderation des types au tirage : le plus doux est le plus frequent */
 export const JOKER_WEIGHTS: Record<JokerType, number> = { fifty: 40, audience: 30, all_in: 30 };
+/**
+ * All-In : multiplicateur des points en cas de bonne reponse (la mauvaise
+ * reponse coute toujours la valeur de la question). Passe de 3 a 2 en
+ * octobre 2026 : a 3, un All-In gagne renversait trop le classement.
+ * Miroir cote ecrans : ALL_IN_MULTIPLICATEUR dans gameClient.ts.
+ */
+export const ALL_IN_MULTIPLICATEUR = 2;
 
 /**
  * Serie de bonnes reponses : a partir de la STREAK_BONUS_FROM-ieme consecutive,

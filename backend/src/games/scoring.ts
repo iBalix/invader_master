@@ -13,7 +13,7 @@ import type {
   SessionConfig,
   SpecialQuestion,
 } from './types.js';
-import { SPEED_BONUS, STREAK_BONUS_FROM } from './types.js';
+import { ALL_IN_MULTIPLICATEUR, SPEED_BONUS, STREAK_BONUS_FROM } from './types.js';
 
 interface ComputeInput {
   question: QuestionSnapshot;
@@ -111,11 +111,11 @@ export function computeReveal(input: ComputeInput): ComputedReveal {
       if (special === 'double') points *= 2;
       if (special === 'quitte_double' && q.type === 'qcm' && !correct) points = -2;
 
-      // Joker all-in : x3 si correct, -points de la question si faux.
-      // Applique seulement si le joueur a REPONDU : une deconnexion n'est pas
-      // une erreur, on ne punit pas l'absence.
+      // Joker all-in : x ALL_IN_MULTIPLICATEUR si correct, -points de la
+      // question si faux. Applique seulement si le joueur a REPONDU : une
+      // deconnexion n'est pas une erreur, on ne punit pas l'absence.
       if (allInPlayerIds.has(player.id)) {
-        points = correct ? points * 3 : -q.points;
+        points = correct ? points * ALL_IN_MULTIPLICATEUR : -q.points;
       }
 
       // Top estimations : points APRÈS multiplicateurs, pour rester cohérent

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { tournamentApi } from '../tournament/tournamentClient';
 import {
+  ALL_IN_MULTIPLICATEUR,
   ApiError,
   AUDIO_PREROLL_MS,
   clearIdentity,
@@ -918,7 +919,7 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
         <div className="min-w-0">
           <p className="text-xs uppercase tracking-widest text-white/40">
             Question {q.index + 1}/{q.total} · {q.type === 'estimation' ? 'jusqu\u2019à ' : ''}{q.points} pt{q.points > 1 ? 's' : ''}
-            {allInArme ? ' · 🎰 ALL-IN ×3' : ''}
+            {allInArme ? ` · 🎰 ALL-IN ×${ALL_IN_MULTIPLICATEUR}` : ''}
           </p>
           <h2 className={`text-balance font-bold leading-snug ${embedded ? 'text-3xl' : 'text-lg'}`}>{q.question}</h2>
         </div>
@@ -1034,7 +1035,7 @@ function QuestionScreen({ state, you, sessionRef, playerToken, refresh, embedded
 
       {allInArme && !answered && (
         <div className="anim-pop mt-2 shrink-0 rounded-xl border-2 border-fuchsia-400/60 bg-fuchsia-500/15 px-3 py-1.5 text-center text-sm font-black text-fuchsia-200">
-          🎰 ALL-IN : ×3 si bon, −{q.points} si faux
+          🎰 ALL-IN : ×{ALL_IN_MULTIPLICATEUR} si bon, −{q.points} si faux
         </div>
       )}
 

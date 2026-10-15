@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
+  ALL_IN_MULTIPLICATEUR,
   gameApi,
   JOKER_DEFS,
   type JokerType,
@@ -1461,7 +1462,7 @@ function RevealProjo({ state }: { state: PublicState }) {
       <div className="mt-3 flex min-h-[52px] shrink-0 flex-wrap items-center justify-center gap-4">
         {rapideDevoile && allInWinners.length > 0 && (
           <span className="anim-pop rounded-full border border-fuchsia-400/50 bg-fuchsia-500/15 px-6 py-2 text-2xl font-bold text-fuchsia-200">
-            🎰 All-In ×3 : {allInWinners.map(([pseudo]) => pseudo).join(', ')}
+            🎰 All-In ×{ALL_IN_MULTIPLICATEUR} : {allInWinners.map(([pseudo]) => pseudo).join(', ')}
           </span>
         )}
         {rapideDevoile && allInLosers.length > 0 && (

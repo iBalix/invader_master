@@ -422,7 +422,7 @@ export const SCENARIOS: LabScenario[] = [
     jeu: 'quiz',
     surface: 'joueur',
     label: 'Question + All-In armé',
-    description: 'Le bandeau ×3 pulse sous la question.',
+    description: 'Le bandeau ×2 pulse sous la question.',
     state: () =>
       baseState({
         status: 'question',
