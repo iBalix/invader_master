@@ -20,7 +20,7 @@ interface Props {
   title?: ReactNode;
   children: ReactNode;
   dismissOnBackdrop?: boolean;
-  size?: 'md' | 'lg' | 'xl' | '2xl';
+  size?: 'md' | 'lg' | 'xl' | '2xl' | '3xl';
   /** padding et titre resserrés : pour les modales denses qui doivent tenir
    * sans scroll sur une dalle 1080p */
   dense?: boolean;
@@ -31,6 +31,7 @@ const SIZE_CLASSES = {
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
   '2xl': 'max-w-6xl',
+  '3xl': 'max-w-7xl',
 };
 
 export default function ArcadeModal({

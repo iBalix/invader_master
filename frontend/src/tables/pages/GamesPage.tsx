@@ -11,7 +11,8 @@
  *   non cliquables. Un second appui sur le filtre actif le retire.
  * - Grid de vignettes 16:9 dense ; avec un filtre pose, les jeux qui ne portent
  *   pas cette configuration sont grises
- * - Tap d'une vignette = LaunchGameModal (sauf grise)
+ * - Tap d'une vignette = LaunchGameModal (sauf grise), ou WebGameIntroModal
+ *   pour un jeu maison (echecs, blackjack, Flappy Bar...)
  * - Plus de titre redondant en haut (la categorie active est lisible dans la sidebar)
  * - Plus de catégorie "Nos préférés" ni "4 joueurs" (filtrees au seed v2)
  */
@@ -30,6 +31,7 @@ import BackButton from '../components/layout/BackButton';
 import LauncherSidebar, { type SidebarEntry } from '../components/layout/LauncherSidebar';
 import GameCard from '../components/games/GameCard';
 import LaunchGameModal from '../components/games/LaunchGameModal';
+import WebGameIntroModal from '../components/games/WebGameIntroModal';
 import RetroLoader from '../components/ui/RetroLoader';
 import AnimatedGrid, { AnimatedGridItem } from '../components/ui/AnimatedGrid';
 import ScrollIndicator from '../components/menu/ScrollIndicator';
@@ -85,6 +87,8 @@ export default function GamesPage() {
   const t = useT();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selected, setSelected] = useState<GameV2 | null>(null);
+  // jeu maison : pop-up de presentation avant d'entrer dans son lobby
+  const [selectedWeb, setSelectedWeb] = useState<GameV2 | null>(null);
   // null = aucun filtre, et c'est l'etat par defaut : on entre dans une
   // categorie en voyant tous ses jeux, pas une grille a moitie grisee.
   const [playerFilter, setPlayerFilter] = useState<ConfigJoueurs | null>(null);
@@ -270,12 +274,12 @@ export default function GamesPage() {
                           }
                           onClick={() => {
                             if (isDisabled) return;
-                            // jeu web (échecs, ...) : navigation interne dans
-                            // le SPA, pas d'ordre de lancement. Le garde
-                            // /table/ empêche toute sortie du kiosque par une
-                            // URL mal saisie en base.
+                            // jeu web (échecs, ...) : pop-up de présentation,
+                            // puis navigation interne dans le SPA, pas d'ordre
+                            // de lancement. Le garde /table/ empêche toute
+                            // sortie du kiosque par une URL mal saisie en base.
                             if (g.gameType === 'web' && g.gameUrl?.startsWith('/table/')) {
-                              navigate(g.gameUrl);
+                              setSelectedWeb(g);
                               return;
                             }
                             setSelected(g);
@@ -295,6 +299,15 @@ export default function GamesPage() {
         open={!!selected}
         game={selected as unknown as Game | null}
         onClose={() => setSelected(null)}
+      />
+
+      <WebGameIntroModal
+        open={!!selectedWeb}
+        game={selectedWeb}
+        onClose={() => setSelectedWeb(null)}
+        onPlay={(g) => {
+          if (g.gameUrl?.startsWith('/table/')) navigate(g.gameUrl);
+        }}
       />
     </div>
   );
