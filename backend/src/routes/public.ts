@@ -131,10 +131,8 @@ publicRoutes.get('/quizzes/:id', async (req, res) => {
   }
 });
 
-// Full carte: categories with products, conditionings, variants, icon+color.
-// '/carte-v2' : ancien chemin, garde pour les dalles et le site encore charges
-// avec un bundle d'avant la migration 053. A retirer une fois tout recharge.
-publicRoutes.get(['/carte', '/carte-v2'], async (req, res) => {
+// Full carte: categories with products, conditionings, variants, icon+color
+publicRoutes.get('/carte', async (req, res) => {
   try {
     const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
 
@@ -292,10 +290,8 @@ publicRoutes.get('/website-settings', async (_req, res) => {
   }
 });
 
-// Full games: categories enrichies (icon/color/texture) + consoles (display_name) + games (max_players, youtube, controls).
-// '/games-v2' : ancien chemin, garde pour les dalles encore chargees avec un
-// bundle d'avant la migration 053. A retirer une fois tout recharge.
-publicRoutes.get(['/games', '/games-v2'], async (req, res) => {
+// Full games: categories enrichies (icon/color/texture) + consoles (display_name) + games (max_players, youtube, controls)
+publicRoutes.get('/games', async (req, res) => {
   try {
     const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
 
