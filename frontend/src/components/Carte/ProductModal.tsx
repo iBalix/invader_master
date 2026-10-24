@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Sparkles } from 'lucide-react';
 import FileUpload from '../Quiz/FileUpload';
+import ConditioningEditor, { type ConditioningInput } from './ConditioningEditor';
+import VariantEditor, { type VariantInput } from './VariantEditor';
+import TagSelector from './TagSelector';
+import ImageGenModal from './ImageGenModal';
 
 export interface ProductData {
   id?: string;
@@ -17,6 +21,9 @@ export interface ProductData {
   image_url: string | null;
   video_url: string | null;
   display_order: number;
+  conditionings: ConditioningInput[];
+  variants: VariantInput[];
+  tag_ids: string[];
 }
 
 const EMPTY: ProductData = {
@@ -33,6 +40,9 @@ const EMPTY: ProductData = {
   image_url: null,
   video_url: null,
   display_order: 100,
+  conditionings: [],
+  variants: [],
+  tag_ids: [],
 };
 
 interface Props {
@@ -44,6 +54,7 @@ interface Props {
 export default function ProductModal({ initial, onSave, onClose }: Props) {
   const [form, setForm] = useState<ProductData>({ ...EMPTY });
   const [saving, setSaving] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
 
   useEffect(() => {
     if (initial) {
@@ -62,6 +73,22 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
         image_url: initial.image_url ?? null,
         video_url: initial.video_url ?? null,
         display_order: initial.display_order ?? 100,
+        conditionings: (initial.conditionings ?? []).map((c) => ({
+          id: c.id,
+          label: c.label ?? '',
+          label_en: c.label_en ?? '',
+          price: c.price ?? 0,
+          price_hh: c.price_hh ?? null,
+        })),
+        variants: (initial.variants ?? []).map((v) => ({
+          id: v.id,
+          label: v.label ?? '',
+          label_en: v.label_en ?? '',
+          color: v.color ?? null,
+        })),
+        tag_ids:
+          initial.tag_ids ??
+          ((initial as unknown as { tags?: { id: string }[] }).tags ?? []).map((t) => t.id),
       });
     }
   }, [initial]);
@@ -82,7 +109,7 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b sticky top-0 bg-white z-10">
           <h2 className="text-lg font-bold">
             {initial?.id ? 'Modifier le produit' : 'Nouveau produit'}
@@ -136,9 +163,7 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Prix *</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="number" step="0.01" min="0"
                 value={form.price}
                 onChange={(e) => set('price', parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -148,13 +173,9 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Prix HH</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="number" step="0.01" min="0"
                 value={form.price_hh ?? ''}
-                onChange={(e) =>
-                  set('price_hh', e.target.value ? parseFloat(e.target.value) : null)
-                }
+                onChange={(e) => set('price_hh', e.target.value ? parseFloat(e.target.value) : null)}
                 placeholder="—"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
@@ -162,13 +183,9 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Prix secondaire</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="number" step="0.01" min="0"
                 value={form.price_second ?? ''}
-                onChange={(e) =>
-                  set('price_second', e.target.value ? parseFloat(e.target.value) : null)
-                }
+                onChange={(e) => set('price_second', e.target.value ? parseFloat(e.target.value) : null)}
                 placeholder="—"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
@@ -190,37 +207,57 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <FileUpload
-                label="Icône"
-                accept="image/*"
-                value={form.icon_url}
-                onChange={(v) => set('icon_url', v)}
-              />
-              <p className="mt-1 text-xs text-gray-400">Exactement 300 x 300 px</p>
+              <FileUpload label="Icône" accept="image/*" value={form.icon_url} onChange={(v) => set('icon_url', v)} />
+              <p className="mt-1 text-xs text-gray-400">
+                Carré, 300 x 300 px. Utilisée par l'ancien site et par la liste ci-dessus, elle
+                n'est plus affichée sur les tables : c'est l'image HD qui y sert partout.
+              </p>
             </div>
             <div>
-              <FileUpload
-                label="Image HD"
-                accept="image/*"
-                value={form.image_url}
-                onChange={(v) => set('image_url', v)}
-              />
-              <p className="mt-1 text-xs text-gray-400">Minimum 1280 x 720 px</p>
+              <FileUpload label="Image HD" accept="image/*" value={form.image_url} onChange={(v) => set('image_url', v)} />
+              <p className="mt-1 text-xs text-gray-400">
+                <strong className="text-gray-500">16:9 obligatoire</strong>, idéalement 1280 x 720 px.
+                Affichée en 16:9 partout sur les tables (liste, fiche produit, panier) : une image
+                carrée ou verticale sera rognée au centre, gauche et droite coupées.
+              </p>
+              {/* type="button" IMPERATIF : sans lui, un bouton dans un <form>
+                  vaut submit et ce clic enregistrerait le produit. */}
+              <button
+                type="button"
+                onClick={() => setGenOpen(true)}
+                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Générer avec l'IA
+              </button>
             </div>
           </div>
 
           <div>
-            <FileUpload
-              label="Vidéo (optionnelle)"
-              accept="video/mp4,video/webm"
-              value={form.video_url}
-              onChange={(v) => set('video_url', v)}
-            />
+            <FileUpload label="Vidéo (optionnelle)" accept="video/mp4,video/webm" value={form.video_url} onChange={(v) => set('video_url', v)} />
             <p className="mt-1 text-xs text-gray-400">
-              MP4 ou WebM, 50&nbsp;Mo max. Jouée automatiquement à l'ouverture de la
-              fiche produit sur les tables tactiles, puis fondu vers l'image HD à
-              0,5&nbsp;s de la fin. Conseil : 5–10&nbsp;s, 1280×720, sans son.
+              MP4 ou WebM, 50 Mo max. Jouée automatiquement à l'ouverture de la fiche produit sur les tables tactiles.
             </p>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <ConditioningEditor
+              value={form.conditionings}
+              onChange={(next) => set('conditionings', next)}
+            />
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <VariantEditor
+              value={form.variants}
+              onChange={(next) => set('variants', next)}
+            />
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <TagSelector
+              value={form.tag_ids}
+              onChange={(next) => set('tag_ids', next)}
+            />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -241,6 +278,22 @@ export default function ProductModal({ initial, onSave, onClose }: Props) {
             </button>
           </div>
         </form>
+
+        {/* Hors du <form> volontairement, cf. l'en-tete de ImageGenModal */}
+        <ImageGenModal
+          open={genOpen}
+          productName={form.name}
+          productDescription={form.description}
+          /* categories : presentes a l'execution sur la ligne de liste, mais
+             absentes du type ProductData. Elles ne servent qu'a deviner un
+             defaut ajustable, d'ou la lecture defensive plutot qu'un elargissement
+             du type partage. */
+          productCategories={
+            (initial as unknown as { categories?: string[] } | null)?.categories ?? []
+          }
+          onAccept={(url) => set('image_url', url)}
+          onClose={() => setGenOpen(false)}
+        />
       </div>
     </div>
   );

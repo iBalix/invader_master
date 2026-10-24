@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Loader2, X, Youtube } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import FileUpload from '../components/Quiz/FileUpload';
@@ -12,15 +12,35 @@ interface GameForm {
   subtitle_en: string;
   description: string;
   description_en: string;
+  /** 'emulator' = ROM lancée par l'agent ; 'web' = route interne du SPA tables */
+  game_type: 'emulator' | 'web';
+  game_url: string;
   file_name: string;
   console_id: string;
   platform: string[];
   display_order: number;
   competition: boolean;
   competition_link: string;
+  /** false = masque de la liste des tables, mais toujours joignable par URL directe */
+  active: boolean;
+  /** configurations de joueurs cochees ('1' | '2' | '3' | '4' | '4+') */
+  player_counts: string[];
+  youtube_url: string;
+  youtube_video_id: string | null;
+  youtube_start_sec: number;
+  youtube_duration_sec: number | null;
+  control_a: string;
+  control_b: string;
+  control_x: string;
+  control_y: string;
+  control_l: string;
+  control_r: string;
+  control_start: string;
+  control_select: string;
+  special_note: string;
 }
 
-interface ConsoleOption { id: string; name: string; }
+interface ConsoleOption { id: string; name: string; display_name: string | null; }
 interface CategoryOption { id: string; name: string; }
 
 const EMPTY: GameForm = {
@@ -30,15 +50,98 @@ const EMPTY: GameForm = {
   subtitle_en: '',
   description: '',
   description_en: '',
+  game_type: 'emulator',
+  game_url: '',
   file_name: '',
   console_id: '',
   platform: [],
   display_order: 100,
   competition: false,
   competition_link: '',
+  active: true,
+  player_counts: [],
+  youtube_url: '',
+  youtube_video_id: null,
+  youtube_start_sec: 0,
+  youtube_duration_sec: null,
+  control_a: '',
+  control_b: '',
+  control_x: '',
+  control_y: '',
+  control_l: '',
+  control_r: '',
+  control_start: '',
+  control_select: '',
+  special_note: '',
 };
 
 const PLATFORM_OPTIONS = ['Table', 'Borne', 'Salon'];
+
+/**
+ * Configurations de joueurs, alignees une a une sur les puces de filtre des
+ * bornes (games.player_counts).
+ *
+ * C'est un ENSEMBLE, pas un plafond. L'ancien champ "joueurs max" laissait le
+ * filtre deduire que tout nombre inferieur marchait aussi : les echecs, a 2
+ * joueurs obligatoires, ressortaient donc sous "1 joueur". On coche desormais
+ * explicitement chaque configuration ou le jeu doit apparaitre.
+ *
+ * max_players existe toujours en base mais n'est plus saisi ici : le backend le
+ * recalcule depuis ces tags a l'enregistrement.
+ */
+const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '4+'] as const;
+
+/**
+ * Tags d'un jeu a l'ouverture du formulaire, avec repli sur max_players.
+ *
+ * Le repli couvre la fenetre entre le deploiement et l'application de la
+ * migration 047 : sans lui, editer un jeu presenterait tous les tags decoches
+ * et le premier enregistrement le sortirait de tous les filtres. Il reproduit
+ * l'ancien raisonnement en plafond, donc 1..N.
+ */
+function configsInitiales(g: { player_counts?: string[] | null; max_players?: number | null }): string[] {
+  if (g.player_counts && g.player_counts.length > 0) {
+    return PLAYER_COUNT_OPTIONS.filter((c) => g.player_counts!.includes(c));
+  }
+  const max = g.max_players ?? 1;
+  const out = PLAYER_COUNT_OPTIONS.filter((c) => c !== '4+' && Number(c) <= Math.min(max, 4)) as string[];
+  if (max > 4) out.push('4+');
+  return out;
+}
+
+const CONTROL_FIELDS: { key: keyof GameForm; label: string }[] = [
+  { key: 'control_a', label: 'A' },
+  { key: 'control_b', label: 'B' },
+  { key: 'control_x', label: 'X' },
+  { key: 'control_y', label: 'Y' },
+  { key: 'control_l', label: 'L' },
+  { key: 'control_r', label: 'R' },
+  { key: 'control_start', label: 'Start' },
+  { key: 'control_select', label: 'Select' },
+];
+
+/**
+ * Parse une URL YouTube et retourne le video_id, ou null si invalide.
+ * Supporte : youtu.be/XXX, youtube.com/watch?v=XXX, youtube.com/embed/XXX
+ */
+function parseYoutubeId(url: string): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  // Si déjà un ID brut (11 chars alphanumériques + _ -)
+  if (/^[A-Za-z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  const patterns = [
+    /youtu\.be\/([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/watch\?(?:.*&)?v=([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/embed\/([A-Za-z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([A-Za-z0-9_-]{11})/,
+  ];
+  for (const re of patterns) {
+    const m = trimmed.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
 
 export default function GameFormPage() {
   const { id } = useParams();
@@ -57,6 +160,17 @@ export default function GameFormPage() {
   const set = <K extends keyof GameForm>(key: K, val: GameForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: val }));
 
+  const togglePlayerCount = (c: string) => {
+    setForm((prev) => ({
+      ...prev,
+      // on reordonne selon PLAYER_COUNT_OPTIONS : les tags servent aussi
+      // d'affichage dans la liste, autant qu'ils y sortent toujours triés
+      player_counts: PLAYER_COUNT_OPTIONS.filter((v) =>
+        v === c ? !prev.player_counts.includes(c) : prev.player_counts.includes(v),
+      ),
+    }));
+  };
+
   const togglePlatform = (p: string) => {
     setForm((prev) => ({
       ...prev,
@@ -72,11 +186,17 @@ export default function GameFormPage() {
     );
   };
 
+  const onYoutubeUrlChange = (url: string) => {
+    const videoId = parseYoutubeId(url);
+    setForm((prev) => ({ ...prev, youtube_url: url, youtube_video_id: videoId }));
+  };
+
   const loadGame = useCallback(async () => {
     if (!id) { setLoading(false); return; }
     try {
       const { data } = await api.get(`/api/games/${id}`);
       const g = data.game;
+      const videoId = g.youtube_video_id ?? null;
       setForm({
         name: g.name ?? '',
         name_en: g.name_en ?? '',
@@ -84,12 +204,30 @@ export default function GameFormPage() {
         subtitle_en: g.subtitle_en ?? '',
         description: g.description ?? '',
         description_en: g.description_en ?? '',
+        game_type: g.game_type === 'web' ? 'web' : 'emulator',
+        game_url: g.game_url ?? '',
         file_name: g.file_name ?? '',
         console_id: g.console_id ?? '',
         platform: g.platform ?? [],
         display_order: g.display_order ?? 100,
         competition: g.competition ?? false,
         competition_link: g.competition_link ?? '',
+        // absent tant que migration-050 n'est pas appliquee : un jeu est actif par defaut
+        active: g.active ?? true,
+        player_counts: configsInitiales(g),
+        youtube_url: videoId ? `https://youtu.be/${videoId}` : '',
+        youtube_video_id: videoId,
+        youtube_start_sec: g.youtube_start_sec ?? 0,
+        youtube_duration_sec: g.youtube_duration_sec ?? null,
+        control_a: g.control_a ?? '',
+        control_b: g.control_b ?? '',
+        control_x: g.control_x ?? '',
+        control_y: g.control_y ?? '',
+        control_l: g.control_l ?? '',
+        control_r: g.control_r ?? '',
+        control_start: g.control_start ?? '',
+        control_select: g.control_select ?? '',
+        special_note: g.special_note ?? '',
       });
       setCoverUrl(g.cover_url ?? null);
       setImages((g.images ?? []).map((img: { image_url: string }) => img.image_url));
@@ -106,7 +244,11 @@ export default function GameFormPage() {
 
   useEffect(() => {
     api.get('/api/game-consoles').then(({ data }) =>
-      setAllConsoles((data.items ?? []).map((c: ConsoleOption) => ({ id: c.id, name: c.name }))),
+      setAllConsoles((data.items ?? []).map((c: ConsoleOption) => ({
+        id: c.id,
+        name: c.name,
+        display_name: c.display_name,
+      }))),
     );
     api.get('/api/game-categories').then(({ data }) =>
       setAllCategories((data.items ?? []).map((c: CategoryOption) => ({ id: c.id, name: c.name }))),
@@ -115,19 +257,57 @@ export default function GameFormPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.file_name.trim() || !form.console_id) {
-      toast.error('Nom, nom fichier et console requis');
+    if (!form.name.trim()) {
+      toast.error('Nom requis');
+      return;
+    }
+    if (form.game_type === 'web') {
+      // un jeu web n'a ni ROM ni console : il lui faut une route interne
+      if (!form.game_url.trim().startsWith('/table/')) {
+        toast.error('Un jeu web exige une URL interne commençant par /table/');
+        return;
+      }
+    } else if (!form.file_name.trim() || !form.console_id) {
+      toast.error('Nom fichier et console requis');
+      return;
+    }
+    if (form.youtube_url && !form.youtube_video_id) {
+      toast.error('URL YouTube invalide');
       return;
     }
 
     setSaving(true);
     try {
       const payload = {
-        ...form,
+        name: form.name,
+        name_en: form.name_en,
         subtitle: form.subtitle || null,
+        subtitle_en: form.subtitle_en || null,
         description: form.description || null,
+        description_en: form.description_en || null,
+        game_type: form.game_type,
+        game_url: form.game_type === 'web' ? form.game_url.trim() : null,
+        file_name: form.game_type === 'web' ? null : form.file_name,
+        console_id: form.game_type === 'web' ? null : form.console_id,
+        platform: form.platform,
+        display_order: form.display_order,
+        competition: form.competition,
         competition_link: form.competition_link || null,
+        active: form.active,
         cover_url: coverUrl,
+        player_counts: form.player_counts,
+        youtube_video_id: form.youtube_video_id,
+        youtube_start_sec: form.youtube_start_sec || 0,
+        youtube_duration_sec: form.youtube_duration_sec,
+        control_a: form.control_a.trim() || null,
+        control_b: form.control_b.trim() || null,
+        control_x: form.control_x.trim() || null,
+        control_y: form.control_y.trim() || null,
+        control_l: form.control_l.trim() || null,
+        control_r: form.control_r.trim() || null,
+        control_start: form.control_start.trim() || null,
+        control_select: form.control_select.trim() || null,
+        special_note: form.special_note.trim() || null,
         images,
         category_ids: categoryIds,
       };
@@ -220,36 +400,95 @@ export default function GameFormPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom fichier *</label>
-              <input type="text" value={form.file_name} onChange={(e) => set('file_name', e.target.value)}
-                placeholder="Ex : street_fighter_2"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" required />
-              <p className="mt-1 text-xs text-gray-400">Nom du fichier ROM / dossier du jeu</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Console *</label>
-              <select value={form.console_id} onChange={(e) => set('console_id', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" required>
-                <option value="">— Sélectionner —</option>
-                {allConsoles.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Type de jeu *</label>
+            <select value={form.game_type} onChange={(e) => set('game_type', e.target.value as 'emulator' | 'web')}
+              className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+              <option value="emulator">Émulateur (ROM lancée sur la table)</option>
+              <option value="web">Jeu web (joué dans l'app des tables)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-400">
+              Un jeu web n'a ni ROM ni console : la table ouvre directement une page de l'app
+              (ex. les échecs en réseau).
+            </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {form.game_type === 'web' ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">URL interne *</label>
+              <input type="text" value={form.game_url} onChange={(e) => set('game_url', e.target.value)}
+                placeholder="/table/games/chess"
+                className="w-full md:w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" />
+              <p className="mt-1 text-xs text-gray-400">
+                Doit commencer par <code>/table/</code> : la borne ne doit jamais sortir du kiosque.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nom fichier *</label>
+                <input type="text" value={form.file_name} onChange={(e) => set('file_name', e.target.value)}
+                  placeholder="Ex : street_fighter_2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm" />
+                <p className="mt-1 text-xs text-gray-400">Nom du fichier ROM / dossier du jeu</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Console *</label>
+                <select value={form.console_id} onChange={(e) => set('console_id', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                  <option value="">— Sélectionner —</option>
+                  {allConsoles.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.display_name && c.display_name !== c.name ? ` (${c.display_name})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ordre d'affichage</label>
               <input type="number" value={form.display_order} onChange={(e) => set('display_order', parseInt(e.target.value) || 100)}
-                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
-              <p className="mt-1 text-xs text-gray-400">Tri croissant : les valeurs les plus basses apparaissent en premier</p>
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Nombre de joueurs *</label>
+              <div className="flex gap-2 flex-wrap">
+                {PLAYER_COUNT_OPTIONS.map((c) => {
+                  const on = form.player_counts.includes(c);
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => togglePlayerCount(c)}
+                      aria-pressed={on}
+                      className={`px-3 py-2 rounded-lg border text-sm font-medium transition ${
+                        on
+                          ? 'border-primary-500 bg-primary-500 text-white'
+                          : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {c === '1' ? '1 joueur' : `${c} joueurs`}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-xs text-gray-400">
+                Coche chaque configuration sous laquelle le jeu doit apparaître dans le filtre des
+                bornes. Ce n'est pas un maximum : les échecs se jouent à deux, donc « 2 joueurs »
+                seul. Un jeu de 1 à 4 se coche 1, 2, 3 et 4.
+              </p>
+              {form.player_counts.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Aucune configuration cochée : le jeu ne sortira sous aucun filtre.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Plateformes</label>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 {PLATFORM_OPTIONS.map((p) => (
                   <label key={p} className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={form.platform.includes(p)} onChange={() => togglePlatform(p)}
@@ -259,6 +498,17 @@ export default function GameFormPage() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <button type="button" onClick={() => set('active', !form.active)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${form.active ? 'bg-primary-500' : 'bg-gray-300'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.active ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+              <span className="text-sm text-gray-700">Jeu actif (visible sur les tables)</span>
+            </label>
+            <p className="mt-1 text-xs text-gray-500">Un jeu inactif reste lançable par son URL directe</p>
           </div>
 
           <div className="flex items-center gap-6">
@@ -282,11 +532,106 @@ export default function GameFormPage() {
         </section>
 
         <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            <Youtube className="w-5 h-5 text-red-500" /> Vidéo YouTube (preview borne)
+          </h2>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">URL YouTube</label>
+            <input
+              type="text"
+              value={form.youtube_url}
+              onChange={(e) => onYoutubeUrlChange(e.target.value)}
+              placeholder="https://youtu.be/dQw4w9WgXcQ ou https://www.youtube.com/watch?v=..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            {form.youtube_url && (
+              form.youtube_video_id ? (
+                <p className="mt-1 text-xs text-green-600">
+                  Video ID détecté : <span className="font-mono">{form.youtube_video_id}</span>
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-red-600">URL YouTube invalide</p>
+              )
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Démarrer à (secondes)</label>
+              <input
+                type="number"
+                min={0}
+                value={form.youtube_start_sec}
+                onChange={(e) => set('youtube_start_sec', Math.max(0, parseInt(e.target.value) || 0))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Durée (secondes, optionnel)</label>
+              <input
+                type="number"
+                min={1}
+                value={form.youtube_duration_sec ?? ''}
+                onChange={(e) => set('youtube_duration_sec', e.target.value ? Math.max(1, parseInt(e.target.value)) : null)}
+                placeholder="vide = vidéo entière"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-gray-400">
+            Le fade vers la jaquette s'active 0,5 s avant la fin de la durée configurée.
+            Vidéo muette + sans contrôles côté borne.
+          </p>
+        </section>
+
+        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-3">
+          <h2 className="text-lg font-semibold">Touches manette SNES</h2>
+          <p className="text-xs text-gray-500">
+            Décris l'action de chaque touche utilisée par le jeu. Les touches laissées vides ne seront pas affichées sur le schéma.
+          </p>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {CONTROL_FIELDS.map(({ key, label }) => (
+              <div key={key}>
+                <label className="block text-xs font-mono font-semibold text-gray-700 mb-1">{label}</label>
+                <input
+                  type="text"
+                  value={form[key] as string}
+                  onChange={(e) => set(key, e.target.value as never)}
+                  placeholder="Ex: Sauter"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mention spéciale</label>
+            <textarea
+              value={form.special_note}
+              onChange={(e) => set('special_note', e.target.value)}
+              rows={2}
+              placeholder="Ex: Astuce, règle maison, conseil de jeu… (affiché dans la modale de lancement)"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-primary-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              La modale de rappel s'ouvre dès qu'il y a une mention OU au moins une touche configurée.
+            </p>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">
           <h2 className="text-lg font-semibold mb-2">Médias</h2>
 
           <div>
             <FileUpload label="Jaquette (cover)" accept="image/*" value={coverUrl} onChange={(v) => setCoverUrl(v)} />
-            <p className="mt-1 text-xs text-gray-400">Minimum 388 x 319 px</p>
+            <p className="mt-1 text-xs text-gray-400">
+              <strong className="text-gray-500">16:9 obligatoire</strong>, idéalement 1280 x 720 px.
+              Affichée en 16:9 dans la grille des jeux, soit 360 x 202 px sur une dalle : une
+              jaquette carrée ou verticale sera rognée en haut et en bas.
+            </p>
           </div>
 
           <div>
@@ -304,6 +649,10 @@ export default function GameFormPage() {
                 </div>
               ))}
             </div>
+            <p className="mt-2 text-xs text-gray-400">
+              <strong className="text-gray-500">16:9</strong>, idéalement 1280 x 720 px. Affichées
+              dans la fiche de lancement sur la table, à environ 560 x 315 px.
+            </p>
             <div className="mt-2">
               <FileUpload label="" accept="image/*" value={null} onChange={addImage} />
               <p className="mt-1 text-xs text-gray-400">Minimum 1280 x 720 px</p>

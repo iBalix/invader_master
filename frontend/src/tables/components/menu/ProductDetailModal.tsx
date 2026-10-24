@@ -18,7 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Minus, Plus, ShoppingCart } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import ArcadeButton from '../ui/ArcadeButton';
-import type { MenuProductV2 } from '../../hooks/useCarteV2';
+import type { MenuProduct } from '../../hooks/useCarte';
 import { formatPrice } from '../../lib/format';
 import { useT } from '../../i18n/useT';
 
@@ -37,7 +37,7 @@ const FADE_DURATION_MS = 500;
 
 interface Props {
   open: boolean;
-  product: MenuProductV2 | null;
+  product: MenuProduct | null;
   happyHour: boolean;
   qtyInCart: number;
   onClose: () => void;

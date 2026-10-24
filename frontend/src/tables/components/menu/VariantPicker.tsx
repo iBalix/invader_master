@@ -4,14 +4,14 @@
  */
 
 import { X } from 'lucide-react';
-import type { MenuVariantV2, MenuConditioningV2 } from '../../hooks/useCarteV2';
+import type { MenuVariant, MenuConditioning } from '../../hooks/useCarte';
 import { useT } from '../../i18n/useT';
 
 interface Props {
   productName: string;
-  variants: MenuVariantV2[];
-  conditioning?: MenuConditioningV2 | null;
-  onSelect: (variant: MenuVariantV2) => void;
+  variants: MenuVariant[];
+  conditioning?: MenuConditioning | null;
+  onSelect: (variant: MenuVariant) => void;
   onClose: () => void;
 }
 

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { publicApi } from '../lib/tablesApi';
 
-export interface CarteSettingsV2 {
+export interface CarteSettings {
   id: string;
   happyHourStart: string;
   happyHourEnd: string;
@@ -26,7 +26,7 @@ function parseTimeToMinutes(value: string | null | undefined): number | null {
   return h * 60 + m;
 }
 
-export function computeHappyHourNow(settings: CarteSettingsV2 | null, now: Date): boolean {
+export function computeHappyHourNow(settings: CarteSettings | null, now: Date): boolean {
   if (!settings) return false;
   const slug = DAY_INDEX_TO_SLUG[now.getDay()];
   if (!settings.happyHourDays.includes(slug)) return false;
@@ -39,7 +39,7 @@ export function computeHappyHourNow(settings: CarteSettingsV2 | null, now: Date)
 
 interface State {
   loading: boolean;
-  settings: CarteSettingsV2 | null;
+  settings: CarteSettings | null;
   error: string | null;
 }
 
@@ -54,7 +54,7 @@ export function useCarteSettings(): Result {
   useEffect(() => {
     let cancelled = false;
     publicApi
-      .get<CarteSettingsV2>('/carte-settings')
+      .get<CarteSettings>('/carte-settings')
       .then((res) => {
         if (cancelled) return;
         setState({ loading: false, settings: res.data ?? null, error: null });

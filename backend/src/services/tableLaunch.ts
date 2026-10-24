@@ -122,14 +122,14 @@ async function resolveGame(
   gameId: string,
 ): Promise<{ id: string; name: string; deeplink: string } | null> {
   const { data: game } = await supabaseAdmin
-    .from('games_v2')
+    .from('games')
     .select('id, name, file_name, console_id')
     .eq('id', gameId)
     .maybeSingle();
   if (!game?.file_name || !game.console_id) return null;
 
   const { data: consoleRow } = await supabaseAdmin
-    .from('game_consoles_v2')
+    .from('game_consoles')
     .select('library')
     .eq('id', game.console_id)
     .maybeSingle();

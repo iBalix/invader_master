@@ -14,6 +14,8 @@ import {
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import ProductModal, { type ProductData } from '../components/Carte/ProductModal';
+import LucideIconPicker from '../components/Carte/LucideIconPicker';
+import FileUpload from '../components/Quiz/FileUpload';
 
 interface CategoryForm {
   name: string;
@@ -21,8 +23,9 @@ interface CategoryForm {
   parent_id: string | null;
   is_main_category: boolean;
   weight: number;
-  begin_hour: string;
-  end_hour: string;
+  icon_name: string | null;
+  color: string | null;
+  texture_url: string | null;
 }
 
 interface CategoryOption {
@@ -36,8 +39,9 @@ const EMPTY: CategoryForm = {
   parent_id: null,
   is_main_category: false,
   weight: 0,
-  begin_hour: '',
-  end_hour: '',
+  icon_name: null,
+  color: null,
+  texture_url: null,
 };
 
 export default function CategoryFormPage() {
@@ -79,8 +83,9 @@ export default function CategoryFormPage() {
         parent_id: c.parent_id ?? null,
         is_main_category: c.is_main_category ?? false,
         weight: c.weight ?? 0,
-        begin_hour: c.begin_hour ?? '',
-        end_hour: c.end_hour ?? '',
+        icon_name: c.icon_name ?? null,
+        color: c.color ?? null,
+        texture_url: c.texture_url ?? null,
       });
       setProducts(c.products ?? []);
     } catch {
@@ -110,14 +115,19 @@ export default function CategoryFormPage() {
       toast.error('Le nom est requis');
       return;
     }
+    if (form.color && !/^#[0-9A-Fa-f]{6}$/.test(form.color)) {
+      toast.error('La couleur doit être au format hex #RRGGBB');
+      return;
+    }
 
     setSaving(true);
     try {
       const payload = {
         ...form,
         parent_id: form.parent_id || null,
-        begin_hour: form.begin_hour || null,
-        end_hour: form.end_hour || null,
+        icon_name: form.icon_name || null,
+        color: form.color || null,
+        texture_url: form.texture_url || null,
         product_ids: products.map((p) => p.id).filter(Boolean),
       };
 
@@ -256,9 +266,6 @@ export default function CategoryFormPage() {
                 ))}
               </select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Poids (tri)</label>
               <input
@@ -267,28 +274,60 @@ export default function CategoryFormPage() {
                 onChange={(e) => set('weight', parseInt(e.target.value) || 0)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Icône</label>
+              <LucideIconPicker
+                value={form.icon_name}
+                onChange={(name) => set('icon_name', name)}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Couleur</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.color ?? '#3b82f6'}
+                  onChange={(e) => set('color', e.target.value)}
+                  className="w-12 h-10 border border-gray-300 rounded cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={form.color ?? ''}
+                  onChange={(e) => set('color', e.target.value || null)}
+                  placeholder="#RRGGBB"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+                {form.color && (
+                  <button
+                    type="button"
+                    onClick={() => set('color', null)}
+                    className="px-2 py-1 text-xs text-gray-500 hover:text-red-500"
+                  >
+                    Effacer
+                  </button>
+                )}
+              </div>
               <p className="mt-1 text-xs text-gray-400">
-                Tri croissant : les valeurs les plus basses apparaissent en premier
+                Background subtle dans la sidebar des tables tactiles.
               </p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Heure début</label>
-              <input
-                type="time"
-                value={form.begin_hour}
-                onChange={(e) => set('begin_hour', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Heure fin</label>
-              <input
-                type="time"
-                value={form.end_hour}
-                onChange={(e) => set('end_hour', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <FileUpload
+              label="Texture (fond du bouton sidebar)"
+              accept="image/*"
+              value={form.texture_url}
+              onChange={(url) => set('texture_url', url)}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              Recommandé : paysage 16:9 (ex 800×450). Affichée en fond du bouton sidebar côté bornes,
+              avec un dégradé noir à gauche pour la lisibilité du libellé.
+            </p>
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">
@@ -331,9 +370,7 @@ export default function CategoryFormPage() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  setProductModal({ open: true, editing: null, editIdx: null })
-                }
+                onClick={() => setProductModal({ open: true, editing: null, editIdx: null })}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Créer un produit
@@ -387,9 +424,7 @@ export default function CategoryFormPage() {
                               <span className="ml-2 text-xs text-gray-400">{p.price}€</span>
                             </span>
                             {alreadyAdded ? (
-                              <span className="ml-2 px-2 py-1 text-xs text-gray-400">
-                                Déjà ajouté
-                              </span>
+                              <span className="ml-2 px-2 py-1 text-xs text-gray-400">Déjà ajouté</span>
                             ) : (
                               <button
                                 type="button"
@@ -407,9 +442,7 @@ export default function CategoryFormPage() {
                 })()}
               {searchResults.length === 0 && !searchLoading && (
                 <p className="text-sm text-gray-400">
-                  {searchQuery
-                    ? 'Aucun produit ne correspond à la recherche'
-                    : 'Aucun produit disponible'}
+                  {searchQuery ? 'Aucun produit ne correspond à la recherche' : 'Aucun produit disponible'}
                 </p>
               )}
             </div>
@@ -448,9 +481,7 @@ export default function CategoryFormPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() =>
-                        setProductModal({ open: true, editing: p, editIdx: idx })
-                      }
+                      onClick={() => setProductModal({ open: true, editing: p, editIdx: idx })}
                       className="p-1 text-gray-400 hover:text-primary-500"
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -491,9 +522,7 @@ export default function CategoryFormPage() {
         <ProductModal
           initial={productModal.editing}
           onSave={handleProductSave}
-          onClose={() =>
-            setProductModal({ open: false, editing: null, editIdx: null })
-          }
+          onClose={() => setProductModal({ open: false, editing: null, editIdx: null })}
         />
       )}
     </div>

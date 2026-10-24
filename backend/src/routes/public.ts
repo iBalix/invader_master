@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
-import { colonneActivePresente } from '../lib/gamesV2Columns.js';
+import { colonneActivePresente } from '../lib/gamesColumns.js';
 
 export const publicRoutes = Router();
 
@@ -131,8 +131,10 @@ publicRoutes.get('/quizzes/:id', async (req, res) => {
   }
 });
 
-// Full carte: categories with products and sub-categories
-publicRoutes.get('/carte', async (req, res) => {
+// Full carte: categories with products, conditionings, variants, icon+color.
+// '/carte-v2' : ancien chemin, garde pour les dalles et le site encore charges
+// avec un bundle d'avant la migration 053. A retirer une fois tout recharge.
+publicRoutes.get(['/carte', '/carte-v2'], async (req, res) => {
   try {
     const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
 
@@ -152,82 +154,23 @@ publicRoutes.get('/carte', async (req, res) => {
       .select('category_id, product_id, position')
       .order('position', { ascending: true });
 
-    const productMap = new Map((products ?? []).map((p) => [p.id, p]));
-
-    const linksByCategory: Record<string, Array<{ product_id: string; position: number }>> = {};
-    for (const l of links ?? []) {
-      if (!linksByCategory[l.category_id]) linksByCategory[l.category_id] = [];
-      linksByCategory[l.category_id].push(l);
-    }
-
-    function buildProducts(catId: string) {
-      const catLinks = linksByCategory[catId] ?? [];
-      return catLinks
-        .sort((a, b) => a.position - b.position)
-        .map((l) => productMap.get(l.product_id))
-        .filter(Boolean)
-        .map((p) => toCamel(localize(p as Record<string, unknown>, ['name', 'subtitle', 'description'], locale)));
-    }
-
-    const allCats = categories ?? [];
-    const childIds = new Set(allCats.filter((c) => c.parent_id).map((c) => c.id));
-
-    const result = allCats.map((cat) => ({
-      ...toCamel(localize(cat, ['name'], locale)),
-      products: buildProducts(cat.id),
-      subCategories: allCats
-        .filter((sc) => sc.parent_id === cat.id)
-        .map((sc) => ({
-          ...toCamel(localize(sc, ['name'], locale)),
-          products: buildProducts(sc.id),
-        })),
-    }));
-
-    res.json({ categories: result.filter((c) => !childIds.has((c as Record<string, unknown>).id as string)) });
-  } catch (err) {
-    console.error('Public carte error:', err);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// Full carte v2: categories with products, conditionings, variants, icon+color
-publicRoutes.get('/carte-v2', async (req, res) => {
-  try {
-    const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
-
-    const { data: categories, error: catErr } = await supabaseAdmin
-      .from('menu_categories_v2')
-      .select('*')
-      .order('weight', { ascending: true });
-
-    if (catErr) throw catErr;
-
-    const { data: products } = await supabaseAdmin
-      .from('menu_products_v2')
-      .select('*');
-
-    const { data: links } = await supabaseAdmin
-      .from('category_products_v2')
-      .select('category_id, product_id, position')
-      .order('position', { ascending: true });
-
     const { data: conditionings } = await supabaseAdmin
-      .from('product_v2_conditionings')
+      .from('product_conditionings')
       .select('*')
       .order('position', { ascending: true });
 
     const { data: variants } = await supabaseAdmin
-      .from('product_v2_variants')
+      .from('product_variants')
       .select('*')
       .order('position', { ascending: true });
 
     const { data: tagLinks } = await supabaseAdmin
-      .from('product_v2_product_tags')
+      .from('product_product_tags')
       .select('product_id, tag_id, position')
       .order('position', { ascending: true });
 
     const { data: tagsData } = await supabaseAdmin
-      .from('product_v2_tags')
+      .from('product_tags')
       .select('*');
 
     const conditioningsByProduct: Record<string, Record<string, unknown>[]> = {};
@@ -302,7 +245,7 @@ publicRoutes.get('/carte-v2', async (req, res) => {
 
     res.json({ categories: result.filter((c) => !childIds.has((c as Record<string, unknown>).id as string)) });
   } catch (err) {
-    console.error('Public carte v2 error:', err);
+    console.error('Public carte error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
@@ -349,8 +292,10 @@ publicRoutes.get('/website-settings', async (_req, res) => {
   }
 });
 
-// Full games: categories, consoles, games with relations
-publicRoutes.get('/games', async (req, res) => {
+// Full games: categories enrichies (icon/color/texture) + consoles (display_name) + games (max_players, youtube, controls).
+// '/games-v2' : ancien chemin, garde pour les dalles encore chargees avec un
+// bundle d'avant la migration 053. A retirer une fois tout recharge.
+publicRoutes.get(['/games', '/games-v2'], async (req, res) => {
   try {
     const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
 
@@ -364,10 +309,16 @@ publicRoutes.get('/games', async (req, res) => {
       .select('*')
       .order('name', { ascending: true });
 
-    const { data: games } = await supabaseAdmin
+    // Jeux inactifs masques de la liste des tables (docs/migration-050). Le
+    // filtre n'est pose que si la colonne existe deja : un push sur main deploie
+    // en prod avant la migration, et filtrer sur une colonne absente ferait 500
+    // (page des jeux vide dans le bar). Cf. lib/gamesColumns.ts.
+    let gamesQuery = supabaseAdmin
       .from('games')
       .select('*')
       .order('display_order', { ascending: true });
+    if (await colonneActivePresente()) gamesQuery = gamesQuery.eq('active', true);
+    const { data: games } = await gamesQuery;
 
     const { data: images } = await supabaseAdmin
       .from('game_images')
@@ -383,88 +334,12 @@ publicRoutes.get('/games', async (req, res) => {
     const localizedCats = (categories ?? []).map((c) => localize(c, ['name'], locale));
     const catMap = new Map(localizedCats.map((c) => [c.id as string, c.name as string]));
 
-    const imagesByGame: Record<string, string[]> = {};
-    for (const img of images ?? []) {
-      if (!imagesByGame[img.game_id]) imagesByGame[img.game_id] = [];
-      imagesByGame[img.game_id].push(img.image_url);
-    }
-
-    const catsByGame: Record<string, string[]> = {};
-    for (const l of catLinks ?? []) {
-      if (!catsByGame[l.game_id]) catsByGame[l.game_id] = [];
-      const name = catMap.get(l.category_id);
-      if (name) catsByGame[l.game_id].push(name);
-    }
-
-    const gameItems = (games ?? []).map((g) => {
-      const c = consoleMap.get(g.console_id);
-      return {
-        ...toCamel(localize(g, ['name', 'subtitle', 'description'], locale)),
-        consoleName: c?.name ?? null,
-        consoleLibrary: c?.library ?? null,
-        consoleLogoUrl: c?.logo_url ?? null,
-        categories: catsByGame[g.id] ?? [],
-        images: imagesByGame[g.id] ?? [],
-      };
-    });
-
-    res.json({
-      categories: localizedCats.map((c) => toCamel(c as Record<string, unknown>)),
-      consoles: (consoles ?? []).map((c) => toCamel(c)),
-      games: gameItems,
-    });
-  } catch (err) {
-    console.error('Public games error:', err);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
-
-// Full games v2: categories enrichies (icon/color/texture) + consoles (display_name) + games (max_players, youtube, controls)
-publicRoutes.get('/games-v2', async (req, res) => {
-  try {
-    const locale = (req.query.locale as string) === 'en' ? 'en' : 'fr';
-
-    const { data: categories } = await supabaseAdmin
-      .from('game_categories_v2')
-      .select('*')
-      .order('display_order', { ascending: true });
-
-    const { data: consoles } = await supabaseAdmin
-      .from('game_consoles_v2')
-      .select('*')
-      .order('name', { ascending: true });
-
-    // Jeux inactifs masques de la liste des tables (docs/migration-050). Le
-    // filtre n'est pose que si la colonne existe deja : un push sur main deploie
-    // en prod avant la migration, et filtrer sur une colonne absente ferait 500
-    // (page des jeux vide dans le bar). Cf. lib/gamesV2Columns.ts.
-    let gamesQuery = supabaseAdmin
-      .from('games_v2')
-      .select('*')
-      .order('display_order', { ascending: true });
-    if (await colonneActivePresente()) gamesQuery = gamesQuery.eq('active', true);
-    const { data: games } = await gamesQuery;
-
-    const { data: images } = await supabaseAdmin
-      .from('game_images_v2')
-      .select('game_id, image_url, position')
-      .order('position', { ascending: true });
-
-    const { data: catLinks } = await supabaseAdmin
-      .from('game_category_games_v2')
-      .select('game_id, category_id');
-
-    const consoleMap = new Map((consoles ?? []).map((c) => [c.id, c]));
-
-    const localizedCats = (categories ?? []).map((c) => localize(c, ['name'], locale));
-    const catMap = new Map(localizedCats.map((c) => [c.id as string, c.name as string]));
-
     // Categories dont les jeux ne sont PAS lancables depuis une table : ils sont
     // reserves aux bornes de la salle. Le test porte sur la colonne `name` BRUTE
     // et non sur le libelle localise, parce que la categorie s'appelle "Bornes"
     // en francais et "Arcades" en anglais : un test cote client sur le nom
     // affiche rendrait ces jeux lancables des qu'une table passe en anglais.
-    // Meme regle qu'en v1, cf. invader_table/game.php:318, qui remplacait le
+    // Meme regle que l'ancienne app PHP, cf. invader_table/game.php:318, qui remplacait le
     // bouton JOUER par "DISPONIBLE SUR UNE BORNE DU BAR".
     const catsSansTable = new Set(
       (categories ?? [])
@@ -508,7 +383,7 @@ publicRoutes.get('/games-v2', async (req, res) => {
       games: gameItems,
     });
   } catch (err) {
-    console.error('Public games v2 error:', err);
+    console.error('Public games error:', err);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });

@@ -1,5 +1,5 @@
 /**
- * Ecran liste des jeux v2 (DA V3 launcher).
+ * Ecran liste des jeux (DA V3 launcher).
  *
  * - Sidebar moderne (LauncherSidebar) avec icone Lucide + texture par categorie
  * - Bandeau de filtre nb joueurs (1 / 2 / 3 / 4 / 4+) au-dessus de la grille.
@@ -14,15 +14,14 @@
  * - Tap d'une vignette = LaunchGameModal (sauf grise), ou WebGameIntroModal
  *   pour un jeu maison (echecs, blackjack, Flappy Bar...)
  * - Plus de titre redondant en haut (la categorie active est lisible dans la sidebar)
- * - Plus de catégorie "Nos préférés" ni "4 joueurs" (filtrees au seed v2)
+ * - Plus de catégorie "Nos préférés" ni "4 joueurs" (filtrees au seed de la migration 029)
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHostname } from '../hooks/useHostname';
-import { useGamesV2, type GameV2 } from '../hooks/useGamesV2';
+import { useGames, type Game } from '../hooks/useGames';
 import { useDesignConfig } from '../hooks/useDesignConfig';
-import type { Game } from '../hooks/useGames';
 import { useT, type TFunction } from '../i18n/useT';
 import HeaderBar from '../components/layout/HeaderBar';
 import GamepadBadge from '../components/layout/GamepadBadge';
@@ -45,7 +44,7 @@ import ScrollIndicator from '../components/menu/ScrollIndicator';
  * exactement deux, et ressortaient pourtant sous "1 joueur".
  *
  * Chaque jeu declare desormais la liste des configurations sous lesquelles il
- * doit apparaitre (games_v2.player_counts), et un filtre ne garde que les jeux
+ * doit apparaitre (games.player_counts), et un filtre ne garde que les jeux
  * qui contiennent sa valeur. Un jeu 1 a 4 joueurs se tague donc explicitement
  * 1, 2, 3 et 4.
  */
@@ -70,7 +69,7 @@ function libelleConfig(c: string, t: TFunction): string {
  * de la migration 047 : sans lui, la page jeux se viderait entre les deux. Il
  * reproduit l'ancien raisonnement en plafond, donc 1..N.
  */
-function configsDuJeu(g: GameV2): string[] {
+function configsDuJeu(g: Game): string[] {
   if (g.playerCounts && g.playerCounts.length > 0) return g.playerCounts;
   const max = g.maxPlayers ?? 1;
   const out = CONFIGS_JOUEURS.filter((c) => c !== '4+' && Number(c) <= Math.min(max, 4)) as string[];
@@ -81,14 +80,14 @@ function configsDuJeu(g: GameV2): string[] {
 export default function GamesPage() {
   useHostname();
   const navigate = useNavigate();
-  const { loading, data, error } = useGamesV2();
+  const { loading, data, error } = useGames();
   const { design } = useDesignConfig();
   const gamesColor = design.gamesButtonColor;
   const t = useT();
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [selected, setSelected] = useState<GameV2 | null>(null);
+  const [selected, setSelected] = useState<Game | null>(null);
   // jeu maison : pop-up de presentation avant d'entrer dans son lobby
-  const [selectedWeb, setSelectedWeb] = useState<GameV2 | null>(null);
+  const [selectedWeb, setSelectedWeb] = useState<Game | null>(null);
   // null = aucun filtre, et c'est l'etat par defaut : on entre dans une
   // categorie en voyant tous ses jeux, pas une grille a moitie grisee.
   const [playerFilter, setPlayerFilter] = useState<ConfigJoueurs | null>(null);
@@ -120,9 +119,9 @@ export default function GamesPage() {
   }, [data]);
 
   const visibleGames = useMemo(() => {
-    if (!data || !activeCategory) return [] as GameV2[];
+    if (!data || !activeCategory) return [] as Game[];
     const cat = data.categories.find((c) => c.id === activeCategory);
-    if (!cat) return [] as GameV2[];
+    if (!cat) return [] as Game[];
     return data.games.filter((g) => g.categories.includes(cat.name));
   }, [data, activeCategory]);
 
@@ -255,13 +254,10 @@ export default function GamesPage() {
                       (g.consoleName ? consoleLabelByName.get(g.consoleName) : null) ||
                       g.consoleName ||
                       null;
-                    // Adapter pour le composant GameCard qui type Game (v1) — les champs
-                    // communs (id, name, images, consoleName) suffisent au rendu.
-                    const gameForCard = g as unknown as Game;
                     return (
                       <AnimatedGridItem key={g.id}>
                         <GameCard
-                          game={gameForCard}
+                          game={g}
                           consoleLabel={consoleLabel}
                           disabled={isDisabled}
                           disabledReason={
@@ -297,7 +293,7 @@ export default function GamesPage() {
 
       <LaunchGameModal
         open={!!selected}
-        game={selected as unknown as Game | null}
+        game={selected}
         onClose={() => setSelected(null)}
       />
 

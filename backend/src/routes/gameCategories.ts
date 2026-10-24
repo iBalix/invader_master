@@ -7,6 +7,16 @@ export const gameCategoryRoutes = Router();
 
 gameCategoryRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
 
+const ALLOWED = ['name', 'name_en', 'display_order', 'icon_name', 'color', 'texture_url'] as const;
+
+function pick(body: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ALLOWED) {
+    if (key in body) out[key] = body[key];
+  }
+  return out;
+}
+
 gameCategoryRoutes.get('/', async (_req, res) => {
   try {
     const { data: categories, error } = await supabaseAdmin
@@ -43,7 +53,7 @@ gameCategoryRoutes.post('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('game_categories')
-      .insert(req.body)
+      .insert(pick(req.body))
       .select()
       .single();
 
@@ -63,7 +73,7 @@ gameCategoryRoutes.put('/:id', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('game_categories')
-      .update(req.body)
+      .update(pick(req.body))
       .eq('id', req.params.id)
       .select()
       .single();

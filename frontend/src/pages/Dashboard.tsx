@@ -15,7 +15,6 @@ import {
   ShoppingBag,
   ArrowRight,
   ExternalLink,
-  Sparkles,
   Radio,
   Trophy,
   type LucideIcon,
@@ -36,10 +35,8 @@ interface DashCard {
 }
 
 const CONTENUS: DashCard[] = [
-  { title: 'Carte', icon: UtensilsCrossed, path: '/contenus/carte', description: 'Menu, catégories et produits', pageKey: 'contenus/carte' },
-  { title: 'Carte v2', icon: Sparkles, badge: 'V2', path: '/contenus/carte-v2', description: 'Nouvelle carte (conditionnements, variantes, icônes, paramètres)', pageKey: 'contenus/carte' },
-  { title: 'Jeux', icon: Gamepad2, path: '/contenus/jeux', description: 'Bornes, consoles et catalogue', pageKey: 'contenus/jeux' },
-  { title: 'Jeux v2', icon: Sparkles, badge: 'V2', path: '/contenus/jeux-v2', description: 'Nouveau modèle (vidéo YouTube, manette SNES, max joueurs)', pageKey: 'contenus/jeux' },
+  { title: 'Carte', icon: UtensilsCrossed, path: '/contenus/carte', description: 'Menu, catégories, produits, conditionnements et variantes', pageKey: 'contenus/carte' },
+  { title: 'Jeux', icon: Gamepad2, path: '/contenus/jeux', description: 'Catalogue, consoles, vidéos YouTube et manettes', pageKey: 'contenus/jeux' },
   { title: 'Évènements', icon: Calendar, path: '/contenus/evenements', description: 'Quizz, soirées, tournois', pageKey: 'contenus/evenements' },
   { title: 'Config écrans', icon: Monitor, path: '/contenus/config-ecrans', description: 'Projecteur, TV et tables tactiles', pageKey: 'contenus/medias' },
   { title: 'Traductions', icon: Languages, path: '/contenus/traductions', description: 'Textes multilingues', pageKey: 'contenus/traductions' },

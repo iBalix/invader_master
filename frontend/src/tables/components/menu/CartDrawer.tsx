@@ -33,7 +33,7 @@ export default function CartDrawer({ open, onClose, hostname, onCheckout }: Prop
   const [couponOpen, setCouponOpen] = useState(false);
 
   // Pour pricing/checkout : utiliser realProductId (UUID reel) si present, sinon productId.
-  // En carte v2, productId contient une cle composite (cf. cartStore.buildCartKey).
+  // productId contient une cle composite (cf. cartStore.buildCartKey).
   const payload = useMemo(
     () => ({
       items: items.map((i) => ({

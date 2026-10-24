@@ -12,7 +12,7 @@
  * passent par des clés i18n, donc restent surchargeables depuis le
  * back-office des traductions sans redéploiement.
  *
- * Clé du registre = game_url du catalogue (games_v2), identité stable des jeux
+ * Clé du registre = game_url du catalogue (games), identité stable des jeux
  * web. Un jeu web absent du registre reçoit le guide générique : la pop-up
  * s'affiche quand même, avec la description du catalogue.
  */

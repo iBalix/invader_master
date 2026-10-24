@@ -39,7 +39,7 @@ export default function TagSelector({ value, onChange }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get('/api/menu-tags-v2');
+      const { data } = await api.get('/api/menu-tags');
       setTags(data.items ?? []);
       setEchec(false);
     } catch {
@@ -63,7 +63,7 @@ export default function TagSelector({ value, onChange }: Props) {
     if (!newName.trim()) return;
     setSaving(true);
     try {
-      const { data } = await api.post('/api/menu-tags-v2', {
+      const { data } = await api.post('/api/menu-tags', {
         name: newName.trim(),
         color: newColor,
         icon_name: newIcon,

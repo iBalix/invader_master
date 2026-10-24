@@ -1,5 +1,5 @@
 /**
- * Ecran carte v2 (DA V3 launcher glass).
+ * Ecran carte (DA V3 launcher glass).
  *
  * Layout :
  *   - Header transparent : back + badge happy hour (titre supprime).
@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Beer } from 'lucide-react';
 import { useHostname } from '../hooks/useHostname';
-import { useCarteV2, type MenuCategoryV2, type MenuProductV2, type MenuConditioningV2, type MenuVariantV2 } from '../hooks/useCarteV2';
+import { useCarte, type MenuCategory, type MenuProduct, type MenuConditioning, type MenuVariant } from '../hooks/useCarte';
 import { useCarteSettings } from '../hooks/useCarteSettings';
 import { useDesignConfig } from '../hooks/useDesignConfig';
 import { useCart, buildCartKey } from '../store/cartStore';
@@ -39,7 +39,7 @@ import RetroLoader from '../components/ui/RetroLoader';
 import { EASE_OUT_QUART } from '../lib/motion';
 import type { PricedCart } from '../types';
 
-function findCategory(cats: MenuCategoryV2[], id: string): MenuCategoryV2 | null {
+function findCategory(cats: MenuCategory[], id: string): MenuCategory | null {
   for (const c of cats) {
     if (c.id === id) return c;
     for (const sc of c.subCategories ?? []) {
@@ -49,11 +49,11 @@ function findCategory(cats: MenuCategoryV2[], id: string): MenuCategoryV2 | null
   return null;
 }
 
-function getCategoryProducts(cat: MenuCategoryV2 | null): MenuProductV2[] {
+function getCategoryProducts(cat: MenuCategory | null): MenuProduct[] {
   if (!cat) return [];
   const seen = new Set<string>();
-  const out: MenuProductV2[] = [];
-  const push = (p: MenuProductV2) => {
+  const out: MenuProduct[] = [];
+  const push = (p: MenuProduct) => {
     const id = String(p.id);
     if (seen.has(id)) return;
     seen.add(id);
@@ -73,7 +73,7 @@ function getCategoryProducts(cat: MenuCategoryV2 | null): MenuProductV2[] {
  *   - Plus de filtre par nom (Happy Hour) : la fenetre HH vient de settings.
  */
 function flattenCategories(
-  cats: MenuCategoryV2[],
+  cats: MenuCategory[],
   openParentId: string | null,
 ): SidebarEntry[] {
   const out: SidebarEntry[] = [];
@@ -111,7 +111,7 @@ function flattenCategories(
 
 export default function MenuPage() {
   const identity = useHostname();
-  const { loading, categories, error } = useCarteV2();
+  const { loading, categories, error } = useCarte();
   const { settings, isHappyHourNow } = useCarteSettings();
   const { design } = useDesignConfig();
   const { items, add, totalQty } = useCart();
@@ -121,10 +121,10 @@ export default function MenuPage() {
   const [openParentId, setOpenParentId] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkout, setCheckout] = useState<PricedCart | null>(null);
-  const [detailProduct, setDetailProduct] = useState<MenuProductV2 | null>(null);
+  const [detailProduct, setDetailProduct] = useState<MenuProduct | null>(null);
   const [variantPicker, setVariantPicker] = useState<{
-    product: MenuProductV2;
-    conditioning: MenuConditioningV2 | null;
+    product: MenuProduct;
+    conditioning: MenuConditioning | null;
   } | null>(null);
   const [googleReviewOpen, setGoogleReviewOpen] = useState(false);
 
@@ -151,7 +151,7 @@ export default function MenuPage() {
   }, [categories, currentId]);
 
   const currentCategory = currentId ? findCategory(categories, currentId) : null;
-  const products: MenuProductV2[] = useMemo(
+  const products: MenuProduct[] = useMemo(
     () => getCategoryProducts(currentCategory),
     [currentCategory],
   );
@@ -201,9 +201,9 @@ export default function MenuPage() {
    * Ajoute un produit au panier avec eventuellement un conditionnement et / ou
    * une variante. La cle composite est encodee dans `productId` (cf. cartStore).
    */
-  function addToCart(p: MenuProductV2, opts: {
-    conditioning?: MenuConditioningV2 | null;
-    variant?: MenuVariantV2 | null;
+  function addToCart(p: MenuProduct, opts: {
+    conditioning?: MenuConditioning | null;
+    variant?: MenuVariant | null;
     qty?: number;
   } = {}) {
     const { conditioning, variant, qty = 1 } = opts;
@@ -237,7 +237,7 @@ export default function MenuPage() {
    *   - Produit sans variantes : ajout direct.
    *   - Produit avec variantes : ouvre VariantPicker (avec ou sans conditioning).
    */
-  function handleAdd(p: MenuProductV2, conditioning?: MenuConditioningV2 | null) {
+  function handleAdd(p: MenuProduct, conditioning?: MenuConditioning | null) {
     const variants = p.variants ?? [];
     if (variants.length > 0) {
       setVariantPicker({ product: p, conditioning: conditioning ?? null });
@@ -246,7 +246,7 @@ export default function MenuPage() {
     addToCart(p, { conditioning });
   }
 
-  // ProductDetailModal accepte directement MenuProductV2 (conditionings + variants
+  // ProductDetailModal accepte directement MenuProduct (conditionings + variants
   // pour affichage).
 
   return (

@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X, Settings } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import ProductModal, { type ProductData } from '../components/Carte/ProductModal';
+import CarteSettingsModal from '../components/Carte/CarteSettingsModal';
+import LucideIcon from '../lib/LucideIcon';
 
 interface CategoryRow {
   id: string;
@@ -12,8 +14,8 @@ interface CategoryRow {
   parent_name: string | null;
   is_main_category: boolean;
   weight: number;
-  begin_hour: string | null;
-  end_hour: string | null;
+  icon_name: string | null;
+  color: string | null;
   productCount: number;
 }
 
@@ -26,6 +28,9 @@ interface ProductRow {
   display_order: number;
   icon_url: string | null;
   categories: string[];
+  conditionings: { label: string; price: number }[];
+  variants: { label: string; color: string | null }[];
+  tags: { id: string; name: string; color: string | null; icon_name: string | null }[];
 }
 
 type Tab = 'categories' | 'products';
@@ -41,6 +46,7 @@ export default function CarteListPage() {
     open: false,
     editing: null,
   });
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -149,8 +155,19 @@ export default function CarteListPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Carte du bar</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Carte</h1>
+          <p className="text-sm text-gray-500">Nouvelle carte (conditionnements, variantes, icônes)</p>
+        </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            title="Paramètres de la carte"
+          >
+            <Settings className="w-4 h-4" />
+            Paramètres
+          </button>
           {tab === 'categories' ? (
             <Link
               to="/contenus/carte/category/new"
@@ -175,9 +192,7 @@ export default function CarteListPage() {
         <button
           onClick={() => setTab('categories')}
           className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-            tab === 'categories'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+            tab === 'categories' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           Catégories ({categories.length})
@@ -185,9 +200,7 @@ export default function CarteListPage() {
         <button
           onClick={() => setTab('products')}
           className={`px-4 py-2 text-sm font-medium rounded-md transition ${
-            tab === 'products'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+            tab === 'products' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           Produits ({products.length})
@@ -206,17 +219,21 @@ export default function CarteListPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 w-10">Icon</th>
                   <th className="px-6 py-3">Nom</th>
                   <th className="px-6 py-3">Parent</th>
                   <th className="px-6 py-3 text-center">Poids</th>
                   <th className="px-6 py-3 text-center">Produits</th>
-                  <th className="px-6 py-3 text-center">Horaires</th>
+                  <th className="px-6 py-3 text-center">Couleur</th>
                   <th className="px-6 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {treeCategories.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50 transition">
+                    <td className="px-6 py-4">
+                      <LucideIcon name={c.icon_name} className="w-5 h-5 text-gray-500" />
+                    </td>
                     <td className="px-6 py-4 font-medium">
                       <Link
                         to={`/contenus/carte/category/${c.id}`}
@@ -237,10 +254,16 @@ export default function CarteListPage() {
                         {c.productCount}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center text-gray-500 text-sm">
-                      {c.begin_hour && c.end_hour
-                        ? `${c.begin_hour} — ${c.end_hour}`
-                        : '—'}
+                    <td className="px-6 py-4 text-center">
+                      {c.color ? (
+                        <span
+                          className="inline-block w-6 h-6 rounded-full border border-gray-200 align-middle"
+                          style={{ backgroundColor: c.color }}
+                          title={c.color}
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-sm">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -292,9 +315,7 @@ export default function CarteListPage() {
                     type="button"
                     onClick={() => toggleCategory(c.name)}
                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition ${
-                      active
-                        ? 'bg-primary-500 text-white'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      active ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     {c.name}
@@ -326,7 +347,9 @@ export default function CarteListPage() {
                     <th className="px-6 py-3">Nom</th>
                     <th className="px-6 py-3 text-center">Prix</th>
                     <th className="px-6 py-3 text-center">Prix HH</th>
-                    <th className="px-6 py-3 text-center">Ordre</th>
+                    <th className="px-6 py-3 text-center">Cond.</th>
+                    <th className="px-6 py-3 text-center">Var.</th>
+                    <th className="px-6 py-3">Tags</th>
                     <th className="px-6 py-3">Catégories</th>
                     <th className="px-6 py-3">Actions</th>
                   </tr>
@@ -340,11 +363,7 @@ export default function CarteListPage() {
                           className="flex items-center gap-3 text-primary-600 hover:underline text-left"
                         >
                           {p.icon_url ? (
-                            <img
-                              src={p.icon_url}
-                              alt=""
-                              className="w-8 h-8 rounded object-cover flex-shrink-0"
-                            />
+                            <img src={p.icon_url} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
                           ) : (
                             <div className="w-8 h-8 rounded bg-gray-100 flex-shrink-0" />
                           )}
@@ -355,15 +374,55 @@ export default function CarteListPage() {
                       <td className="px-6 py-4 text-center text-gray-500">
                         {p.price_hh != null ? `${p.price_hh}€` : '—'}
                       </td>
-                      <td className="px-6 py-4 text-center text-gray-500">{p.display_order}</td>
+                      <td className="px-6 py-4 text-center text-gray-500 text-sm">
+                        {p.conditionings && p.conditionings.length > 0 ? p.conditionings.length : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {p.variants && p.variants.length > 0 ? (
+                          <div className="flex items-center justify-center gap-0.5">
+                            {p.variants.slice(0, 5).map((v, i) => (
+                              <span
+                                key={i}
+                                className="inline-block w-3 h-3 rounded-full border border-white shadow-sm"
+                                style={{ backgroundColor: v.color ?? '#cccccc' }}
+                                title={v.label}
+                              />
+                            ))}
+                            {p.variants.length > 5 && (
+                              <span className="text-xs text-gray-400 ml-1">+{p.variants.length - 5}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1">
+                          {p.tags && p.tags.length > 0 ? (
+                            p.tags.map((t) => (
+                              <span
+                                key={t.id}
+                                className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full"
+                                style={{
+                                  backgroundColor: t.color ? `${t.color}22` : '#f3f4f6',
+                                  color: t.color ?? '#4b5563',
+                                  borderColor: t.color ?? '#e5e7eb',
+                                }}
+                              >
+                                {t.icon_name && <LucideIcon name={t.icon_name} className="w-3 h-3" />}
+                                {t.name}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-1">
                           {p.categories.length > 0
                             ? p.categories.map((cat, i) => (
-                                <span
-                                  key={i}
-                                  className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded"
-                                >
+                                <span key={i} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
                                   {cat}
                                 </span>
                               ))
@@ -373,9 +432,7 @@ export default function CarteListPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() =>
-                              setProductModal({ open: true, editing: p as unknown as ProductData })
-                            }
+                            onClick={() => setProductModal({ open: true, editing: p as unknown as ProductData })}
                             className="p-1.5 text-gray-400 hover:text-primary-500 transition"
                             title="Modifier"
                           >
@@ -407,6 +464,7 @@ export default function CarteListPage() {
         />
       )}
 
+      <CarteSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

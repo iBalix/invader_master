@@ -3,21 +3,21 @@ import { supabaseAdmin } from '../config/supabase.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
-export const menuTagV2Routes = Router();
+export const menuTagRoutes = Router();
 
-menuTagV2Routes.use(authMiddleware, requireRole('admin', 'salarie'));
+menuTagRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
 
-menuTagV2Routes.get('/', async (_req, res) => {
+menuTagRoutes.get('/', async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('product_v2_tags')
+      .from('product_tags')
       .select('*')
       .order('position', { ascending: true });
 
     if (error) throw error;
 
     const { data: links } = await supabaseAdmin
-      .from('product_v2_product_tags')
+      .from('product_product_tags')
       .select('tag_id');
 
     const useCount: Record<string, number> = {};
@@ -32,15 +32,15 @@ menuTagV2Routes.get('/', async (_req, res) => {
 
     res.json({ status: 'success', items });
   } catch (err) {
-    console.error('List menu tags v2 error:', err);
+    console.error('List menu tags error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });
   }
 });
 
-menuTagV2Routes.post('/', async (req, res) => {
+menuTagRoutes.post('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('product_v2_tags')
+      .from('product_tags')
       .insert(req.body)
       .select()
       .single();
@@ -50,15 +50,15 @@ menuTagV2Routes.post('/', async (req, res) => {
     }
     res.status(201).json({ status: 'success', tag: data });
   } catch (err) {
-    console.error('Create menu tag v2 error:', err);
+    console.error('Create menu tag error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });
   }
 });
 
-menuTagV2Routes.put('/:id', async (req, res) => {
+menuTagRoutes.put('/:id', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('product_v2_tags')
+      .from('product_tags')
       .update(req.body)
       .eq('id', req.params.id)
       .select()
@@ -69,21 +69,21 @@ menuTagV2Routes.put('/:id', async (req, res) => {
     }
     res.json({ status: 'success', tag: data });
   } catch (err) {
-    console.error('Update menu tag v2 error:', err);
+    console.error('Update menu tag error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });
   }
 });
 
-menuTagV2Routes.delete('/:id', async (req, res) => {
+menuTagRoutes.delete('/:id', async (req, res) => {
   try {
     const { error } = await supabaseAdmin
-      .from('product_v2_tags')
+      .from('product_tags')
       .delete()
       .eq('id', req.params.id);
     if (error) throw error;
     res.json({ status: 'success' });
   } catch (err) {
-    console.error('Delete menu tag v2 error:', err);
+    console.error('Delete menu tag error:', err);
     res.status(500).json({ status: 'error', message: 'Erreur serveur' });
   }
 });

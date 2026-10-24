@@ -1,7 +1,7 @@
 /**
  * Boîte de dialogue de génération d'image produit par IA.
  *
- * Elle est montée EN DEHORS du <form> de ProductModalV2, volontairement : un
+ * Elle est montée EN DEHORS du <form> de ProductModal, volontairement : un
  * <form> imbriqué est du HTML invalide, et surtout la touche Entrée dans la zone
  * de texte du prompt soumettrait le formulaire parent, donc enregistrerait le
  * produit au lieu de générer. Pour la même raison, chaque bouton porte
@@ -97,7 +97,7 @@ export default function ImageGenModal({
   const charger = useCallback(async () => {
     try {
       const [produits, reglages] = await Promise.all([
-        api.get('/api/menu-products-v2'),
+        api.get('/api/menu-products'),
         api.get('/api/carte-settings'),
       ]);
       const items: ProduitReference[] = (produits.data?.items ?? []).filter(
@@ -137,7 +137,7 @@ export default function ImageGenModal({
     setResultat(null);
     try {
       const { data } = await api.post(
-        '/api/menu-products-v2/generate-image',
+        '/api/menu-products/generate-image',
         {
           productName,
           productType,

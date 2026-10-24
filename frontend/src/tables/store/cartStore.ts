@@ -8,7 +8,7 @@
  * pas la commande en cours, et qu'un master/slave aient leur panier
  * independant (leurs hostnames different).
  *
- * Carte v2 : un produit peut etre ajoute avec un conditionnement et / ou
+ * Un produit peut etre ajoute avec un conditionnement et / ou
  * une variante. L'identite d'un item devient (productId, conditioningId,
  * variantId). Pour minimiser l'impact sur le code consommateur :
  *   - `productId` continue de jouer le role de "cle d'item" cote store

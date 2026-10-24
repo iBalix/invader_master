@@ -6,7 +6,7 @@
  *     verticale.
  *   - Quand disabled : opacity reduite + grayscale + pointer-events none.
  *     Le badge "Min X joueurs" est superpose pour expliquer pourquoi.
- *   - consoleName accepte un fallback display (utilise par GamesPage v2).
+ *   - consoleName accepte un fallback display (utilise par GamesPage).
  */
 
 import type { Game } from '../../hooks/useGames';

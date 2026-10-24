@@ -30,11 +30,10 @@ const BUCKET = 'invader-assets';
 /**
  * Prefixe legitime des medias du bar.
  *
- * `menu_products_v2.image_url` est du texte libre : telecharger une URL venue de
+ * `menu_products.image_url` est du texte libre : telecharger une URL venue de
  * la base avec un simple fetch ouvrirait une SSRF depuis un process qui detient
  * la cle service_role. On refuse donc tout ce qui ne vient pas de notre bucket,
- * et on passe par le SDK Storage plutot que par le reseau. Meme garde-fou que
- * scripts/optimize-v2-images.ts.
+ * et on passe par le SDK Storage plutot que par le reseau.
  */
 const PREFIXE_STOCKAGE = `${process.env.SUPABASE_URL ?? ''}/storage/v1/object/public/${BUCKET}/`;
 

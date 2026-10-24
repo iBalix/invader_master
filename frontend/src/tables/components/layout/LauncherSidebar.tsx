@@ -42,16 +42,16 @@ export interface SidebarEntry {
    */
   expanded?: boolean;
   /**
-   * Nom d'icone Lucide (carte v2). Affichee a gauche du libelle.
+   * Nom d'icone Lucide (carte). Affichee a gauche du libelle.
    */
   iconName?: string | null;
   /**
-   * Couleur hex (#RRGGBB) appliquee en background subtil sur l'item (carte v2).
+   * Couleur hex (#RRGGBB) appliquee en background subtil sur l'item (carte).
    */
   color?: string | null;
   /**
    * URL d'une texture image (paysage 16:9) appliquee en background du bouton
-   * (jeux v2). Un degrade noir gauche -> transparent droit garantit la lisibilite
+   * (jeux). Un degrade noir gauche -> transparent droit garantit la lisibilite
    * du libelle. Si absente, fallback sur color.
    */
   textureUrl?: string | null;
@@ -72,7 +72,7 @@ interface Props {
   showCategoryDividers?: boolean;
   /**
    * Slot rendu en bas de la sidebar, sous la liste d'entries (shrink-0).
-   * Utilise pour le bloc Happy Hour fixe sur la carte v2.
+   * Utilise pour le bloc Happy Hour fixe sur la carte.
    */
   bottomSlot?: ReactNode;
   /**
@@ -162,7 +162,7 @@ export default function LauncherSidebar({
           }
 
           const colorBg = e.color && !active ? `${e.color}22` : undefined;
-          // Texture (jeux v2) : background image avec degrade noir gauche -> transparent droit.
+          // Texture (jeux) : background image avec degrade noir gauche -> transparent droit.
           // Le degrade garantit la lisibilite du libelle (place a gauche).
           const textureStyle: React.CSSProperties | undefined = e.textureUrl
             ? {

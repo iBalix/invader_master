@@ -5,6 +5,7 @@ import FileUpload from '../Quiz/FileUpload';
 export interface GameConsoleData {
   id?: string;
   name: string;
+  display_name: string | null;
   library: string;
   logo_url: string | null;
 }
@@ -17,6 +18,7 @@ interface Props {
 
 export default function GameConsoleModal({ initial, onSave, onClose }: Props) {
   const [name, setName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [library, setLibrary] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -24,6 +26,7 @@ export default function GameConsoleModal({ initial, onSave, onClose }: Props) {
   useEffect(() => {
     if (initial) {
       setName(initial.name ?? '');
+      setDisplayName(initial.display_name ?? '');
       setLibrary(initial.library ?? '');
       setLogoUrl(initial.logo_url ?? null);
     }
@@ -34,14 +37,20 @@ export default function GameConsoleModal({ initial, onSave, onClose }: Props) {
     if (!name.trim() || !library.trim()) return;
     setSaving(true);
     try {
-      await onSave({ id: initial?.id, name: name.trim(), library: library.trim(), logo_url: logoUrl });
+      await onSave({
+        id: initial?.id,
+        name: name.trim(),
+        display_name: displayName.trim() || null,
+        library: library.trim(),
+        logo_url: logoUrl,
+      });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
         <div className="flex items-center justify-between p-5 border-b">
           <h2 className="text-lg font-bold">
@@ -59,10 +68,24 @@ export default function GameConsoleModal({ initial, onSave, onClose }: Props) {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="Ex : Super Nintendo Entertainment System"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               required
               autoFocus
             />
+            <p className="mt-1 text-xs text-gray-400">Nom officiel / complet (peut être long).</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nom affiché (bornes)</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Ex : SNES"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+            <p className="mt-1 text-xs text-gray-400">Court, lisible. Affiché sur les cards et modales des tables tactiles. Vide = utilise le nom complet.</p>
           </div>
 
           <div>
@@ -78,14 +101,20 @@ export default function GameConsoleModal({ initial, onSave, onClose }: Props) {
             <p className="mt-1 text-xs text-gray-400">Nom du core RetroArch utilisé pour lancer les jeux</p>
           </div>
 
-          <FileUpload
-            label="Logo"
-            accept="image/*"
-            value={logoUrl}
-            onChange={(v) => setLogoUrl(v)}
-          />
+          <div>
+            <FileUpload
+              label="Logo"
+              accept="image/*"
+              value={logoUrl}
+              onChange={(v) => setLogoUrl(v)}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              PNG à fond transparent, hauteur 120 px environ. Sert à l'ancien site : il n'est pas
+              affiché sur les nouvelles tables aujourd'hui, seul le nom de la console y apparaît.
+            </p>
+          </div>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-2 border-t border-gray-200">
             <button type="button" onClick={onClose} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition">
               Annuler
             </button>

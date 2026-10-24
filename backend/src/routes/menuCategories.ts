@@ -27,9 +27,7 @@ menuCategoryRoutes.get('/', async (_req, res) => {
       }
     }
 
-    const parentMap = new Map(
-      (categories ?? []).map((c) => [c.id, c.name]),
-    );
+    const parentMap = new Map((categories ?? []).map((c) => [c.id, c.name]));
 
     const items = (categories ?? []).map((c) => ({
       ...c,
@@ -81,7 +79,7 @@ menuCategoryRoutes.get('/:id', async (req, res) => {
 
     const { data: subCategories } = await supabaseAdmin
       .from('menu_categories')
-      .select('id, name, weight')
+      .select('id, name, weight, icon_name, color')
       .eq('parent_id', category.id)
       .order('weight', { ascending: true });
 

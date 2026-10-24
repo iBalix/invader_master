@@ -1,5 +1,5 @@
 /**
- * Ligne produit (layout horizontal) pour la Carte v2.
+ * Ligne produit (layout horizontal) pour la carte.
  *
  *   - Image carree a gauche.
  *   - Centre : tags, nom, sous-titre, description, pastilles variantes.
@@ -13,18 +13,18 @@
  */
 
 import { Plus } from 'lucide-react';
-import type { MenuProductV2, MenuConditioningV2 } from '../../hooks/useCarteV2';
+import type { MenuProduct, MenuConditioning } from '../../hooks/useCarte';
 import { formatPrice } from '../../lib/format';
 import LucideIcon from '../../../lib/LucideIcon';
 import { useT } from '../../i18n/useT';
 
 interface Props {
-  product: MenuProductV2;
+  product: MenuProduct;
   happyHour: boolean;
   qtyInCart: number;
   onSelect: () => void;
   onAdd: () => void;
-  onAddConditioning?: (cond: MenuConditioningV2) => void;
+  onAddConditioning?: (cond: MenuConditioning) => void;
   showAddButton?: boolean;
 }
 

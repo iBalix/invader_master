@@ -67,7 +67,7 @@ export default function CarteSettingsModal({ open, onClose }: Props) {
     // liste des visuels selectionnables ; un echec ici ne doit pas empecher de
     // regler les horaires de happy hour
     try {
-      const { data } = await api.get('/api/menu-products-v2');
+      const { data } = await api.get('/api/menu-products');
       const items = (data?.items ?? []) as { id: string; name: string; image_url: string | null }[];
       setProduitsAvecImage(items.filter((p) => p.image_url));
     } catch {

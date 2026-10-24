@@ -13,14 +13,10 @@ import QuizListPage from './pages/QuizListPage';
 import QuizFormPage from './pages/QuizFormPage';
 import CarteListPage from './pages/CarteListPage';
 import CategoryFormPage from './pages/CategoryFormPage';
-import CarteV2ListPage from './pages/CarteV2ListPage';
-import CategoryFormV2Page from './pages/CategoryFormV2Page';
 import CarteSettingsPage from './pages/CarteSettingsPage';
 import WebsiteSettingsPage from './pages/WebsiteSettingsPage';
 import GamesListPage from './pages/GamesListPage';
 import GameFormPage from './pages/GameFormPage';
-import GamesV2ListPage from './pages/GamesV2ListPage';
-import GameFormV2Page from './pages/GameFormV2Page';
 import ScreensConfigPage from './pages/ScreensConfigPage';
 import EventsPage from './pages/EventsPage';
 import CouponsPage from './pages/TablesTactiles/CouponsPage';
@@ -90,16 +86,12 @@ export default function App() {
                     <Route path="contenus/carte" element={<CarteListPage />} />
                     <Route path="contenus/carte/category/new" element={<CategoryFormPage />} />
                     <Route path="contenus/carte/category/:id" element={<CategoryFormPage />} />
-                    <Route path="contenus/carte-v2" element={<CarteV2ListPage />} />
-                    <Route path="contenus/carte-v2/category/new" element={<CategoryFormV2Page />} />
-                    <Route path="contenus/carte-v2/category/:id" element={<CategoryFormV2Page />} />
+                    <Route path="contenus/carte-v2/*" element={<Navigate to="/contenus/carte" replace />} />
                     <Route path="contenus/carte-settings" element={<CarteSettingsPage />} />
                     <Route path="contenus/jeux" element={<GamesListPage />} />
                     <Route path="contenus/jeux/game/new" element={<GameFormPage />} />
                     <Route path="contenus/jeux/game/:id" element={<GameFormPage />} />
-                    <Route path="contenus/jeux-v2" element={<GamesV2ListPage />} />
-                    <Route path="contenus/jeux-v2/game/new" element={<GameFormV2Page />} />
-                    <Route path="contenus/jeux-v2/game/:id" element={<GameFormV2Page />} />
+                    <Route path="contenus/jeux-v2/*" element={<Navigate to="/contenus/jeux" replace />} />
                     <Route path="contenus/config-ecrans" element={<ScreensConfigPage />} />
                     <Route path="contenus/medias" element={<Navigate to="/contenus/config-ecrans" replace />} />
                     <Route path="contenus/evenements" element={<EventsPage />} />

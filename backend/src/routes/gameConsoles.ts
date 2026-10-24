@@ -7,6 +7,16 @@ export const gameConsoleRoutes = Router();
 
 gameConsoleRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
 
+const ALLOWED = ['name', 'display_name', 'library', 'logo_url'] as const;
+
+function pick(body: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ALLOWED) {
+    if (key in body) out[key] = body[key];
+  }
+  return out;
+}
+
 gameConsoleRoutes.get('/', async (_req, res) => {
   try {
     const { data: consoles, error } = await supabaseAdmin
@@ -43,7 +53,7 @@ gameConsoleRoutes.post('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('game_consoles')
-      .insert(req.body)
+      .insert(pick(req.body))
       .select()
       .single();
 
@@ -63,7 +73,7 @@ gameConsoleRoutes.put('/:id', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('game_consoles')
-      .update(req.body)
+      .update(pick(req.body))
       .eq('id', req.params.id)
       .select()
       .single();

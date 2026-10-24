@@ -1,11 +1,81 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
+import { colonneActivePresente } from '../lib/gamesColumns.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
 export const gameRoutes = Router();
 
 gameRoutes.use(authMiddleware, requireRole('admin', 'salarie'));
+
+const ALLOWED = [
+  'name', 'name_en', 'subtitle', 'subtitle_en', 'description', 'description_en',
+  'file_name', 'console_id', 'platform', 'competition', 'competition_link',
+  'cover_url', 'display_order', 'max_players', 'player_counts',
+  'youtube_video_id', 'youtube_start_sec', 'youtube_duration_sec',
+  'control_a', 'control_b', 'control_x', 'control_y',
+  'control_l', 'control_r', 'control_start', 'control_select',
+  'special_note', 'game_type', 'game_url', 'active',
+] as const;
+
+/** configurations de joueurs, alignees une a une sur les puces de filtre */
+const PLAYER_COUNTS = ['1', '2', '3', '4', '4+'] as const;
+
+function pick(body: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ALLOWED) {
+    if (key in body) out[key] = body[key];
+  }
+  // game_type : vocabulaire fermé (le CHECK SQL protège aussi, mais on évite
+  // un 500 PostgREST opaque sur une valeur farfelue)
+  if ('game_type' in out && out.game_type !== 'emulator' && out.game_type !== 'web') {
+    delete out.game_type;
+  }
+  // active : booleen strict. Le back-office envoie true/false, on tolere aussi
+  // 'true'/'false' et 1/0 ; toute autre valeur est ignoree plutot que de laisser
+  // PostgREST repondre un 500 opaque ("invalid input syntax for type boolean").
+  if ('active' in out) {
+    const v = out.active;
+    if (v === true || v === 'true' || v === 1) out.active = true;
+    else if (v === false || v === 'false' || v === 0) out.active = false;
+    else delete out.active;
+  }
+  // Clamp max_players to 1-20 (Flappy Bar accueille tout le bar, CHECK releve
+  // a 20 par docs/migration-051-flappybar.sql)
+  if (out.max_players != null) {
+    const n = Number(out.max_players);
+    if (Number.isFinite(n)) out.max_players = Math.max(1, Math.min(20, Math.round(n)));
+    else delete out.max_players;
+  }
+  // player_counts : vocabulaire ferme, aligne sur les puces de filtre des
+  // bornes. C'est un ENSEMBLE de configurations supportees, pas un plafond :
+  // les echecs valent ['2'] et ne doivent pas ressortir sous "1 joueur".
+  // Le CHECK SQL protege aussi, mais on evite un 500 PostgREST opaque.
+  if ('player_counts' in out) {
+    const brut = Array.isArray(out.player_counts) ? out.player_counts : [];
+    const retenus = PLAYER_COUNTS.filter((v) => brut.includes(v));
+    out.player_counts = retenus;
+    // max_players est DERIVE des tags, jamais saisi : deux champs decrivant le
+    // meme fait finissent toujours par diverger. Il ne sert plus qu'a deux
+    // choses, l'affichage et le repli des bornes quand player_counts est vide.
+    // '4+' vaut 8, le plafond du CHECK depuis migration-046 (blackjack en
+    // reseau) ; sinon on prend le tag le plus haut.
+    if (retenus.length > 0) {
+      out.max_players = retenus.includes('4+')
+        ? 8
+        : Math.max(...retenus.map((v) => Number(v)));
+    }
+  }
+  // Sanitize youtube_start_sec / youtube_duration_sec (integers >= 0)
+  for (const k of ['youtube_start_sec', 'youtube_duration_sec'] as const) {
+    if (out[k] != null && out[k] !== '') {
+      const n = Number(out[k]);
+      if (Number.isFinite(n) && n >= 0) out[k] = Math.round(n);
+      else out[k] = null;
+    }
+  }
+  return out;
+}
 
 gameRoutes.get('/', async (req, res) => {
   try {
@@ -23,10 +93,16 @@ gameRoutes.get('/', async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    const { data: consoles } = await supabaseAdmin.from('game_consoles').select('id, name');
-    const consoleMap = new Map((consoles ?? []).map((c) => [c.id, c.name]));
+    const { data: consoles } = await supabaseAdmin
+      .from('game_consoles')
+      .select('id, name, display_name');
+    const consoleMap = new Map(
+      (consoles ?? []).map((c) => [c.id, { name: c.name, display_name: c.display_name }]),
+    );
 
-    const { data: catLinks } = await supabaseAdmin.from('game_category_games').select('game_id, category_id');
+    const { data: catLinks } = await supabaseAdmin
+      .from('game_category_games')
+      .select('game_id, category_id');
     const { data: cats } = await supabaseAdmin.from('game_categories').select('id, name');
     const catMap = new Map((cats ?? []).map((c) => [c.id, c.name]));
 
@@ -39,11 +115,15 @@ gameRoutes.get('/', async (req, res) => {
       }
     }
 
-    const items = (data ?? []).map((g) => ({
-      ...g,
-      console_name: consoleMap.get(g.console_id) ?? null,
-      categories: gameCats[g.id] ?? [],
-    }));
+    const items = (data ?? []).map((g) => {
+      const c = consoleMap.get(g.console_id);
+      return {
+        ...g,
+        console_name: c?.name ?? null,
+        console_display_name: c?.display_name ?? null,
+        categories: gameCats[g.id] ?? [],
+      };
+    });
 
     res.json({ status: 'success', items });
   } catch (err) {
@@ -76,11 +156,15 @@ gameRoutes.get('/:id', async (req, res) => {
       .select('category_id')
       .eq('game_id', game.id);
 
-    const { data: console_ } = await supabaseAdmin
-      .from('game_consoles')
-      .select('id, name, library, logo_url')
-      .eq('id', game.console_id)
-      .single();
+    let console_: unknown = null;
+    if (game.console_id) {
+      const { data } = await supabaseAdmin
+        .from('game_consoles')
+        .select('id, name, display_name, library, logo_url')
+        .eq('id', game.console_id)
+        .single();
+      console_ = data;
+    }
 
     res.json({
       status: 'success',
@@ -97,9 +181,42 @@ gameRoutes.get('/:id', async (req, res) => {
   }
 });
 
+/**
+ * La colonne player_counts existe-t-elle deja ?
+ *
+ * migration-047 s'applique a la main dans le SQL Editor (convention du projet),
+ * donc le code peut etre deploye avant. Sans ce garde-fou, PostgREST refuserait
+ * tout enregistrement de jeu ("column games.player_counts does not exist")
+ * entre les deux : le back-office serait casse pour une migration en retard.
+ *
+ * On sonde avant chaque enregistrement et on retire simplement le champ tant que
+ * la colonne manque. Seul le succes est memorise, JAMAIS l'absence : la
+ * migration s'applique en base sans redemarrer le backend, et un cache negatif
+ * obligerait a redeployer pour que les tags se remettent a fonctionner. Le cout
+ * de la sonde est donc un select limit 1 par sauvegarde, uniquement pendant la
+ * fenetre degradee. A retirer quand la migration sera passee partout.
+ */
+let colonneTagsVue = false;
+
+async function colonneTagsPresente(): Promise<boolean> {
+  if (colonneTagsVue) return true;
+  const { error } = await supabaseAdmin.from('games').select('player_counts').limit(1);
+  if (error) {
+    console.warn(
+      '[games] colonne player_counts absente, tags de joueurs ignores a l\'ecriture. Appliquer docs/migration-047-games-v2-player-counts.sql.',
+    );
+    return false;
+  }
+  colonneTagsVue = true;
+  return true;
+}
+
 gameRoutes.post('/', async (req, res) => {
   try {
-    const { category_ids, images, ...fields } = req.body;
+    const { category_ids, images } = req.body;
+    const fields = pick(req.body);
+    if (!(await colonneTagsPresente())) delete fields.player_counts;
+    if (!(await colonneActivePresente())) delete fields.active;
 
     const { data: game, error } = await supabaseAdmin
       .from('games')
@@ -107,8 +224,8 @@ gameRoutes.post('/', async (req, res) => {
       .select()
       .single();
 
-    if (error) {
-      res.status(400).json({ status: 'error', message: error.message });
+    if (error || !game) {
+      res.status(400).json({ status: 'error', message: error?.message ?? 'Erreur insertion' });
       return;
     }
 
@@ -117,7 +234,12 @@ gameRoutes.post('/', async (req, res) => {
         category_id: cid,
         game_id: game.id,
       }));
-      await supabaseAdmin.from('game_category_games').insert(links);
+      const { error: cErr } = await supabaseAdmin.from('game_category_games').insert(links);
+      if (cErr) {
+        await supabaseAdmin.from('games').delete().eq('id', game.id);
+        res.status(400).json({ status: 'error', message: `Catégories: ${cErr.message}` });
+        return;
+      }
     }
 
     if (Array.isArray(images) && images.length > 0) {
@@ -126,7 +248,12 @@ gameRoutes.post('/', async (req, res) => {
         image_url: url,
         position: i,
       }));
-      await supabaseAdmin.from('game_images').insert(imgRows);
+      const { error: iErr } = await supabaseAdmin.from('game_images').insert(imgRows);
+      if (iErr) {
+        await supabaseAdmin.from('games').delete().eq('id', game.id);
+        res.status(400).json({ status: 'error', message: `Images: ${iErr.message}` });
+        return;
+      }
     }
 
     res.status(201).json({ status: 'success', game });
@@ -138,20 +265,38 @@ gameRoutes.post('/', async (req, res) => {
 
 gameRoutes.put('/:id', async (req, res) => {
   try {
-    const { category_ids, images, ...fields } = req.body;
+    const { category_ids, images } = req.body;
+    const fields = pick(req.body);
+    if (!(await colonneTagsPresente())) delete fields.player_counts;
+    if (!(await colonneActivePresente())) delete fields.active;
 
-    const { error } = await supabaseAdmin
+    // On selectionne la ligne mise a jour pour detecter un update silencieux
+    // (RLS qui filtre, ID invalide). Sans ca, PostgREST renvoie 204 meme si 0
+    // ligne touchee et le client pense que ca a marche.
+    const { data: updated, error } = await supabaseAdmin
       .from('games')
       .update(fields)
-      .eq('id', req.params.id);
+      .eq('id', req.params.id)
+      .select('id');
 
     if (error) {
       res.status(400).json({ status: 'error', message: error.message });
       return;
     }
+    if (!updated || updated.length === 0) {
+      res.status(409).json({
+        status: 'error',
+        message:
+          "Aucune ligne modifiee (ID introuvable ou RLS bloque l'update). Verifier la cle SUPABASE_SERVICE_ROLE_KEY du backend.",
+      });
+      return;
+    }
 
     if (Array.isArray(category_ids)) {
-      await supabaseAdmin.from('game_category_games').delete().eq('game_id', req.params.id);
+      await supabaseAdmin
+        .from('game_category_games')
+        .delete()
+        .eq('game_id', req.params.id);
       if (category_ids.length > 0) {
         const links = category_ids.map((cid: string) => ({
           category_id: cid,

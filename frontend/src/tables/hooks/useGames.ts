@@ -1,19 +1,29 @@
 /**
- * Recupere le catalogue de jeux via /public/games.
- *
- * Le payload contient categories, consoles et games (avec consoleLibrary,
- * categories, images...). On le passe brut au composant qui filtrera.
+ * Recupere le catalogue de jeux via /public/games : categories (iconName,
+ * color, textureUrl), consoles (displayName) et jeux (maxPlayers, youtube_*,
+ * control_*).
  */
 
 import { useEffect, useState } from 'react';
 import { publicApi } from '../lib/tablesApi';
+import { useLocaleStore } from '../i18n/localeStore';
 
 export interface GameCategory {
   id: string;
   name: string;
-  emoji?: string | null;
-  iconUrl?: string | null;
+  nameEn?: string | null;
   displayOrder?: number;
+  iconName?: string | null;
+  color?: string | null;
+  textureUrl?: string | null;
+}
+
+export interface GameConsole {
+  id: string;
+  name: string;
+  displayName?: string | null;
+  library?: string;
+  logoUrl?: string | null;
 }
 
 export interface Game {
@@ -22,31 +32,38 @@ export interface Game {
   subtitle?: string | null;
   description?: string | null;
   fileName?: string | null;
+  coverUrl?: string | null;
   consoleId?: string;
   consoleName?: string | null;
-  /** Optionnel : nom court affiche borne (jeux v2). Si undefined, fallback sur consoleName. */
   consoleDisplayName?: string | null;
   consoleLibrary?: string | null;
   consoleLogoUrl?: string | null;
   categories: string[];
-  /**
-   * Jeu reserve aux bornes de la salle : pas de lancement depuis une table.
-   * Calcule par le serveur sur le nom NON traduit de la categorie, cf.
-   * backend/src/routes/public.ts (la categorie s'appelle "Bornes" en francais
-   * et "Arcades" en anglais).
-   */
-  bornesOnly?: boolean;
   images: string[];
   gameType?: string | null;
   gameUrl?: string | null;
   multiplayer?: boolean;
   controllerCount?: number | null;
   displayOrder?: number;
-  /** v2 only — preview YouTube avec fade vers cover dans LaunchGameModal */
+  maxPlayers?: number;
+  /**
+   * Configurations de joueurs supportees ('1' | '2' | '3' | '4' | '4+').
+   * Optionnel : absent tant que la migration 047 n'est pas appliquee, le filtre
+   * retombe alors sur maxPlayers.
+   */
+  playerCounts?: string[];
+  /** jeu reserve aux bornes de la salle : pas de lancement depuis une table */
+  bornesOnly?: boolean;
+  /**
+   * Interrupteur du catalogue : false = masque de la liste des tables. Le
+   * filtrage est fait cote serveur (GET /public/games ne renvoie que les
+   * jeux actifs), la valeur n'est ici qu'indicative.
+   * Optionnel : absent tant que la migration 050 n'est pas appliquee.
+   */
+  active?: boolean;
   youtubeVideoId?: string | null;
   youtubeStartSec?: number;
   youtubeDurationSec?: number | null;
-  /** v2 only — schema manette SNES */
   controlA?: string | null;
   controlB?: string | null;
   controlX?: string | null;
@@ -55,15 +72,12 @@ export interface Game {
   controlR?: string | null;
   controlStart?: string | null;
   controlSelect?: string | null;
-  /** v2 only — mention speciale affichee dans la modale de lancement */
   specialNote?: string | null;
-  /** v2 only — cover bullet path */
-  coverUrl?: string | null;
 }
 
 export interface GamesPayload {
   categories: GameCategory[];
-  consoles: Array<{ id: string; name: string; library?: string; logoUrl?: string }>;
+  consoles: GameConsole[];
   games: Game[];
 }
 
@@ -74,6 +88,7 @@ interface State {
 }
 
 export function useGames(): State {
+  const locale = useLocaleStore((s) => s.locale);
   const [state, setState] = useState<State>({ loading: true, data: null, error: null });
 
   useEffect(() => {
@@ -95,7 +110,8 @@ export function useGames(): State {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // relance au changement de langue : la locale voyage avec la requete
+  }, [locale]);
 
   return state;
 }

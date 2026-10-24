@@ -17,7 +17,7 @@
 import { Hand, Play, Trophy } from 'lucide-react';
 import ArcadeModal from '../ui/ArcadeModal';
 import ArcadeButton from '../ui/ArcadeButton';
-import type { GameV2 } from '../../hooks/useGamesV2';
+import type { Game } from '../../hooks/useGames';
 import { useWebGameLive, type WebGameLiveInfo } from '../../hooks/useWebGameLive';
 import { webGameGuide } from '../../lib/webGameGuides';
 import { useLocaleStore } from '../../i18n/localeStore';
@@ -26,9 +26,9 @@ import { formatMeters } from '../../games/flappybar/lib/format';
 
 interface Props {
   open: boolean;
-  game: GameV2 | null;
+  game: Game | null;
   onClose: () => void;
-  onPlay: (game: GameV2) => void;
+  onPlay: (game: Game) => void;
 }
 
 /** ligne « en ce moment dans le bar » */

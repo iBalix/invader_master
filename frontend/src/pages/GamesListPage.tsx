@@ -1,20 +1,48 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X, Youtube } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
 import GameCategoryModal, { type GameCategoryData } from '../components/Games/GameCategoryModal';
 import GameConsoleModal, { type GameConsoleData } from '../components/Games/GameConsoleModal';
+import LucideIcon from '../lib/LucideIcon';
 
 interface GameRow {
   id: string;
   name: string;
   cover_url: string | null;
   console_name: string | null;
+  console_display_name: string | null;
   platform: string[];
   display_order: number;
+  max_players: number;
+  /** absent tant que migration-047 n'est pas appliquee : on retombe sur max_players */
+  player_counts?: string[] | null;
+  youtube_video_id: string | null;
   categories: string[];
   competition: boolean;
+  /** absent tant que migration-050 n'est pas appliquee : traite comme actif */
+  active?: boolean;
+}
+
+const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '4+'] as const;
+
+/**
+ * Configurations affichees dans la colonne "Joueurs".
+ *
+ * On montre les tags plutot que l'ancien "max joueurs" : c'est la donnee qui
+ * decide reellement sous quel filtre le jeu sort sur les bornes. Repli sur
+ * max_players tant que la migration 047 n'est pas appliquee, sinon la colonne
+ * serait vide partout.
+ */
+function configsAffichees(g: GameRow): string[] {
+  if (g.player_counts && g.player_counts.length > 0) {
+    return PLAYER_COUNT_OPTIONS.filter((c) => g.player_counts!.includes(c));
+  }
+  const max = g.max_players ?? 1;
+  const out = PLAYER_COUNT_OPTIONS.filter((c) => c !== '4+' && Number(c) <= Math.min(max, 4)) as string[];
+  if (max > 4) out.push('4+');
+  return out;
 }
 
 interface CategoryRow {
@@ -22,12 +50,16 @@ interface CategoryRow {
   name: string;
   name_en: string;
   display_order: number;
+  icon_name: string | null;
+  color: string | null;
+  texture_url: string | null;
   gameCount: number;
 }
 
 interface ConsoleRow {
   id: string;
   name: string;
+  display_name: string | null;
   library: string;
   logo_url: string | null;
   gameCount: number;
@@ -78,6 +110,33 @@ export default function GamesListPage() {
       toast.success('Jeu supprimé');
       loadGames();
     } catch { toast.error('Erreur lors de la suppression'); }
+  };
+
+  /**
+   * Bascule actif/inactif depuis la liste, en optimiste : le cas d'usage est
+   * "couper un jeu bugue en un clic", sans passer par le formulaire. `active`
+   * absent (migration-050 pas encore appliquee) vaut actif.
+   */
+  const handleToggleActive = async (g: GameRow) => {
+    const cible = !(g.active ?? true);
+    const majLocale = (val: boolean | undefined) =>
+      setGames((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: val } : x)));
+    majLocale(cible);
+    try {
+      const { data } = await api.put(`/api/games/${g.id}`, { active: cible });
+      // le backend ignore le champ tant que la colonne manque : on se realigne
+      // sur ce qui a vraiment ete enregistre plutot que d'afficher un mensonge
+      const reel: boolean = data?.game?.active ?? true;
+      if (reel !== cible) {
+        majLocale(reel);
+        toast.error('Colonne "active" absente en base : appliquer docs/migration-050-games-v2-active.sql');
+        return;
+      }
+      toast.success(cible ? 'Jeu activé' : 'Jeu désactivé');
+    } catch {
+      majLocale(g.active);
+      toast.error("Erreur lors de la mise à jour de l'état du jeu");
+    }
   };
 
   const handleDeleteCategory = async (id: string, name: string) => {
@@ -178,7 +237,10 @@ export default function GamesListPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Jeux</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Jeux</h1>
+          <p className="text-sm text-gray-500">Nouveau modèle (vidéo YouTube, manette SNES, max joueurs, catégories enrichies)</p>
+        </div>
         <div className="flex items-center gap-2">
           {createButton()}
         </div>
@@ -257,29 +319,68 @@ export default function GamesListPage() {
                   <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                     <th className="px-6 py-3">Jeu</th>
                     <th className="px-6 py-3">Console</th>
+                    <th className="px-6 py-3 text-center">Joueurs</th>
+                    <th className="px-6 py-3 text-center">YT</th>
                     <th className="px-6 py-3">Plateforme(s)</th>
                     <th className="px-6 py-3">Catégories</th>
                     <th className="px-6 py-3 text-center">Ordre</th>
+                    <th className="px-6 py-3 text-center">Actif</th>
                     <th className="px-6 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredGames.map((g) => (
-                    <tr key={g.id} className="hover:bg-gray-50 transition">
+                    <tr key={g.id} className={`hover:bg-gray-50 transition ${(g.active ?? true) ? '' : 'opacity-60'}`}>
                       <td className="px-6 py-4 font-medium">
-                        <Link
-                          to={`/contenus/jeux/game/${g.id}`}
-                          className="flex items-center gap-3 text-primary-600 hover:underline"
-                        >
-                          {g.cover_url ? (
-                            <img src={g.cover_url} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
-                          ) : (
-                            <div className="w-10 h-10 rounded bg-gray-100 flex-shrink-0" />
+                        <div className="flex items-center gap-2">
+                          <Link
+                            to={`/contenus/jeux/game/${g.id}`}
+                            className="flex items-center gap-3 text-primary-600 hover:underline"
+                          >
+                            {g.cover_url ? (
+                              <img src={g.cover_url} alt="" className="w-10 h-10 rounded object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-gray-100 flex-shrink-0" />
+                            )}
+                            {g.name}
+                          </Link>
+                          {!(g.active ?? true) && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactif</span>
                           )}
-                          {g.name}
-                        </Link>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-gray-600 text-sm">{g.console_name ?? '—'}</td>
+                      <td className="px-6 py-4 text-gray-600 text-sm">
+                        {g.console_display_name ? (
+                          <>
+                            {g.console_display_name}
+                            <span className="ml-1 text-xs text-gray-400">({g.console_name})</span>
+                          </>
+                        ) : (
+                          g.console_name ?? '—'
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex flex-wrap justify-center gap-1">
+                          {configsAffichees(g).map((c) => (
+                            <span
+                              key={c}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+                            >
+                              {c}
+                            </span>
+                          ))}
+                          {configsAffichees(g).length === 0 && (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        {g.youtube_video_id ? (
+                          <Youtube className="w-4 h-4 text-red-500 inline" />
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-1">
                           {g.platform.length > 0
@@ -299,6 +400,17 @@ export default function GamesListPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center text-gray-500 text-sm">{g.display_order}</td>
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(g)}
+                          aria-pressed={g.active ?? true}
+                          title={(g.active ?? true) ? 'Désactiver (masquer sur les tables)' : 'Activer (afficher sur les tables)'}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition ${(g.active ?? true) ? 'bg-primary-500' : 'bg-gray-300'}`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${(g.active ?? true) ? 'translate-x-4' : 'translate-x-1'}`} />
+                        </button>
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <Link to={`/contenus/jeux/game/${g.id}`} className="p-1.5 text-gray-400 hover:text-primary-500 transition" title="Modifier">
@@ -324,7 +436,10 @@ export default function GamesListPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 w-10">Icon</th>
                   <th className="px-6 py-3">Nom</th>
+                  <th className="px-6 py-3 text-center">Couleur</th>
+                  <th className="px-6 py-3 text-center">Texture</th>
                   <th className="px-6 py-3 text-center">Ordre</th>
                   <th className="px-6 py-3 text-center">Jeux</th>
                   <th className="px-6 py-3">Actions</th>
@@ -333,7 +448,32 @@ export default function GamesListPage() {
               <tbody className="divide-y divide-gray-100">
                 {categories.map((c) => (
                   <tr key={c.id} className="hover:bg-gray-50 transition">
+                    <td className="px-6 py-4">
+                      <LucideIcon name={c.icon_name} className="w-5 h-5 text-gray-500" />
+                    </td>
                     <td className="px-6 py-4 font-medium">{c.name}</td>
+                    <td className="px-6 py-4 text-center">
+                      {c.color ? (
+                        <span
+                          className="inline-block w-6 h-6 rounded-full border border-gray-200 align-middle"
+                          style={{ backgroundColor: c.color }}
+                          title={c.color}
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-sm">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {c.texture_url ? (
+                        <img
+                          src={c.texture_url}
+                          alt=""
+                          className="inline-block w-16 h-9 rounded object-cover border border-gray-200"
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-sm">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-center text-gray-500 text-sm">{c.display_order}</td>
                     <td className="px-6 py-4 text-center">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{c.gameCount}</span>
@@ -363,6 +503,7 @@ export default function GamesListPage() {
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <th className="px-6 py-3">Console</th>
+                  <th className="px-6 py-3">Nom affiché (bornes)</th>
                   <th className="px-6 py-3">Library</th>
                   <th className="px-6 py-3 text-center">Jeux</th>
                   <th className="px-6 py-3">Actions</th>
@@ -380,6 +521,13 @@ export default function GamesListPage() {
                         )}
                         {c.name}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {c.display_name ? (
+                        <span className="text-gray-700 font-medium">{c.display_name}</span>
+                      ) : (
+                        <span className="text-gray-400 italic">{c.name}</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-gray-500 text-sm font-mono">{c.library}</td>
                     <td className="px-6 py-4 text-center">
@@ -418,7 +566,6 @@ export default function GamesListPage() {
           onClose={() => setConsoleModal({ open: false, editing: null })}
         />
       )}
-
     </div>
   );
 }
