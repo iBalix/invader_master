@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { chessApi } from '../games/chess/lib/chessApi';
 import { bjApi } from '../games/blackjack/lib/bjApi';
 import { flapApi } from '../games/flappybar/lib/flapApi';
+import { invApi } from '../games/barinvaders/lib/invApi';
 import type { WebGameLive } from '../lib/webGameGuides';
 
 const POLL_MS = 5_000;
@@ -23,7 +24,8 @@ export interface WebGameLiveInfo {
   waiting: number;
   /** parties lancées (on peut les regarder) */
   playing: number;
-  record: { pseudo: string; score: number } | null;
+  /** unit : 'm' (Flappy Bar, mètres) ou 'pts' (Bar Invaders) */
+  record: { pseudo: string; score: number; unit: 'm' | 'pts' } | null;
 }
 
 async function lire(kind: WebGameLive): Promise<WebGameLiveInfo> {
@@ -44,6 +46,19 @@ async function lire(kind: WebGameLive): Promise<WebGameLiveInfo> {
       record: null,
     };
   }
+  if (kind === 'barinvaders') {
+    const [items, records] = await Promise.all([
+      invApi.lobby(),
+      // le record est un bonus : son absence ne doit pas masquer les parties
+      invApi.records(1).catch(() => []),
+    ]);
+    const best = records[0];
+    return {
+      waiting: items.filter((i) => i.status === 'lobby' && i.joinable).length,
+      playing: items.filter((i) => i.status === 'playing').length,
+      record: best ? { pseudo: best.pseudo, score: best.score, unit: 'pts' } : null,
+    };
+  }
   const [items, records] = await Promise.all([
     flapApi.lobby(),
     // le record est un bonus : son absence ne doit pas masquer les parties
@@ -53,7 +68,7 @@ async function lire(kind: WebGameLive): Promise<WebGameLiveInfo> {
   return {
     waiting: items.filter((i) => i.status === 'lobby' && i.joinable).length,
     playing: items.filter((i) => i.status === 'playing').length,
-    record: best ? { pseudo: best.pseudo, score: best.score } : null,
+    record: best ? { pseudo: best.pseudo, score: best.score, unit: 'm' } : null,
   };
 }
 

@@ -2,7 +2,7 @@
  * Moteur de jeu — types partagés (modes quiz / battle / chess)
  */
 
-export type GameMode = 'quiz' | 'battle' | 'chess' | 'blackjack' | 'flappybar' | 'tournament';
+export type GameMode = 'quiz' | 'battle' | 'chess' | 'blackjack' | 'flappybar' | 'barinvaders' | 'tournament';
 
 export type QuizStatus =
   | 'lobby'
@@ -54,6 +54,9 @@ export type ChessSessionStatus = 'lobby' | 'playing' | 'end';
  * cours vivent dans runtime.flappybar.round, le classement dans lastRound.
  */
 export type FlapSessionStatus = ChessSessionStatus;
+
+/** Bar Invaders : mêmes trois statuts, pour la même raison (runtime.barinvaders) */
+export type InvSessionStatus = ChessSessionStatus;
 
 /** blackjack : phases d'une manche, le détail vit dans runtime.blackjack */
 export type BlackjackStatus =

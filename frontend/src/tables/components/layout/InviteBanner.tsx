@@ -11,13 +11,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bird, Crown, Spade, X } from 'lucide-react';
+import { Bird, Crown, Rocket, Spade, X } from 'lucide-react';
 import { useRealtimeTopic } from '../../hooks/useRealtimeTopic';
 import { useT } from '../../i18n/useT';
 import { EASE_OUT_QUART } from '../../lib/motion';
 
 interface Invite {
-  game: 'chess' | 'blackjack' | 'flappybar';
+  game: 'chess' | 'blackjack' | 'flappybar' | 'barinvaders';
   sessionId: string;
   pseudo: string;
   at: number;
@@ -48,6 +48,12 @@ const GAME_STYLE: Record<Invite['game'], { accent: string; bg: string; icon: Rea
     bg: 'linear-gradient(90deg, rgba(58,12,44,0.97), rgba(32,8,28,0.97))',
     icon: <Bird className="h-8 w-8" />,
     labelKey: 'table.invite.flappybar',
+  },
+  barinvaders: {
+    accent: '#3DFF8A',
+    bg: 'linear-gradient(90deg, rgba(8,40,22,0.97), rgba(5,20,12,0.97))',
+    icon: <Rocket className="h-8 w-8" />,
+    labelKey: 'table.invite.barinvaders',
   },
 };
 

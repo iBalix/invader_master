@@ -20,6 +20,7 @@
 import {
   Bot,
   Coins,
+  Crosshair,
   Eye,
   Hand,
   Layers,
@@ -36,7 +37,7 @@ import {
 } from 'lucide-react';
 
 /** lobby interrogé pour la ligne « en ce moment dans le bar » */
-export type WebGameLive = 'chess' | 'blackjack' | 'flappybar';
+export type WebGameLive = 'chess' | 'blackjack' | 'flappybar' | 'barinvaders';
 
 export interface WebGameGuideItem {
   icon: LucideIcon;
@@ -122,6 +123,28 @@ const FLAPPY: WebGameGuide = {
   live: 'flappybar',
 };
 
+const INVADERS: WebGameGuide = {
+  accent: '#3DFF8A',
+  facts: [
+    { icon: Users, key: 'table.webgame.inv.fact.players' },
+    { icon: Timer, key: 'table.webgame.inv.fact.rounds' },
+    { icon: Trophy, key: 'table.webgame.inv.fact.records' },
+  ],
+  steps: [
+    { icon: Rocket, key: 'table.webgame.inv.step.create' },
+    { icon: Users, key: 'table.webgame.inv.step.join' },
+    { icon: Crosshair, key: 'table.webgame.inv.step.play' },
+    { icon: Eye, key: 'table.webgame.inv.step.watch' },
+  ],
+  rules: [
+    'table.webgame.inv.rule.fleet',
+    'table.webgame.inv.rule.shields',
+    'table.webgame.inv.rule.ufo',
+    'table.webgame.inv.rule.end',
+  ],
+  live: 'barinvaders',
+};
+
 /** jeu web pas encore décrit ici : l'essentiel, valable pour tous */
 const GENERIC: WebGameGuide = {
   accent: '#A664FF',
@@ -139,6 +162,7 @@ const GUIDES: Record<string, WebGameGuide> = {
   '/table/games/chess': CHESS,
   '/table/games/blackjack': BLACKJACK,
   '/table/games/flappybar': FLAPPY,
+  '/table/games/barinvaders': INVADERS,
 };
 
 export function webGameGuide(gameUrl: string | null | undefined): WebGameGuide {

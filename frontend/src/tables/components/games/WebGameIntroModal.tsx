@@ -154,7 +154,12 @@ export default function WebGameIntroModal({ open, game, onClose, onPlay }: Props
                     <div className="flex items-center gap-3 text-lg text-table-ink-soft">
                       <Trophy className="h-5 w-5 shrink-0 text-table-yellow" />
                       {t('table.webgame.live.record', 'Record du bar : {score} par {pseudo}')
-                        .replace('{score}', `${formatMeters(live.record.score, 1, locale)} m`)
+                        .replace(
+                          '{score}',
+                          live.record.unit === 'pts'
+                            ? `${Math.floor(live.record.score).toLocaleString(locale === 'fr' ? 'fr-FR' : 'en-GB')} pts`
+                            : `${formatMeters(live.record.score, 1, locale)} m`,
+                        )
                         .replace('{pseudo}', live.record.pseudo)}
                     </div>
                   )}

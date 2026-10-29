@@ -31,6 +31,7 @@ import { gamePublicRoutes } from './routes/gamePublic.js';
 import { chessPublicRoutes } from './routes/chessPublic.js';
 import { blackjackPublicRoutes } from './routes/blackjackPublic.js';
 import { flappybarPublicRoutes } from './routes/flappybarPublic.js';
+import { barinvadersPublicRoutes } from './routes/barinvadersPublic.js';
 import { tournamentPublicRoutes } from './routes/tournamentPublic.js';
 import { competitionTemplateRoutes } from './routes/competitionTemplates.js';
 import { gameSessionRoutes } from './routes/game.js';
@@ -51,6 +52,7 @@ import { rolePermissionRoutes } from './routes/rolePermissions.js';
 import { initAgentBridge } from './websocket/agent-bridge.js';
 import { attachUpgradeRouter } from './websocket/upgrade-router.js';
 import { initFlappybarBridge } from './websocket/flappybar-bridge.js';
+import { initBarinvadersBridge } from './websocket/barinvaders-bridge.js';
 import { startLaunchScheduler } from './services/tableLaunch.js';
 
 const app = express();
@@ -72,12 +74,17 @@ const corsOrigins = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map((s) => s.trim())
   : defaultCorsOrigins;
 
+// Bar Invaders : la fin de partie porte la liste des entrées de toute la partie
+// (jusqu'à plusieurs centaines de ko sur une longue partie). Parseur dédié
+// monté AVANT le global : une fois le corps lu, le parseur global le laisse passer.
+app.use('/public/barinvaders', express.json({ limit: '1mb' }));
 app.use(express.json());
 
 app.use('/public/game', cors(), gamePublicRoutes);
 app.use('/public/chess', cors(), chessPublicRoutes);
 app.use('/public/blackjack', cors(), blackjackPublicRoutes);
 app.use('/public/flappybar', cors(), flappybarPublicRoutes);
+app.use('/public/barinvaders', cors(), barinvadersPublicRoutes);
 app.use('/public/tournament', cors(), tournamentPublicRoutes);
 app.use('/public', cors(), publicRoutes);
 app.use('/public/tables', cors(), tablesRoutes);
@@ -136,6 +143,7 @@ const server = createServer(app);
 attachUpgradeRouter(server);
 initAgentBridge(server);
 initFlappybarBridge();
+initBarinvadersBridge();
 
 server.listen(PORT, () => {
   console.log(`[invader-backend] Listening on port ${PORT}`);

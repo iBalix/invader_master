@@ -25,6 +25,9 @@ import { buildBjPublicState } from '../games/blackjack/bjViews.js';
 // idem : enregistre l'advancer 'flappybar'
 import { flapGmAction } from '../games/flappybar/flapFlow.js';
 import { buildFlapPublicState } from '../games/flappybar/flapViews.js';
+// idem : enregistre l'advancer 'barinvaders'
+import { invGmAction } from '../games/barinvaders/invFlow.js';
+import { buildInvPublicState } from '../games/barinvaders/invViews.js';
 import { buildGmState } from '../games/views.js';
 // idem : enregistre l'advancer 'tournament' (et l'écouteur des parties d'échecs)
 import {
@@ -173,7 +176,7 @@ gameSessionRoutes.get('/:id/state', async (req, res) => {
       res.json({ status: 'success', data: buildTournamentGmState(session, await liveGamesInfo(session)) });
       return;
     }
-    // échecs / blackjack / flappy bar : rien de secret, la vue publique suffit au staff
+    // échecs / blackjack / flappy bar / bar invaders : rien de secret, la vue publique suffit au staff
     if (session.mode === 'chess') {
       res.json({ status: 'success', data: buildChessPublicState(session) });
       return;
@@ -184,6 +187,10 @@ gameSessionRoutes.get('/:id/state', async (req, res) => {
     }
     if (session.mode === 'flappybar') {
       res.json({ status: 'success', data: buildFlapPublicState(session) });
+      return;
+    }
+    if (session.mode === 'barinvaders') {
+      res.json({ status: 'success', data: buildInvPublicState(session) });
       return;
     }
     const players = await loadPlayers(session.id);
@@ -282,6 +289,12 @@ gameSessionRoutes.post('/:id/action', async (req, res) => {
       // seule action staff : terminer la partie (la manche en cours est classée)
       const session = await flapGmAction(existing.id, action);
       res.json({ status: 'success', data: buildFlapPublicState(session) });
+      return;
+    }
+    if (existing.mode === 'barinvaders') {
+      // seule action staff : terminer la partie (la manche en cours est classée)
+      const session = await invGmAction(existing.id, action);
+      res.json({ status: 'success', data: buildInvPublicState(session) });
       return;
     }
     const session =

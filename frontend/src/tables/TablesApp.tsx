@@ -32,6 +32,7 @@ import ChessGamePage from './games/chess/pages/ChessGamePage';
 import BlackjackLobbyPage from './games/blackjack/pages/BlackjackLobbyPage';
 import BlackjackGamePage from './games/blackjack/pages/BlackjackGamePage';
 import FlapLobbyPage from './games/flappybar/pages/FlapLobbyPage';
+import InvLobbyPage from './games/barinvaders/pages/InvLobbyPage';
 import RetroLoader from './components/ui/RetroLoader';
 import { useHostname } from './hooks/useHostname';
 import { useSansZoom } from '../hooks/useSansZoom';
@@ -39,6 +40,8 @@ import { useSansZoom } from '../hooks/useSansZoom';
 // La page de partie de Flappy Bar embarque Phaser : chargée à la demande pour
 // ne pas alourdir le bundle des autres écrans (le lobby, lui, reste immédiat).
 const FlapGamePage = lazy(() => import('./games/flappybar/pages/FlapGamePage'));
+// Bar Invaders : la page de partie embarque la sim et le moteur de rendu, chargée à la demande
+const InvGamePage = lazy(() => import('./games/barinvaders/pages/InvGamePage'));
 
 function LazyFallback() {
   return (
@@ -115,6 +118,15 @@ export default function TablesApp() {
           element={
             <Suspense fallback={<LazyFallback />}>
               <FlapGamePage />
+            </Suspense>
+          }
+        />
+        <Route path="games/barinvaders" element={<InvLobbyPage />} />
+        <Route
+          path="games/barinvaders/:sessionId"
+          element={
+            <Suspense fallback={<LazyFallback />}>
+              <InvGamePage />
             </Suspense>
           }
         />

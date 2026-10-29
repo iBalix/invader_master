@@ -52,11 +52,12 @@ function getRouteKind(pathname: string): RouteKind {
   // le videoprojecteur sans toucher la dalle ne doit pas basculer en veille
   // au bout de 90 s en pleine partie.
   if (pathname.startsWith('/table/play')) return 'fullscreen';
-  // page de PARTIE d'échecs, de blackjack ou de Flappy Bar (avec sessionId) : plein écran, veille coupée.
-  // Les lobbys /table/games/chess, /table/games/blackjack et /table/games/flappybar restent des pages 'sub' classiques.
+  // page de PARTIE d'échecs, de blackjack, de Flappy Bar ou de Bar Invaders (avec sessionId) : plein écran, veille coupée.
+  // Les lobbys /table/games/chess, /table/games/blackjack, /table/games/flappybar et /table/games/barinvaders restent des pages 'sub' classiques.
   if (pathname.startsWith('/table/games/chess/')) return 'fullscreen';
   if (pathname.startsWith('/table/games/blackjack/')) return 'fullscreen';
   if (pathname.startsWith('/table/games/flappybar/')) return 'fullscreen';
+  if (pathname.startsWith('/table/games/barinvaders/')) return 'fullscreen';
   if (pathname.startsWith('/table/setup')) return 'setup';
   return 'sub';
 }
