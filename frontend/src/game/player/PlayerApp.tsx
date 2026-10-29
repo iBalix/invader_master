@@ -84,9 +84,18 @@ const AUDIENCE_REFRESH_MS = 450;
  * Les autres surfaces (téléphones, autres dalles) affichent « Regarde
  * l'écran » : la vidéo ne se joue que sur le projecteur et sur ces tables-là.
  * L'extrait y est MUET : le son vient de la sono du bar via le projecteur,
- * cinq lecteurs légèrement désynchronisés s'entendraient.
+ * neuf lecteurs légèrement désynchronisés s'entendraient.
  */
-const VIDEO_DALLES = new Set(['TABLE02-1', 'TABLE03-1', 'TABLE05-1', 'TABLE06-1']);
+const VIDEO_DALLES = new Set([
+  'TABLE01-1',
+  'TABLE01-2',
+  'TABLE02-1',
+  'TABLE03-1',
+  'TABLE04-1',
+  'TABLE04-2',
+  'TABLE05-1',
+  'TABLE06-1',
+]);
 
 export default function PlayerApp({ embedded, onExit, deviceLabel }: PlayerAppProps = {}) {
   const { code } = useParams<{ code?: string }>();
