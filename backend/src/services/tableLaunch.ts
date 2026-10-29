@@ -62,7 +62,7 @@ const MAX_ORDER_AGE_MS = 4 * 60 * 60 * 1000;
  * l'écran, la page du master restait figée en pleine transition sous le jeu,
  * et la vraie fin de partie n'était plus signalée.
  */
-const FOCUS_GRACE_MS = 15_000;
+const FOCUS_GRACE_MS = 10_000;
 
 // ---------------------------------------------------------------------------
 // Hostnames
