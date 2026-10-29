@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, type NavigateFunction } from 'react-router-dom';
 import {
   ackOrder,
   fetchCurrentOrder,
@@ -182,6 +182,33 @@ export function primeLaunchOrder(next: LaunchOrderView | null): void {
   if (next) void maybeExecute(next);
 }
 
+let leaving = false;
+
+/**
+ * Sortie de l'ecran de jeu vers l'accueil.
+ *
+ * Sur le MASTER, c'est un rechargement complet de la page et non une
+ * navigation interne. Pendant toute la partie, la page du master reste
+ * ouverte sous l'emulateur, et Edge suspend les animations d'une fenetre
+ * recouverte : une transition commencee au mauvais moment y restait figee a
+ * mi-course (page vide, ni texte ni bouton) et la table etait perdue jusqu'au
+ * prochain redemarrage. Le slave n'a jamais eu ce probleme parce qu'il
+ * relance Edge a chaque fin de jeu. Repartir d'une page neuve fait la meme
+ * chose cote master : l'accueil s'affiche d'emblee, sans transition.
+ */
+export function leaveGameScreen(navigate: NavigateFunction): void {
+  const identity = parseHostname(getHostname());
+  if (identity?.role === 'master') {
+    if (leaving) return;
+    leaving = true;
+    // hostname remis en clair : les navigations internes l'ont retire de l'URL,
+    // et la page neuve ne doit pas dependre du seul stockage local
+    window.location.replace(`/table/home?hostname=${encodeURIComponent(identity.hostname)}`);
+    return;
+  }
+  navigate('/table/home', { replace: true });
+}
+
 /**
  * Bascule automatique vers / depuis l'ecran de jeu, montee une seule fois dans
  * le layout.
@@ -212,6 +239,6 @@ export function useLaunchNavigation(): void {
       return;
     }
 
-    if (onGameScreen) navigate('/table/home', { replace: true });
+    if (onGameScreen) leaveGameScreen(navigate);
   }, [order, ready, location.pathname, navigate]);
 }

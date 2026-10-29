@@ -65,9 +65,13 @@ export async function ackOrder(
   return { ok: data?.ok === true, deeplink: data?.deeplink ?? null, order: data?.order ?? null };
 }
 
-/** Indice de fin de partie (Chrome reprend le focus sur le master). */
-export async function reportFocus(orderId: string): Promise<void> {
-  await tablesApi.post(`/launch/${orderId}/report`, { signal: 'focus' });
+/**
+ * Indice de fin de partie (Chrome reprend le focus sur le master). Renvoie
+ * l'ordre tel que le serveur l'a laisse : termine si le signal a ete retenu.
+ */
+export async function reportFocus(orderId: string): Promise<LaunchOrderView | null> {
+  const { data } = await tablesApi.post(`/launch/${orderId}/report`, { signal: 'focus' });
+  return data?.order ?? null;
 }
 
 /** Bouton "Terminer", disponible sur les deux dalles. */

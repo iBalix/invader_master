@@ -15,10 +15,13 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Loader2, AlertTriangle } from 'lucide-react';
 import { useHostname } from '../hooks/useHostname';
-import { useLaunchOrder } from '../hooks/useLaunchOrder';
+import { leaveGameScreen, useLaunchOrder } from '../hooks/useLaunchOrder';
 import { useT } from '../i18n/useT';
 import ArcadeButton from '../components/ui/ArcadeButton';
 import { endOrder, reportFocus } from '../lib/gameLaunch';
+
+/** sur le master, cadence a laquelle on regarde si Edge a repris la main */
+const FOCUS_CHECK_MS = 3_000;
 
 export default function InGamePage() {
   const identity = useHostname();
@@ -31,21 +34,36 @@ export default function InGamePage() {
   const isMaster = identity?.role === 'master';
 
   // Retour du focus sur le master : indice de fin de partie. On le remonte,
-  // le serveur decide (l'agent peut voir que le jeu tourne toujours : la
-  // bascule de dalle redonne aussi le focus a Chrome).
+  // le serveur decide : il ignore les premieres secondes apres le lancement,
+  // ou Edge reprend brievement la main avant que l'emulateur ouvre sa fenetre.
+  // La verification periodique rattrape une fin de jeu sans evenement focus
+  // (jeu quitte pendant ce delai, ou Edge deja considere comme actif) : tant
+  // que l'emulateur tourne, c'est lui qui a la main, jamais Edge.
+  // Des que le serveur retient le signal, on recharge sans attendre le
+  // prochain sondage : l'ecran rose ne fait plus qu'un flash a la sortie du jeu.
   useEffect(() => {
     if (!isMaster || !orderId) return;
-    function onFocus() {
-      void reportFocus(orderId as string).catch(() => undefined);
+    function signaler() {
+      reportFocus(orderId as string)
+        .then((after) => {
+          if (after?.endedAt) leaveGameScreen(navigate);
+        })
+        .catch(() => undefined);
     }
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [isMaster, orderId]);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) signaler();
+    }, FOCUS_CHECK_MS);
+    window.addEventListener('focus', signaler);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', signaler);
+    };
+  }, [isMaster, orderId, navigate]);
 
   // Ceinture : plus d'ordre du tout (partie finie, onglet recharge, veille
   // depassee) -> on rentre. Sans ca, un ecran pouvait rester bloque ici.
   useEffect(() => {
-    if (ready && !order) navigate('/table/home', { replace: true });
+    if (ready && !order) leaveGameScreen(navigate);
   }, [ready, order, navigate]);
 
   if (!order) return null;
@@ -63,7 +81,7 @@ export default function InGamePage() {
       /* le sondage ou le balayeur finiront par liberer la table */
     }
     refresh();
-    navigate('/table/home', { replace: true });
+    leaveGameScreen(navigate);
   }
 
   return (

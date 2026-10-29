@@ -52,6 +52,17 @@ const ACK_GRACE_MS = 10_000;
 const FAILURE_GRACE_MS = 20_000;
 /** filet final : aucune partie ne reste ouverte plus longtemps */
 const MAX_ORDER_AGE_MS = 4 * 60 * 60 * 1000;
+/**
+ * Fenêtre après le lancement pendant laquelle un retour du focus sur le master
+ * ne veut PAS dire « jeu fermé ». Tirer le deeplink donne la main à la fenêtre
+ * de commande qui démarre RetroArch : elle se referme aussitôt et Edge reprend
+ * le focus avant que l'émulateur n'ouvre la sienne. Relevé en prod du 27 au
+ * 29/10/2026 : 52 parties sur 60 étaient déclarées finies 0 à 1 s après le
+ * lancement. La table repartait à l'accueil pendant que l'émulateur prenait
+ * l'écran, la page du master restait figée en pleine transition sous le jeu,
+ * et la vraie fin de partie n'était plus signalée.
+ */
+const FOCUS_GRACE_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // Hostnames
@@ -303,11 +314,23 @@ export async function ackOrder(id: string, hostname: string): Promise<AckResult>
  * Chrome reprend le focus sur le master : le jeu vient de se fermer.
  * C'est le signal de fin de partie, déjà utilisé par l'ancien code. Il libère
  * les DEUX dalles, alors qu'avant il ne nettoyait que le master.
+ *
+ * Deux cas où le focus ne prouve rien, ignorés : l'ordre n'est pas encore
+ * réclamé (aucun jeu n'a été lancé), ou il vient juste de l'être (voir
+ * FOCUS_GRACE_MS). Le master revérifie de lui-même passé ce délai.
  */
 export async function reportFocus(id: string): Promise<LaunchOrder | null> {
   const order = await getOrder(id);
   if (!order || order.ended_at) return order;
-  await finishOrder(id, order.status === 'dispatched' ? 'dispatched' : 'cancelled', 'master-focus');
+  if (order.status === 'pending') return order;
+  const sinceDispatch = order.dispatched_at
+    ? Date.now() - new Date(order.dispatched_at).getTime()
+    : Number.POSITIVE_INFINITY;
+  if (sinceDispatch < FOCUS_GRACE_MS) {
+    console.log(`[launch] focus ignoré sur ${short(id)}, ${Math.round(sinceDispatch / 1000)} s après le lancement`);
+    return order;
+  }
+  await finishOrder(id, 'dispatched', 'master-focus');
   return getOrder(id);
 }
 
