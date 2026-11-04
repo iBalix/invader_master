@@ -1,0 +1,27 @@
+---
+description: Conventions invader_master (prod, base, jeux, style) pour les agents
+alwaysApply: true
+---
+
+# Conventions invader_master
+
+`main` est la production. Un push sur `main` déploie le bar sur Railway (backend et frontend). Ne jamais commit ni push sur `main` sans accord explicite de Romain.
+
+Le `.env` du projet pointe sur la base Supabase de production. Ne jamais lancer le backend (`npm run dev`, `npm run dev:back`, `npm start`, seed) dans un agent cloud, ni dès qu'un `.env` de prod est présent : le processus démarre un second balayeur sur les vraies parties. Ne pas lire ni écrire de données Supabase depuis ici. Pas de secrets dans le dépôt, les règles ou les conversations.
+
+Statuts de partie des jeux maison : `lobby`, `playing` et `end` uniquement. Ne jamais ajouter de statut. Un état intermédiaire vit dans le JSONB (`runtime`).
+
+RLS : même avec la clé `service_role`, une table avec RLS activée et sans policy renvoie 0 ligne au backend. Toute nouvelle table accessible au backend a au minimum :
+
+```sql
+CREATE POLICY "service_role full access"
+  ON public.<table>
+  FOR ALL TO service_role
+  USING (true) WITH CHECK (true);
+```
+
+Migrations SQL : `docs/migration-NNN-description.sql`, numérotées, idempotentes si possible, appliquées à la main dans le SQL Editor Supabase. Appliquer la migration avant le code qui en dépend.
+
+Code et commentaires en français, au ton du code voisin. Les commentaires expliquent le pourquoi. Pas de tiret cadratin (le tiret long typographique) dans les textes.
+
+Node du projet : 20.19.4 (`.nvmrc`). L'install cloud le place dans `/usr/local/node-v20.19.4`. Si `node -v` n'est pas v20, préfixer le PATH avec ce dossier `bin` avant `npm run lint` et `npm run build`.
