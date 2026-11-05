@@ -8,6 +8,10 @@ alwaysApply: false
 
 Cette commande démarre les serveurs Invader Master (backend et frontend) en arrière-plan.
 
+## Garde-fou
+
+Ne pas lancer le backend si le `.env` pointe sur la base de production. C'est le cas du `.env` de développement habituel, et il n'y a pas de base locale dans l'agent cloud. Démarrer le backend fait tourner un second balayeur sur les vraies parties du bar. Dans ce cas, s'arrêter et le dire, sans démarrer les serveurs.
+
 ## Instructions
 
 Quand l'utilisateur utilise la commande `/invader-start`, exécute les étapes suivantes :
