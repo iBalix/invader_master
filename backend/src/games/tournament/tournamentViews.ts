@@ -10,10 +10,12 @@
  */
 
 import { gameScore } from './swiss.js';
+import { claimsConflict } from './waves.js';
 import { TOURNAMENT_FORMATS, TOURNAMENT_GAMES } from './registry.js';
 import {
   tournamentConfigOf,
   tournamentStateOf,
+  type ScoreClaim,
   type TournamentMatch,
   type TournamentState,
 } from './types.js';
@@ -127,6 +129,12 @@ export function buildTournamentPublicState(session: SessionRow): Record<string, 
         points: g.points,
         counts: g.counts,
         scoredAt: ms(g.scoredAt),
+        claims: (g.claims ?? []).map((c) => ({
+          playerId: c.playerId,
+          places: c.places,
+          loserGames: c.loserGames,
+          at: ms(c.at),
+        })),
       })),
     })),
     bracket: st.bracket
@@ -144,6 +152,12 @@ export function buildTournamentPublicState(session: SessionRow): Record<string, 
             places: m.places,
             loserGames: m.loserGames,
             scoredAt: ms(m.scoredAt),
+            claims: (m.claims ?? []).map((c) => ({
+              playerId: c.playerId,
+              places: c.places,
+              loserGames: c.loserGames,
+              at: ms(c.at),
+            })),
           })),
         }
       : null,
@@ -171,6 +185,24 @@ export interface LiveGameInfo {
   /** dernier coup (ou début de partie), epoch ms */
   lastMoveAt: number | null;
   moves: number;
+}
+
+/** une proposition (ou un désaccord) reste visible tant que le GM n'a pas validé */
+function pushClaimAlert(
+  alerts: string[],
+  pseudo: (id: string | null) => string,
+  label: string,
+  claims: ScoreClaim[] | undefined,
+): void {
+  const list = claims ?? [];
+  if (list.length === 0) return;
+  const last = list[list.length - 1];
+  const name = pseudo(last.playerId);
+  if (claimsConflict(list)) {
+    alerts.push(`Saisies contradictoires sur ${label}. Dernière proposition : ${name}. À trancher.`);
+    return;
+  }
+  alerts.push(`${name} a saisi ${label}. À valider.`);
 }
 
 /** alertes de la console : ce qui demande une décision de l'animateur */
@@ -212,6 +244,16 @@ function gmAlerts(session: SessionRow, liveInfo: Record<string, LiveGameInfo>): 
       if (wave.sitOuts.length > 0) {
         const names = wave.sitOuts.map((id) => pseudo(id)).join(', ');
         alerts.push(`${names} ne joue pas cette salve (nombre impair).`);
+      }
+      for (const g of wave.groups) {
+        if (g.places || g.status !== 'playing') continue;
+        pushClaimAlert(alerts, pseudo, `le groupe ${String.fromCharCode(64 + g.board)}`, g.claims);
+      }
+    }
+    if (st.phase === 'bracket' && st.bracket) {
+      for (const m of st.bracket.matches) {
+        if (m.places || m.status !== 'pending') continue;
+        pushClaimAlert(alerts, pseudo, m.label.toLowerCase(), m.claims);
       }
     }
     if (st.phase === 'wave_done') {

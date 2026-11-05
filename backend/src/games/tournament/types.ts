@@ -224,6 +224,20 @@ export type GroupStatus = 'queued' | 'playing' | 'done';
 export type WaveKind = 'pool' | 'barrage';
 export type BracketRound = 'qf' | 'sf' | 'semi' | 'final';
 
+/**
+ * Proposition d'un joueur, pas un résultat. Le classement et le tableau
+ * n'en tiennent compte que lorsque le GM valide (score-group / score-bracket).
+ * Une personne = une proposition : la suivante remplace la précédente.
+ */
+export interface ScoreClaim {
+  playerId: string;
+  /** index 0 = premier, ou vainqueur en Smash */
+  places: string[];
+  /** Smash en élimination seulement. null en poule et en Mario Kart. */
+  loserGames: 0 | 1 | 2 | null;
+  at: string;
+}
+
 /** un groupe de salve, un match de barrage, ou un carton du tableau */
 export interface WaveGroup {
   id: string;
@@ -231,13 +245,15 @@ export interface WaveGroup {
   board: number;
   playerIds: string[];
   status: GroupStatus;
-  /** index 0 = premier. null tant que le GM n'a pas saisi */
+  /** index 0 = premier. null tant que le GM n'a pas validé */
   places: string[] | null;
   /** points de poule. Vide quand counts est faux (barrage, tableau) */
   points: Record<string, number>;
   /** false : le résultat ordonne, il n'entre pas dans le classement */
   counts: boolean;
   scoredAt: string | null;
+  /** propositions des joueurs du groupe. Vide pour un tournoi d'échecs. */
+  claims: ScoreClaim[];
 }
 
 export interface WaveRound {
@@ -263,6 +279,8 @@ export interface BracketMatch {
   /** Smash en élimination : manches du perdant, 0, 1 ou 2. Le vainqueur en a 3. */
   loserGames: 0 | 1 | 2 | null;
   scoredAt: string | null;
+  /** propositions des joueurs de ce match */
+  claims: ScoreClaim[];
 }
 
 export interface BracketState {
@@ -320,6 +338,14 @@ export function tournamentStateOf(session: SessionRow): TournamentState {
   if (!state.waves) state.waves = [];
   if (state.bracket === undefined) state.bracket = null;
   if (state.bracketWinnerId === undefined) state.bracketWinnerId = null;
+  for (const wave of state.waves) {
+    for (const group of wave.groups) {
+      if (!group.claims) group.claims = [];
+    }
+  }
+  for (const match of state.bracket?.matches ?? []) {
+    if (!match.claims) match.claims = [];
+  }
   return state;
 }
 

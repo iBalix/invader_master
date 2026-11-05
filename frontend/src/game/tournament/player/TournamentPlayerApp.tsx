@@ -38,7 +38,7 @@ import {
   tournamentErrorLabel,
   type IdentityEntry,
 } from '../tournamentClient';
-import type { TMatch, TournamentPublicState, TournamentYou } from '../tournamentTypes';
+import type { TClaim, TMatch, TournamentPublicState, TournamentYou } from '../tournamentTypes';
 import { useServerNow, useTournamentSession } from '../useTournamentSession';
 import '../../game.css';
 
@@ -145,6 +145,29 @@ export default function TournamentPlayerApp() {
     }
   }, [ref, token, busy, apply]);
 
+  const claim = useCallback(
+    async (payload: { kind: 'group' | 'match'; targetId: string; places: string[]; loserGames: 0 | 1 | 2 | null }) => {
+      if (!ref || !token || busy) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const data = await tournamentApi.claim(ref, {
+          playerToken: token,
+          groupId: payload.kind === 'group' ? payload.targetId : undefined,
+          matchId: payload.kind === 'match' ? payload.targetId : undefined,
+          places: payload.places,
+          loserGames: payload.loserGames,
+        });
+        apply({ state: data.state, you: data.you });
+      } catch (err) {
+        setError(tournamentErrorLabel(err));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [ref, token, busy, apply],
+  );
+
   if (resolving || (ref && !state && !loadError)) {
     return (
       <Shell>
@@ -180,6 +203,7 @@ export default function TournamentPlayerApp() {
         onLeave={leave}
         onRejoin={rejoin}
         onAdd={addPerson}
+        onClaim={claim}
         phones={listPhonePlayers(state.id)}
         onPickPhone={(next) => {
           selectPhonePlayer(state.id, next);
@@ -222,6 +246,8 @@ export interface TournamentPlayerScreenProps {
   onPickPhone?: (playerToken: string) => void;
   /** onglet de départ (laboratoire) */
   initialTab?: TournamentPlayerTab;
+  /** proposition de résultat. Le laboratoire s'en passe : le formulaire reste local. */
+  onClaim?: (payload: { kind: 'group' | 'match'; targetId: string; places: string[]; loserGames: 0 | 1 | 2 | null }) => void | Promise<void>;
 }
 
 export type TournamentPlayerTab = 'moi' | 'classement' | 'matchs';
@@ -615,6 +641,7 @@ function MeTab({
   onLeave,
   onRejoin,
   onAdd,
+  onClaim,
 }: TournamentPlayerScreenProps & { playerId: string; status: string }) {
   const [confirming, setConfirming] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -670,7 +697,7 @@ function MeTab({
       </div>
     );
   } else if (state.format === 'waves') {
-    body = <WaveMe state={state} playerId={playerId} />;
+    body = <WaveMe state={state} playerId={playerId} busy={busy} onClaim={onClaim} />;
   } else if (waiting) {
     body = (
       <Message
@@ -833,13 +860,33 @@ function StandingsTab({ state, playerId }: { state: TournamentPublicState; playe
   );
 }
 
-function WaveMe({ state, playerId }: { state: TournamentPublicState; playerId: string }) {
+function WaveMe({
+  state,
+  playerId,
+  busy,
+  onClaim,
+}: {
+  state: TournamentPublicState;
+  playerId: string;
+  busy: boolean;
+  onClaim?: TournamentPlayerScreenProps['onClaim'];
+}) {
   const wave = state.waves[state.waves.length - 1];
   if (state.phase === 'bracket' && state.bracket) {
     const mine = [...state.bracket.matches].reverse().find((m) => m.playerIds.includes(playerId));
     if (mine && mine.playerIds.length >= 2 && !mine.places) {
-      const others = mine.playerIds.filter((id) => id !== playerId).map((id) => pseudoOf(state, id));
-      return <Message emoji="🎮" title={mine.label} sub={`Avec ${others.join(', ')}`} />;
+      return (
+        <ClaimForm
+          state={state}
+          playerId={playerId}
+          title={mine.label}
+          ids={mine.playerIds}
+          claims={mine.claims}
+          mode={state.game === 'smash' ? 'score' : 'places'}
+          busy={busy}
+          onSubmit={(places, loserGames) => onClaim?.({ kind: 'match', targetId: mine.id, places, loserGames })}
+        />
+      );
     }
     if (mine?.places) {
       const place = mine.places.indexOf(playerId) + 1;
@@ -861,7 +908,174 @@ function WaveMe({ state, playerId }: { state: TournamentPublicState; playerId: s
     return <Message emoji="✅" title={`Tu finis ${place}${place === 1 ? 'er' : 'e'}`} sub={pts} />;
   }
   if (group.status === 'queued') return <Message emoji="⏳" title="Ton groupe est en file" sub={names} />;
-  return <Message emoji="🎮" title="C’est à ton groupe de jouer" sub={names} />;
+  const smashPool = state.game === 'smash' && group.playerIds.length === 2;
+  return (
+    <ClaimForm
+      state={state}
+      playerId={playerId}
+      title={smashPool ? 'Qui a gagné ?' : 'Ordre d’arrivée'}
+      ids={group.playerIds}
+      claims={group.claims}
+      mode={smashPool ? 'winner' : 'places'}
+      busy={busy}
+      onSubmit={(places, loserGames) => onClaim?.({ kind: 'group', targetId: group.id, places, loserGames })}
+    />
+  );
+}
+
+function claimSignature(claim: Pick<TClaim, 'places' | 'loserGames'>): string {
+  return `${claim.loserGames ?? ''}:${claim.places.join(',')}`;
+}
+
+function claimText(state: TournamentPublicState, claim: TClaim): string {
+  if (claim.loserGames !== null) return `${pseudoOf(state, claim.places[0])} gagne 3-${claim.loserGames}`;
+  if (claim.places.length === 2) return `${pseudoOf(state, claim.places[0])} gagne`;
+  return claim.places.map((id, i) => `${i + 1}. ${pseudoOf(state, id)}`).join(' · ');
+}
+
+function ClaimForm({
+  state,
+  playerId,
+  title,
+  ids,
+  claims,
+  mode,
+  busy,
+  onSubmit,
+}: {
+  state: TournamentPublicState;
+  playerId: string;
+  title: string;
+  ids: string[];
+  claims: TClaim[];
+  mode: 'places' | 'winner' | 'score';
+  busy: boolean;
+  onSubmit: (places: string[], loserGames: 0 | 1 | 2 | null) => void | Promise<void>;
+}) {
+  const mine = [...(claims ?? [])].reverse().find((c) => c.playerId === playerId) ?? null;
+  const conflict = (claims ?? []).length >= 2 && (claims ?? []).some((c) => claimSignature(c) !== claimSignature(claims[0]));
+  const [editing, setEditing] = useState(!mine);
+  const [order, setOrder] = useState<string[]>([]);
+  const [winner, setWinner] = useState<string | null>(null);
+  const [sent, setSent] = useState<TClaim | null>(null);
+  const shown = mine ?? sent;
+
+  const send = (places: string[], loserGames: 0 | 1 | 2 | null) => {
+    setSent({ playerId, places, loserGames, at: Date.now() });
+    setEditing(false);
+    setOrder([]);
+    setWinner(null);
+    void onSubmit(places, loserGames);
+  };
+
+  if (shown && !editing) {
+    return (
+      <div className="text-center">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{title}</p>
+        <p className="mt-2 text-lg font-black">{claimText(state, shown)}</p>
+        <p className="mt-1 text-sm text-white/60">En attente de l’animateur. Lui seul valide.</p>
+        {conflict && <p className="mt-1 text-sm font-semibold text-amber-200">Les saisies ne concordent pas. L’animateur tranche.</p>}
+        <button type="button" onClick={() => setEditing(true)} className="mt-3 text-sm font-bold text-cyan-200">
+          Modifier
+        </button>
+      </div>
+    );
+  }
+
+  const left = ids.filter((id) => !order.includes(id));
+  return (
+    <div>
+      <p className="text-center text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{title}</p>
+      <p className="mb-2 text-center text-[11px] text-white/45">Tu ne saisis que pour toi. L’animateur valide.</p>
+      {mode === 'places' ? (
+        <>
+          {order.length > 0 && (
+            <ol className="mb-2 space-y-0.5 text-sm font-bold">
+              {order.map((id, i) => (
+                <li key={id}>{i + 1}. {pseudoOf(state, id)}</li>
+              ))}
+            </ol>
+          )}
+          <div className="grid grid-cols-2 gap-1.5">
+            {left.map((id) => (
+              <button
+                key={id}
+                type="button"
+                disabled={busy}
+                onClick={() => setOrder([...order, id])}
+                className="min-h-[44px] truncate rounded-xl border border-white/15 bg-white/5 px-2 text-sm font-bold active:bg-white/15 disabled:opacity-40"
+              >
+                {pseudoOf(state, id)}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <button type="button" disabled={busy || order.length === 0} onClick={() => setOrder([])} className="min-h-[44px] rounded-xl bg-white/10 text-sm font-bold disabled:opacity-40">
+              Recommencer
+            </button>
+            <button
+              type="button"
+              disabled={busy || order.length !== ids.length}
+              onClick={() => send(order, null)}
+              className="min-h-[44px] rounded-xl bg-cyan-400 text-sm font-black text-[#0a0a14] disabled:opacity-40"
+            >
+              Envoyer
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-1.5">
+            {ids.map((id) => (
+              <button
+                key={id}
+                type="button"
+                disabled={busy}
+                onClick={() => setWinner(id)}
+                className={`min-h-[44px] truncate rounded-xl px-2 text-sm font-bold disabled:opacity-40 ${
+                  winner === id ? 'bg-cyan-400 text-[#0a0a14]' : 'border border-white/15 bg-white/5'
+                }`}
+              >
+                {pseudoOf(state, id)}
+              </button>
+            ))}
+          </div>
+          {mode === 'winner' && (
+            <button
+              type="button"
+              disabled={busy || !winner}
+              onClick={() => {
+                if (!winner) return;
+                const other = ids.find((id) => id !== winner) ?? winner;
+                send([winner, other], null);
+              }}
+              className="mt-2 min-h-[44px] w-full rounded-xl bg-cyan-400 text-sm font-black text-[#0a0a14] disabled:opacity-40"
+            >
+              Envoyer
+            </button>
+          )}
+          {mode === 'score' && winner && (
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+              {([0, 1, 2] as const).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    const other = ids.find((id) => id !== winner) ?? winner;
+                    send([winner, other], n);
+                  }}
+                  className="min-h-[44px] rounded-xl bg-cyan-400 text-sm font-black text-[#0a0a14] disabled:opacity-40"
+                >
+                  3-{n}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 function MatchesTab({ state, playerId }: { state: TournamentPublicState; playerId: string }) {

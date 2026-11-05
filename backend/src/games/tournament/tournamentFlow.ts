@@ -41,6 +41,8 @@ import {
   recomposeWave,
   scoreBracket,
   scoreGroup,
+  submitBracketClaim,
+  submitGroupClaim,
   startBarrage,
   startBracket,
   startPoolWave,
@@ -307,6 +309,33 @@ export async function rejoinTournament(sessionId: string, player: PlayerRow): Pr
     ensureTournament(s);
     if (s.ended_at) throw httpErr('error_tournament_over', 409);
     core.reinstatePlayer(tournamentStateOf(s), ctxOf(s), player.id, 'self');
+    markDirty(s);
+    return s;
+  });
+}
+
+/**
+ * Proposition de résultat. `player` vient du jeton, jamais d'un identifiant
+ * envoyé par le téléphone : un second inscrit sur le même appareil ne peut
+ * pas saisir le match du premier.
+ */
+export async function claimTournamentResult(
+  sessionId: string,
+  player: PlayerRow,
+  input: { groupId?: string; matchId?: string; places: string[]; loserGames: number | null },
+): Promise<SessionRow> {
+  return withSession(sessionId, async (s) => {
+    ensureTournament(s);
+    if (s.ended_at) throw httpErr('error_tournament_over', 409);
+    const st = tournamentStateOf(s);
+    const ctx = ctxOf(s);
+    const groupId = input.groupId?.trim() ?? '';
+    const matchId = input.matchId?.trim() ?? '';
+    if ((groupId && matchId) || (!groupId && !matchId)) throw httpErr('error_tournament_bad_result', 400);
+    if (matchId) submitBracketClaim(st, ctx, player.id, matchId, input.places, input.loserGames);
+    else submitGroupClaim(st, ctx, player.id, groupId, input.places);
+    core.commit(st, ctx);
+    syncStatus(s, st);
     markDirty(s);
     return s;
   });
