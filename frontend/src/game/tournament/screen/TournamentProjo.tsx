@@ -43,6 +43,7 @@ import {
   WaitingCard,
   matchLayout,
 } from './parts';
+import WavesProjo from './WavesProjo';
 import { LiveChessBoard } from '../../../tables/games/chess/components/SpectatorBoard';
 import type { ChessColor, ChessPublicState } from '../../../tables/games/chess/lib/chessTypes';
 
@@ -59,10 +60,10 @@ export interface TournamentProjoProps {
 export default function TournamentProjo({ state, now, renderLive }: TournamentProjoProps) {
   // position du tour de ronde, gardée d'un rendu à l'autre (cf. rotation.ts)
   const cycle = useRef<RoundCycle | null>(null);
+  const startRef = useRef<{ key: string; at: number }>({ key: 'lobby', at: now });
+  if (state.format === 'waves') return <WavesProjo state={state} now={now} />;
   const rotation = projoView(state, now, cycle);
   const { view, key, endsAt } = rotation;
-  // début de l'écran courant (progression) : mémorisé à chaque bascule
-  const startRef = useRef<{ key: string; at: number }>({ key, at: now });
   if (startRef.current.key !== key) startRef.current = { key, at: now };
 
   return (

@@ -23,6 +23,7 @@ import {
 } from '../../game/tournament/tournamentClient';
 import type { TMatch, TournamentGmState, TRound, TStanding } from '../../game/tournament/tournamentTypes';
 import { Badge, Btn, Card, NarrowContext, Sheet, inputClass, useMeasuredNarrow } from './ui';
+import { WavesGmBody } from './WavesGmBody';
 
 export type GmAction = (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
 
@@ -56,8 +57,20 @@ export function TournamentGmBody({
   const [matchOpen, setMatchOpen] = useState<string | null>(null);
   const [playerOpen, setPlayerOpen] = useState<string | null>(null);
   const act: GmAction = readOnly ? async () => undefined : action;
-
   const allMatches = useMemo(() => state.rounds.flatMap((r) => r.matches), [state.rounds]);
+  if (state.format === 'waves') {
+    return (
+      <WavesGmBody
+        state={state}
+        busy={busy}
+        action={action}
+        onRefresh={onRefresh}
+        onClosed={onClosed}
+        readOnly={readOnly}
+      />
+    );
+  }
+
   const selectedMatch = matchOpen ? allMatches.find((m) => m.id === matchOpen) ?? null : null;
 
   return (
@@ -143,7 +156,7 @@ function Header({
           <button
             type="button"
             onClick={async () => {
-              await action('abort', {}, "Arrêter l'événement ? Le tournoi est clos tout de suite et les écrans reviennent à l'accueil.");
+              await action('abort', {}, "Arrêter l'événement ? Le tournoi est clos tout de suite. Les écrans restent sur la page du bar.");
               onClosed();
             }}
             className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-400/10 px-2.5 text-xs font-semibold text-rose-300 hover:bg-rose-400/20"
@@ -317,7 +330,7 @@ function MainAction({ state, busy, action, onClosed }: { state: TournamentGmStat
           big
           disabled={busy}
           onClick={async () => {
-            await action('close', {}, "Libérer les écrans ? Le tournoi est clos et les écrans reviennent à l'accueil.");
+            await action('close', {}, 'Clore le tournoi ? Les écrans restent sur la page du bar.');
             onClosed();
           }}
         >
@@ -708,7 +721,7 @@ function ScreensTab({ state, busy, action, readOnly }: { state: TournamentGmStat
             <Btn
               variant="danger"
               disabled={busy}
-              onClick={() => void action('close', {}, "Libérer les écrans maintenant ? Le tournoi est clos.")}
+              onClick={() => void action('close', {}, 'Clore le tournoi maintenant ? Les écrans restent sur la page du bar.')}
             >
               Libérer les écrans (clore)
             </Btn>

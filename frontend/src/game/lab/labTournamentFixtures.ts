@@ -17,6 +17,8 @@ import type {
   TPlayer,
   TRound,
   TStanding,
+  TWave,
+  TWaveGroup,
 } from '../tournament/tournamentTypes';
 import type { ChessPublicState } from '../../tables/games/chess/lib/chessTypes';
 import { drawDuration } from '../tournament/screen/rotation';
@@ -151,6 +153,11 @@ function base(over: Partial<TournamentPublicState>, anchor: number): TournamentP
       match: { games: 1, decide: 'best_of', scoring: 'match' },
       points: POINTS,
       byePolicy: 'floater',
+      groupSize: 2,
+      placementPoints: [4, 3, 2, 1],
+      poolWinPoints: 1,
+      grouping: 'swiss',
+      parallelSlots: 1,
       display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 45_000 },
       wifiSsid: 'INVADER BAR',
       wifiPassword: 'retrogaming',
@@ -164,6 +171,9 @@ function base(over: Partial<TournamentPublicState>, anchor: number): TournamentP
     standings: [],
     rounds: [],
     currentRound: null,
+    waves: [],
+    bracket: null,
+    bracketWinnerId: null,
     feed: [],
     pin: null,
     finishedAt: null,
@@ -333,6 +343,208 @@ export interface TournamentLabScenario {
   sauts?: Array<[string, number]>;
 }
 
+function waveGroup(wave: number, board: number, ids: string[], status: TWaveGroup['status'], counts = true): TWaveGroup {
+  return {
+    id: `w${wave}g${board}`,
+    wave,
+    board,
+    playerIds: ids,
+    status,
+    places: null,
+    points: {},
+    counts,
+    scoredAt: null,
+  };
+}
+
+function ranked(list: TPlayer[], points: number[]): TStanding[] {
+  return list.map((p, i) => ({
+    playerId: p.id,
+    pseudo: p.pseudo,
+    rank: i + 1,
+    tied: false,
+    points: points[i] ?? 0,
+    wins: points[i] ? 1 : 0,
+    draws: 0,
+    losses: 0,
+    played: points[i] ? 1 : 0,
+    buchholz: 0,
+    adjustment: 0,
+    byes: 0,
+    status: p.status,
+  }));
+}
+
+/** salve MK : 10 joueurs, 2 groupes en cours et 1 en file */
+function mkWave(anchor: number): TournamentPublicState {
+  const list = players(10, anchor);
+  const id = (i: number) => list[i].id;
+  const wave: TWave = {
+    number: 2,
+    kind: 'pool',
+    startedAt: anchor - 60_000,
+    finishedAt: null,
+    grouping: 'swiss',
+    parallel: 2,
+    sitOuts: [],
+    groups: [
+      waveGroup(2, 1, [id(0), id(3), id(6), id(8)], 'playing'),
+      waveGroup(2, 2, [id(1), id(4), id(7)], 'playing'),
+      waveGroup(2, 3, [id(2), id(5), id(9)], 'queued'),
+    ],
+  };
+  return base(
+    {
+      title: 'Tournoi Mario Kart',
+      format: 'waves',
+      formatLabel: 'Salves',
+      game: 'mariokart',
+      gameLabel: 'Mario Kart',
+      joinCode: 'KART',
+      phase: 'wave',
+      players: list,
+      playerCount: list.length,
+      standings: ranked(list, [8, 7, 6, 5, 4, 4, 3, 2, 1, 0]),
+      waves: [wave],
+      config: {
+        registrationMin: 10,
+        lateJoin: true,
+        plannedRounds: 3,
+        match: { games: 1, decide: 'best_of', scoring: 'match' },
+        points: POINTS,
+        byePolicy: 'floater',
+        groupSize: 4,
+        placementPoints: [4, 3, 2, 1],
+        poolWinPoints: 1,
+        grouping: 'swiss',
+        parallelSlots: 2,
+        display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 45_000 },
+        wifiSsid: 'INVADER BAR',
+        wifiPassword: 'retrogaming',
+        texts: { winner: 'Bravo #winner#, champion Mario Kart !' },
+        testMode: false,
+      },
+    },
+    anchor,
+  );
+}
+
+function mkSemis(anchor: number): TournamentPublicState {
+  const s = mkWave(anchor);
+  const id = (i: number) => s.players[i].id;
+  s.phase = 'bracket';
+  s.waves[0].groups = s.waves[0].groups.map((g) => ({ ...g, status: 'done', places: g.playerIds, scoredAt: anchor }));
+  s.bracket = {
+    seeding: 'seeded',
+    startedAt: anchor,
+    seeds: s.players.slice(0, 8).map((p) => p.id),
+    matches: [
+      { id: 'bk-s1', round: 'semi', board: 1, label: 'Demi-finale A', playerIds: [id(0), id(2), id(5), id(7)], status: 'pending', places: null, loserGames: null, scoredAt: null },
+      { id: 'bk-s2', round: 'semi', board: 2, label: 'Demi-finale B', playerIds: [id(1), id(3), id(4), id(6)], status: 'pending', places: null, loserGames: null, scoredAt: null },
+      { id: 'bk-f', round: 'final', board: 1, label: 'Finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
+    ],
+  };
+  return s;
+}
+
+function mkWinner(anchor: number): TournamentPublicState {
+  const s = mkSemis(anchor);
+  s.phase = 'final';
+  s.ended = false;
+  s.status = 'end';
+  s.finishedAt = anchor;
+  s.bracketWinnerId = s.players[0].id;
+  const finale = s.bracket?.matches.find((m) => m.round === 'final');
+  if (finale) {
+    finale.playerIds = s.players.slice(0, 4).map((p) => p.id);
+    finale.places = s.players.slice(0, 4).map((p) => p.id);
+    finale.status = 'done';
+  }
+  return s;
+}
+
+/** Smash : 5 joueurs, 1 match en cours, 1 en file, 1 assis */
+function sbWave(anchor: number): TournamentPublicState {
+  const list = players(5, anchor);
+  const id = (i: number) => list[i].id;
+  const s = base(
+    {
+      title: 'Tournoi Smash Bros',
+      format: 'waves',
+      formatLabel: 'Salves',
+      game: 'smash',
+      gameLabel: 'Smash Bros',
+      joinCode: 'SMSH',
+      phase: 'wave',
+      players: list,
+      playerCount: 5,
+      standings: ranked(list, [2, 1, 1, 0, 0]),
+      waves: [
+        {
+          number: 3,
+          kind: 'pool',
+          startedAt: anchor - 30_000,
+          finishedAt: null,
+          grouping: 'swiss',
+          parallel: 1,
+          sitOuts: [id(4)],
+          groups: [waveGroup(3, 1, [id(0), id(3)], 'playing'), waveGroup(3, 2, [id(1), id(2)], 'queued')],
+        },
+      ],
+    },
+    anchor,
+  );
+  s.config = { ...s.config, groupSize: 2, parallelSlots: 1, poolWinPoints: 1, plannedRounds: 4 };
+  return s;
+}
+
+function sbBracket(anchor: number): TournamentPublicState {
+  const list = players(8, anchor);
+  const id = (i: number) => list[i].id;
+  const pair = (board: number, a: number, b: number, label: string) => ({
+    id: `bk-q${board}`,
+    round: 'qf' as const,
+    board,
+    label,
+    playerIds: [id(a), id(b)],
+    status: 'pending' as const,
+    places: null,
+    loserGames: null,
+    scoredAt: null,
+  });
+  const s = base(
+    {
+      title: 'Tournoi Smash Bros',
+      format: 'waves',
+      formatLabel: 'Salves',
+      game: 'smash',
+      gameLabel: 'Smash Bros',
+      joinCode: 'SMSH',
+      phase: 'bracket',
+      players: list,
+      playerCount: 8,
+      standings: ranked(list, [4, 3, 3, 2, 2, 1, 1, 0]),
+      bracket: {
+        seeding: 'seeded',
+        startedAt: anchor,
+        seeds: list.map((p) => p.id),
+        matches: [
+          pair(1, 0, 7, '1er contre 8e'),
+          pair(2, 1, 6, '2e contre 7e'),
+          pair(3, 2, 5, '3e contre 6e'),
+          pair(4, 3, 4, '4e contre 5e'),
+          { id: 'bk-sf1', round: 'sf', board: 1, label: 'Demi-finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
+          { id: 'bk-sf2', round: 'sf', board: 2, label: 'Demi-finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
+          { id: 'bk-f', round: 'final', board: 1, label: 'Finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
+        ],
+      },
+    },
+    anchor,
+  );
+  s.config = { ...s.config, groupSize: 2, parallelSlots: 2, poolWinPoints: 1 };
+  return s;
+}
+
 const DRAW_SAUTS: Array<[string, number]> = [
   ['Titre', 0],
   ['Matchs', 6_000],
@@ -436,6 +648,15 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
   { cle: 't-gm-fin-ronde', surface: 'gm', label: 'Fin de ronde', description: 'Ronde suivante ou fin', state: (a) => midTournament(a, a - 20 * 60_000, 13, true) },
   { cle: 't-gm-final', surface: 'gm', label: 'Podium', description: 'Libérer les écrans', state: (a) => finalState(a) },
   { cle: 't-gm-formulaire', surface: 'gm', label: 'Nouvel événement', description: 'Formulaire de config', state: (a) => lobby(a, 0) },
+  // ---- Mario Kart / Smash
+  { cle: 't-projo-mk-salve', surface: 'projo', label: 'MK salve et file', description: '2 courses en cours, 1 groupe à suivre', state: (a) => mkWave(a) },
+  { cle: 't-projo-mk-demies', surface: 'projo', label: 'MK demies', description: 'Deux groupes de 4, finale à venir', state: (a) => mkSemis(a) },
+  { cle: 't-projo-mk-vainqueur', surface: 'projo', label: 'MK vainqueur', description: 'Trophée', state: (a) => mkWinner(a) },
+  { cle: 't-bar-mk-salve', surface: 'bar', label: 'MK salve', description: 'Groupes, file et QR', state: (a) => mkWave(a) },
+  { cle: 't-projo-sb-salve', surface: 'projo', label: 'Smash salve', description: '1 match, 1 en file, 1 assis', state: (a) => sbWave(a) },
+  { cle: 't-projo-sb-quarts', surface: 'projo', label: 'Smash quarts', description: '1 contre 8, 2 contre 7, 3 contre 6, 4 contre 5', state: (a) => sbBracket(a) },
+  { cle: 't-gm-mk-salve', surface: 'gm', label: 'MK saisie', description: 'Ordre des arrivées et file', state: (a) => mkWave(a) },
+  { cle: 't-tel-mk-groupe', surface: 'joueur', label: 'MK mon groupe', description: 'Le téléphone montre le groupe, pas une table d’échecs', state: (a) => mkWave(a), you: 'p1' },
   // ---- tables
   { cle: 't-table-pastilles', surface: 'table', label: 'Pastilles tournoi', description: 'Modales, partie, récap', state: (a) => midTournament(a, a - 60_000, 13) },
 ];
@@ -453,6 +674,12 @@ export function labGmState(state: TournamentPublicState): TournamentGmState {
   }
   if (state.phase === 'round' && round?.matches.some((m) => m.board === 3 && m.live)) {
     alerts.push('Partie figée : Zoé contre Hugo, dernier coup il y a 13 min.');
+  }
+  const wave = state.waves[state.waves.length - 1];
+  if (wave) {
+    const file = wave.groups.filter((g) => g.status === 'queued').length;
+    if (file > 0) alerts.push(`${file} groupe${file > 1 ? 's' : ''} en file : ils s’affichent « à suivre » sur les écrans.`);
+    if (wave.sitOuts.length > 0) alerts.push('Un joueur ne joue pas cette salve. Il marque 0 et revient à la suivante.');
   }
   return {
     ...state,

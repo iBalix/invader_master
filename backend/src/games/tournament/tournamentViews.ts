@@ -84,6 +84,11 @@ export function buildTournamentPublicState(session: SessionRow): Record<string, 
       match: cfg.match,
       points: cfg.points,
       byePolicy: cfg.byePolicy,
+      groupSize: cfg.groupSize ?? (cfg.game === 'mariokart' ? 4 : 2),
+      placementPoints: cfg.placementPoints ?? [4, 3, 2, 1],
+      poolWinPoints: cfg.poolWinPoints ?? 1,
+      grouping: cfg.grouping ?? 'swiss',
+      parallelSlots: cfg.parallelSlots ?? (cfg.format === 'waves' ? 2 : 1),
       display: cfg.display,
       wifiSsid: cfg.wifiSsid,
       wifiPassword: cfg.wifiPassword,
@@ -104,6 +109,45 @@ export function buildTournamentPublicState(session: SessionRow): Record<string, 
       matches: r.matches.map(publicMatch),
     })),
     currentRound: current?.number ?? null,
+    waves: (st.waves ?? []).map((w) => ({
+      number: w.number,
+      kind: w.kind,
+      startedAt: ms(w.startedAt),
+      finishedAt: ms(w.finishedAt),
+      grouping: w.grouping,
+      parallel: w.parallel,
+      sitOuts: w.sitOuts,
+      groups: w.groups.map((g) => ({
+        id: g.id,
+        wave: g.wave,
+        board: g.board,
+        playerIds: g.playerIds,
+        status: g.status,
+        places: g.places,
+        points: g.points,
+        counts: g.counts,
+        scoredAt: ms(g.scoredAt),
+      })),
+    })),
+    bracket: st.bracket
+      ? {
+          seeding: st.bracket.seeding,
+          startedAt: ms(st.bracket.startedAt),
+          seeds: st.bracket.seeds,
+          matches: st.bracket.matches.map((m) => ({
+            id: m.id,
+            round: m.round,
+            board: m.board,
+            label: m.label,
+            playerIds: m.playerIds,
+            status: m.status,
+            places: m.places,
+            loserGames: m.loserGames,
+            scoredAt: ms(m.scoredAt),
+          })),
+        }
+      : null,
+    bracketWinnerId: st.bracketWinnerId ?? null,
     feed: st.feed.map((f) => ({ ...f, at: ms(f.at) })),
     pin: st.pin ? { ...st.pin, until: ms(st.pin.until) } : null,
     finishedAt: ms(st.finishedAt),
@@ -156,6 +200,25 @@ function gmAlerts(session: SessionRow, liveInfo: Record<string, LiveGameInfo>): 
         const min = Math.round((Date.now() - info.lastMoveAt) / 60_000);
         alerts.push(`Partie figée : ${pseudo(m.a)} contre ${pseudo(m.b)}, dernier coup il y a ${min} min.`);
       }
+    }
+  }
+  if (tournamentConfigOf(session).format === 'waves') {
+    const wave = st.waves[st.waves.length - 1];
+    if ((st.phase === 'wave' || st.phase === 'barrage') && wave) {
+      const short = wave.groups.filter((g) => !g.places && g.playerIds.length < 2);
+      if (short.length > 0) {
+        alerts.push('Un groupe est incomplet (départ en cours de salve). Recompose avant de saisir le résultat.');
+      }
+      if (wave.sitOuts.length > 0) {
+        const names = wave.sitOuts.map((id) => pseudo(id)).join(', ');
+        alerts.push(`${names} ne joue pas cette salve (nombre impair).`);
+      }
+    }
+    if (st.phase === 'wave_done') {
+      const cut = tournamentConfigOf(session).game === 'mariokart' ? 8 : 8;
+      const active = st.standings.filter((s) => s.status === 'active');
+      const border = active.find((s) => s.rank <= cut && active.some((o) => o.playerId !== s.playerId && o.points === s.points && o.rank >= cut));
+      if (border) alerts.push('Égalité près de la qualification : un barrage peut départager.');
     }
   }
   return alerts;
