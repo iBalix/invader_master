@@ -7,7 +7,7 @@
  */
 
 import { useState } from 'react';
-import { DEFAULT_TOURNAMENT_INPUT, type TournamentConfigInput } from '../../game/tournament/tournamentTypes';
+import { DEFAULT_TOURNAMENT_INPUT, LAUNCH_PRESETS, type TournamentConfigInput } from '../../game/tournament/tournamentTypes';
 import { formatSummary } from '../../game/tournament/tournamentClient';
 import { Btn, Card, Field, NarrowContext, NumberInput, Segmented, Toggle, inputClass, useMeasuredNarrow } from './ui';
 
@@ -18,6 +18,7 @@ export function mergeConfig(partial: Partial<TournamentConfigInput> | undefined)
     ...p,
     match: { ...DEFAULT_TOURNAMENT_INPUT.match, ...(p.match ?? {}) },
     points: { ...DEFAULT_TOURNAMENT_INPUT.points, ...(p.points ?? {}) },
+    placementPoints: p.placementPoints ?? DEFAULT_TOURNAMENT_INPUT.placementPoints,
     display: { ...DEFAULT_TOURNAMENT_INPUT.display, ...(p.display ?? {}) },
     texts: { ...DEFAULT_TOURNAMENT_INPUT.texts, ...(p.texts ?? {}) },
   };
@@ -63,11 +64,25 @@ export default function TemplateForm({
             <Field label="Titre affiché sur les écrans" hint="Vide = le nom du modèle">
               <input className={inputClass} value={cfg.title} maxLength={60} onChange={(e) => set('title', e.target.value)} placeholder={name || 'Tournoi'} />
             </Field>
-            <Field label="Mode de compétition">
-              <Segmented value={cfg.format} options={[{ value: 'swiss', label: 'Rondes suisses' }]} onChange={(v) => set('format', v)} />
+            <Field label="Mode de compétition" hint={cfg.format === 'waves' ? 'Salves, puis barrage et tableau si tu le décides' : 'Rondes suisses sur les tables d’échecs'}>
+              <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-slate-200">
+                {cfg.format === 'waves' ? 'Salves' : 'Rondes suisses'}
+              </p>
             </Field>
-            <Field label="Jeu" hint="Résultats remontés automatiquement depuis les tables d'échecs">
-              <Segmented value={cfg.game} options={[{ value: 'chess', label: '♞ Échecs' }]} onChange={(v) => set('game', v)} />
+            <Field label="Jeu" hint="Les échecs remontent les parties des tables. Mario Kart et Smash se saisissent à la main.">
+              <Segmented
+                value={cfg.game}
+                options={[
+                  { value: 'chess', label: 'Échecs' },
+                  { value: 'mariokart', label: 'Mario Kart' },
+                  { value: 'smash', label: 'Smash' },
+                ]}
+                onChange={(v) => {
+                  const preset = LAUNCH_PRESETS.find((p) => p.config.game === v);
+                  if (!preset) return;
+                  setCfg({ ...preset.config, title: cfg.title, testMode: cfg.testMode, wifiSsid: cfg.wifiSsid, wifiPassword: cfg.wifiPassword });
+                }}
+              />
             </Field>
           </div>
         </Card>
@@ -91,6 +106,57 @@ export default function TemplateForm({
           </div>
         </Card>
 
+        {cfg.format === 'waves' && (
+          <Card title={cfg.game === 'mariokart' ? 'Courses' : 'Matchs Smash'}>
+            <div className={pair}>
+              <Field label="En même temps" hint="Le reste attend dans la file, affiché sur les écrans">
+                <NumberInput value={cfg.parallelSlots} min={1} max={12} onChange={(v) => set('parallelSlots', Math.max(1, Math.min(12, Math.round(v))))} />
+              </Field>
+              <Field label="Composition des salves">
+                <Segmented
+                  value={cfg.grouping}
+                  options={[
+                    { value: 'swiss', label: 'Selon le classement' },
+                    { value: 'random', label: 'Au hasard' },
+                  ]}
+                  onChange={(v) => set('grouping', v)}
+                />
+              </Field>
+            </div>
+            {cfg.game === 'mariokart' ? (
+              <div className="mt-3 grid grid-cols-4 gap-3">
+                {cfg.placementPoints.map((pts, i) => (
+                  <Field key={i} label={`${i + 1}${i === 0 ? 'er' : 'e'}`}>
+                    <NumberInput
+                      value={pts}
+                      step={1}
+                      min={0}
+                      max={100}
+                      onChange={(v) => {
+                        const next = [...cfg.placementPoints];
+                        next[i] = v;
+                        set('placementPoints', next);
+                      }}
+                    />
+                  </Field>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-3 max-w-[12rem]">
+                <Field label="Point par match gagné (poules)">
+                  <NumberInput value={cfg.poolWinPoints} min={0} max={100} onChange={(v) => set('poolWinPoints', v)} />
+                </Field>
+              </div>
+            )}
+            <p className="mt-2 text-xs text-slate-500">
+              {cfg.game === 'mariokart'
+                ? 'Groupes de 4 maximum. S’il reste des joueurs, on fait plutôt des groupes de 3. Le barème ne change pas avec la taille du groupe.'
+                : 'Matchs à 2. En phase finale seulement, le score se saisit 3-0, 3-1 ou 3-2.'}
+            </p>
+          </Card>
+        )}
+
+        {cfg.format === 'swiss' && (
         <Card title="Matchs">
           <div className="space-y-4">
             <Field label="Nombre de parties par match">
@@ -124,7 +190,9 @@ export default function TemplateForm({
             </Field>
           </div>
         </Card>
+        )}
 
+        {cfg.format === 'swiss' && (
         <Card title="Points">
           <div className={`grid gap-3 ${narrow ? 'grid-cols-2' : 'grid-cols-4'}`}>
             <Field label="Victoire">
@@ -141,7 +209,9 @@ export default function TemplateForm({
             </Field>
           </div>
         </Card>
+        )}
 
+        {cfg.format === 'swiss' && (
         <Card title="Nombre impair de joueurs">
           <Segmented
             value={cfg.byePolicy}
@@ -164,6 +234,7 @@ export default function TemplateForm({
             </div>
           )}
         </Card>
+        )}
 
         <Card title="Projecteur">
           <p className="mb-3 text-xs text-slate-500">Rotation pendant une ronde, durées en secondes : classement et matchs de la ronde (par page), puis chaque partie en cours, l'une après l'autre.</p>

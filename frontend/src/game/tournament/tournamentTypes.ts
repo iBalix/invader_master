@@ -4,7 +4,17 @@
  * téléphones peignent directement l'instantané reçu.
  */
 
-export type TournamentPhase = 'registration' | 'round' | 'round_done' | 'final';
+export type TournamentPhase =
+  | 'registration'
+  | 'round'
+  | 'round_done'
+  | 'wave'
+  | 'wave_done'
+  | 'barrage'
+  | 'bracket'
+  | 'final';
+export type WaveGrouping = 'swiss' | 'random';
+export type BracketSeeding = 'seeded' | 'random';
 export type RosterStatus = 'active' | 'left' | 'excluded';
 export type ChessSide = 'w' | 'b';
 export type Side = 'a' | 'b';
@@ -73,6 +83,48 @@ export interface TRound {
   matches: TMatch[];
 }
 
+export interface TWaveGroup {
+  id: string;
+  wave: number;
+  board: number;
+  playerIds: string[];
+  status: 'queued' | 'playing' | 'done';
+  places: string[] | null;
+  points: Record<string, number>;
+  counts: boolean;
+  scoredAt: number | null;
+}
+
+export interface TWave {
+  number: number;
+  kind: 'pool' | 'barrage';
+  startedAt: number | null;
+  finishedAt: number | null;
+  grouping: WaveGrouping;
+  parallel: number;
+  sitOuts: string[];
+  groups: TWaveGroup[];
+}
+
+export interface TBracketMatch {
+  id: string;
+  round: 'qf' | 'sf' | 'semi' | 'final';
+  board: number;
+  label: string;
+  playerIds: string[];
+  status: 'waiting' | 'pending' | 'done';
+  places: string[] | null;
+  loserGames: 0 | 1 | 2 | null;
+  scoredAt: number | null;
+}
+
+export interface TBracket {
+  seeding: BracketSeeding;
+  startedAt: number | null;
+  seeds: string[];
+  matches: TBracketMatch[];
+}
+
 export interface TFeed {
   seq: number;
   kind: 'result' | 'join' | 'floater' | 'round' | 'leave' | 'final';
@@ -88,6 +140,11 @@ export interface TournamentConfigView {
   match: { games: number; decide: 'best_of' | 'all'; scoring: 'match' | 'game' };
   points: { win: number; draw: number; loss: number; forfeit: number; bye: number };
   byePolicy: 'floater' | 'points';
+  groupSize: number;
+  placementPoints: number[];
+  poolWinPoints: number;
+  grouping: WaveGrouping;
+  parallelSlots: number;
   display: { standingsMs: number; roundMs: number; liveMs: number };
   wifiSsid: string;
   wifiPassword: string;
@@ -120,6 +177,9 @@ export interface TournamentPublicState {
   standings: TStanding[];
   rounds: TRound[];
   currentRound: number | null;
+  waves: TWave[];
+  bracket: TBracket | null;
+  bracketWinnerId: string | null;
   feed: TFeed[];
   pin: { view: 'standings' | 'round' | 'match'; matchId: string | null; until: number | null } | null;
   finishedAt: number | null;
@@ -154,14 +214,19 @@ export interface TournamentGmState extends TournamentPublicState {
 /** config complète telle qu'enregistrée dans un modèle (formulaire de la console) */
 export interface TournamentConfigInput {
   title: string;
-  format: 'swiss';
-  game: 'chess';
+  format: 'swiss' | 'waves';
+  game: 'chess' | 'mariokart' | 'smash';
   registrationMin: number;
   lateJoin: boolean;
   plannedRounds: number | null;
   match: { games: number; decide: 'best_of' | 'all'; scoring: 'match' | 'game' };
   points: { win: number; draw: number; loss: number; forfeit: number; bye: number };
   byePolicy: 'floater' | 'points';
+  groupSize: number;
+  placementPoints: number[];
+  poolWinPoints: number;
+  grouping: WaveGrouping;
+  parallelSlots: number;
   display: { standingsMs: number; roundMs: number; liveMs: number };
   wifiSsid: string;
   wifiPassword: string;
@@ -179,12 +244,64 @@ export const DEFAULT_TOURNAMENT_INPUT: TournamentConfigInput = {
   match: { games: 1, decide: 'best_of', scoring: 'match' },
   points: { win: 2, draw: 1, loss: 0, forfeit: 2, bye: 2 },
   byePolicy: 'floater',
+  groupSize: 2,
+  placementPoints: [4, 3, 2, 1],
+  poolWinPoints: 1,
+  grouping: 'swiss',
+  parallelSlots: 1,
   display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 45_000 },
   wifiSsid: 'INVADER BAR',
   wifiPassword: '',
   texts: { winner: 'Bravo #winner# !' },
   testMode: false,
 };
+
+/** trois lancements d'un geste. Le détail reste modifiable ensuite sur la console. */
+export const LAUNCH_PRESETS: Array<{ id: string; label: string; name: string; detail: string; config: TournamentConfigInput }> = [
+  {
+    id: 'chess',
+    label: "Lancement tournoi d'échecs",
+    name: "Tournoi d'échecs",
+    detail: 'Rondes suisses, résultats remontés des tables. Projecteur et TV du comptoir ensemble.',
+    config: { ...DEFAULT_TOURNAMENT_INPUT, title: "Tournoi d'échecs" },
+  },
+  {
+    id: 'mk',
+    label: 'Lancement tournoi Mario Kart',
+    name: 'Tournoi Mario Kart',
+    detail: 'Groupes de 4 max (3 s’il le faut), barème 4/3/2/1, 2 courses en même temps.',
+    config: {
+      ...DEFAULT_TOURNAMENT_INPUT,
+      title: 'Tournoi Mario Kart',
+      format: 'waves',
+      game: 'mariokart',
+      plannedRounds: 3,
+      groupSize: 4,
+      placementPoints: [4, 3, 2, 1],
+      grouping: 'swiss',
+      parallelSlots: 2,
+      points: { win: 4, draw: 3, loss: 2, forfeit: 1, bye: 0 },
+    },
+  },
+  {
+    id: 'sb',
+    label: 'Lancement tournoi Smash Bros',
+    name: 'Tournoi Smash Bros',
+    detail: 'Matchs à 2, 1 point par victoire en poules. 3-0, 3-1 ou 3-2 seulement en phase finale.',
+    config: {
+      ...DEFAULT_TOURNAMENT_INPUT,
+      title: 'Tournoi Smash Bros',
+      format: 'waves',
+      game: 'smash',
+      plannedRounds: 3,
+      groupSize: 2,
+      poolWinPoints: 1,
+      grouping: 'swiss',
+      parallelSlots: 2,
+      points: { win: 1, draw: 0, loss: 0, forfeit: 1, bye: 0 },
+    },
+  },
+];
 
 export interface CompetitionTemplate {
   id: string;

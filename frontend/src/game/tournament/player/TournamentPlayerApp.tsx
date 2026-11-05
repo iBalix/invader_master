@@ -14,12 +14,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSansZoom } from '../../../hooks/useSansZoom';
 import {
-  clearTournamentIdentity,
   currentRoundOf,
   fmtPoints,
   fmtScore,
   formatSummary,
+  forgetPhonePlayer,
   hasResults,
+  listPhonePlayers,
   loadTournamentIdentity,
   myColor,
   myCurrentMatch,
@@ -31,9 +32,11 @@ import {
   rankLabel,
   roundLabel,
   saveTournamentIdentity,
+  selectPhonePlayer,
   standingOf,
   tournamentApi,
   tournamentErrorLabel,
+  type IdentityEntry,
 } from '../tournamentClient';
 import type { TMatch, TournamentPublicState, TournamentYou } from '../tournamentTypes';
 import { useServerNow, useTournamentSession } from '../useTournamentSession';
@@ -80,21 +83,21 @@ export default function TournamentPlayerApp() {
     if (id) setToken(id.playerToken);
   }, [state, token]);
 
-  // jeton refusé (retiré pendant les inscriptions, base nettoyée) : on repart de zéro
+  // jeton refusé : on retire seulement cette personne, les autres du téléphone restent
   useEffect(() => {
     if (!youAbsent || !token || !state) return;
-    clearTournamentIdentity(state.id);
-    setToken(null);
-    setNotice("Tu n'es plus inscrit à ce tournoi. Réinscris-toi quand tu veux !");
+    const next = forgetPhonePlayer(state.id, token);
+    setToken(next);
+    if (!next) setNotice("Tu n'es plus inscrit à ce tournoi. Réinscris-toi quand tu veux !");
   }, [youAbsent, token, state]);
 
-  const join = useCallback(
-    async (pseudo: string) => {
+  const joinAs = useCallback(
+    async (pseudo: string, fresh: boolean) => {
       if (!ref || busy) return;
       setBusy(true);
       setError(null);
       try {
-        const data = await tournamentApi.join(ref, { pseudo, playerToken: token ?? undefined });
+        const data = await tournamentApi.join(ref, { pseudo, playerToken: fresh ? undefined : token ?? undefined });
         saveTournamentIdentity(data.sessionId, data.playerToken, data.you?.pseudo ?? pseudo);
         setNotice(null);
         setToken(data.playerToken);
@@ -108,6 +111,9 @@ export default function TournamentPlayerApp() {
     [ref, busy, token, apply],
   );
 
+  const join = useCallback((pseudo: string) => joinAs(pseudo, false), [joinAs]);
+  const addPerson = useCallback((pseudo: string) => joinAs(pseudo, true), [joinAs]);
+
   const leave = useCallback(async () => {
     if (!ref || !token || busy) return;
     setBusy(true);
@@ -115,9 +121,9 @@ export default function TournamentPlayerApp() {
       const data = await tournamentApi.leave(ref, token);
       apply({ state: data.state, you: data.you });
       if (!data.you && state) {
-        // désinscription pendant les inscriptions : plus aucune trace
-        clearTournamentIdentity(state.id);
-        setToken(null);
+        // désinscription pendant les inscriptions : cette personne seulement
+        const next = forgetPhonePlayer(state.id, token);
+        setToken(next);
       }
     } catch (err) {
       setError(tournamentErrorLabel(err));
@@ -173,6 +179,13 @@ export default function TournamentPlayerApp() {
         onJoin={join}
         onLeave={leave}
         onRejoin={rejoin}
+        onAdd={addPerson}
+        phones={listPhonePlayers(state.id)}
+        onPickPhone={(next) => {
+          selectPhonePlayer(state.id, next);
+          apply({ state, you: null });
+          setToken(next);
+        }}
       />
     </Shell>
   );
@@ -203,6 +216,10 @@ export interface TournamentPlayerScreenProps {
   onJoin: (pseudo: string) => void | Promise<void>;
   onLeave: () => void | Promise<void>;
   onRejoin: () => void | Promise<void>;
+  /** inscrit une autre personne du même téléphone, sans réutiliser le jeton courant */
+  onAdd?: (pseudo: string) => void | Promise<void>;
+  phones?: IdentityEntry[];
+  onPickPhone?: (playerToken: string) => void;
   /** onglet de départ (laboratoire) */
   initialTab?: TournamentPlayerTab;
 }
@@ -222,7 +239,7 @@ export function TournamentPlayerScreen(props: TournamentPlayerScreenProps) {
   }
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <StatusBar state={state} playerId={me.id} pseudo={me.pseudo} />
+      <StatusBar state={state} playerId={me.id} pseudo={me.pseudo} phones={props.phones} onPickPhone={props.onPickPhone} />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3">
         {tab === 'moi' && <MeTab {...props} playerId={me.id} status={me.status} />}
         {tab === 'classement' && <StandingsTab state={state} playerId={me.id} />}
@@ -233,26 +250,64 @@ export function TournamentPlayerScreen(props: TournamentPlayerScreenProps) {
   );
 }
 
-function StatusBar({ state, playerId, pseudo }: { state: TournamentPublicState; playerId: string; pseudo: string }) {
-  const s = standingOf(state, playerId);
+function phaseChip(state: TournamentPublicState): string {
+  if (state.format === 'waves') {
+    if (state.phase === 'registration') return 'Inscriptions';
+    if (state.phase === 'final') return 'Terminé';
+    if (state.phase === 'bracket') return 'Phase finale';
+    if (state.phase === 'barrage') return 'Barrage';
+    if (state.phase === 'wave_done') return 'Salve terminée';
+    const wave = state.waves[state.waves.length - 1];
+    return wave ? `Salve ${wave.number}` : 'En cours';
+  }
+  if (state.phase === 'registration') return 'Inscriptions';
+  if (state.phase === 'final') return 'Terminé';
   const round = currentRoundOf(state);
+  return round ? roundLabel(state, round.number) : '';
+}
+
+function StatusBar({
+  state,
+  playerId,
+  pseudo,
+  phones,
+  onPickPhone,
+}: {
+  state: TournamentPublicState;
+  playerId: string;
+  pseudo: string;
+  phones?: IdentityEntry[];
+  onPickPhone?: (playerToken: string) => void;
+}) {
+  const s = standingOf(state, playerId);
   const ranked = hasResults(state);
+  const others = (phones ?? []).filter((p) => p.pseudo !== pseudo);
   return (
     <div className="shrink-0 border-b border-white/10 bg-black/30 px-4 pb-2.5 pt-3">
       <div className="flex items-center justify-between gap-2">
         <p className="truncate text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
-          ♞ {state.title}
+          {state.game === 'chess' ? '♞' : '🏆'} {state.title}
         </p>
         <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-bold text-white/70">
-          {state.phase === 'registration'
-            ? 'Inscriptions'
-            : state.phase === 'final'
-              ? 'Terminé'
-              : round
-                ? roundLabel(state, round.number)
-                : ''}
+          {phaseChip(state)}
         </span>
       </div>
+      {others.length > 0 && onPickPhone && (
+        <div className="mt-2 flex gap-2 overflow-x-auto">
+          {phones?.map((p) => (
+            <button
+              key={p.playerToken}
+              type="button"
+              onClick={() => onPickPhone(p.playerToken)}
+              className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                p.pseudo === pseudo ? 'bg-cyan-400/20 text-cyan-200' : 'bg-white/10 text-white/60'
+              }`}
+            >
+              {p.pseudo}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="mt-1.5 flex items-center justify-between gap-3">
         <p className="min-w-0 truncate text-xl font-black">{pseudo}</p>
         {s && state.phase !== 'registration' && (
@@ -324,7 +379,7 @@ function MiniCountdown({ state }: { state: TournamentPublicState }) {
 
 function JoinScreen({ state, busy, error, notice, onJoin }: TournamentPlayerScreenProps) {
   const [pseudo, setPseudo] = useState('');
-  const closed = state.phase === 'final' || (state.phase !== 'registration' && !state.config.lateJoin);
+  const closed = state.phase === 'final' || state.phase === 'bracket' || (state.phase !== 'registration' && !state.config.lateJoin);
   const started = state.phase !== 'registration';
   const submit = () => {
     if (!pseudo.trim() || busy || closed) return;
@@ -334,7 +389,7 @@ function JoinScreen({ state, busy, error, notice, onJoin }: TournamentPlayerScre
     <Center>
       <div className="anim-fade-up w-full max-w-sm text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">
-          ♞ Tournoi · {state.formatLabel}
+          {state.game === 'chess' ? '♞' : '🏆'} Tournoi · {state.formatLabel}
         </p>
         <h1 className="anim-title-glow mb-1 mt-1 text-balance text-3xl font-black">{state.title}</h1>
         <p className="text-sm text-white/50">
@@ -367,7 +422,9 @@ function JoinScreen({ state, busy, error, notice, onJoin }: TournamentPlayerScre
               placeholder="PSEUDO"
             />
             <p className="mb-3 text-left text-xs text-white/45">
-              Retiens-le bien : c'est ce pseudo que tu taperas sur la table d'échecs pour que tes parties comptent.
+              {state.format === 'waves'
+                ? 'Plusieurs personnes peuvent s’inscrire depuis ce téléphone.'
+                : 'Retiens-le bien : c’est ce pseudo que tu taperas sur la table d’échecs. Tu pourras aussi inscrire quelqu’un d’autre ensuite.'}
             </p>
             {error && <p className="anim-shake mb-3 text-sm font-semibold text-rose-400">{error}</p>}
             <button
@@ -557,8 +614,11 @@ function MeTab({
   error,
   onLeave,
   onRejoin,
+  onAdd,
 }: TournamentPlayerScreenProps & { playerId: string; status: string }) {
   const [confirming, setConfirming] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [extra, setExtra] = useState('');
   const round = currentRoundOf(state);
   const m = state.phase === 'registration' ? null : myCurrentMatch(state, playerId);
   const open = m && (m.status === 'pending' || m.status === 'playing') ? m : null;
@@ -585,7 +645,15 @@ function MeTab({
   } else if (state.phase === 'registration') {
     body = (
       <div className="text-center">
-        <Message emoji="✅" title="Tu es inscrit !" sub="Les matchs de la ronde 1 seront tirés au sort à la fin du compte à rebours." />
+        <Message
+          emoji="✅"
+          title="Tu es inscrit !"
+          sub={
+            state.format === 'waves'
+              ? 'Les groupes de la première salve seront tirés à la fin du compte à rebours.'
+              : 'Les matchs de la ronde 1 seront tirés au sort à la fin du compte à rebours.'
+          }
+        />
         <MiniCountdown state={state} />
         <p className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60">{formatSummary(state)}</p>
       </div>
@@ -601,6 +669,8 @@ function MeTab({
         <Podium state={state} />
       </div>
     );
+  } else if (state.format === 'waves') {
+    body = <WaveMe state={state} playerId={playerId} />;
   } else if (waiting) {
     body = (
       <Message
@@ -635,6 +705,36 @@ function MeTab({
       <div className="flex min-h-0 flex-1 flex-col justify-center">{body}</div>
       <StatsRow state={state} playerId={playerId} />
       {error && <p className="mt-2 text-center text-sm font-semibold text-rose-400">{error}</p>}
+      {adding && onAdd && (
+        <div className="mt-2 flex gap-2">
+          <input
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+            maxLength={16}
+            placeholder="Autre pseudo"
+            className="min-h-[48px] flex-1 rounded-xl border border-white/15 bg-white/5 px-3 font-bold text-white outline-none"
+          />
+          <button
+            type="button"
+            disabled={busy || !extra.trim()}
+            onClick={() => {
+              const name = extra.trim();
+              if (!name) return;
+              setExtra('');
+              setAdding(false);
+              void onAdd(name);
+            }}
+            className="min-h-[48px] rounded-xl bg-cyan-400 px-3 font-black text-[#0a0a14] disabled:opacity-40"
+          >
+            OK
+          </button>
+        </div>
+      )}
+      {status === 'active' && state.phase !== 'final' && state.phase !== 'bracket' && onAdd && (state.phase === 'registration' || state.config.lateJoin) && !adding && (
+        <button type="button" onClick={() => setAdding(true)} className="mx-auto mt-3 shrink-0 rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-bold text-cyan-200">
+          Ajouter une personne
+        </button>
+      )}
       {status === 'active' && state.phase !== 'final' && (
         <button
           type="button"
@@ -733,7 +833,63 @@ function StandingsTab({ state, playerId }: { state: TournamentPublicState; playe
   );
 }
 
+function WaveMe({ state, playerId }: { state: TournamentPublicState; playerId: string }) {
+  const wave = state.waves[state.waves.length - 1];
+  if (state.phase === 'bracket' && state.bracket) {
+    const mine = [...state.bracket.matches].reverse().find((m) => m.playerIds.includes(playerId));
+    if (mine && mine.playerIds.length >= 2 && !mine.places) {
+      const others = mine.playerIds.filter((id) => id !== playerId).map((id) => pseudoOf(state, id));
+      return <Message emoji="🎮" title={mine.label} sub={`Avec ${others.join(', ')}`} />;
+    }
+    if (mine?.places) {
+      const place = mine.places.indexOf(playerId) + 1;
+      const score = mine.loserGames !== null ? ` · 3-${mine.loserGames}` : '';
+      return <Message emoji={place === 1 ? '✅' : '🏁'} title={place === 1 ? 'Tu passes' : 'Éliminé'} sub={`${mine.label}${score}`} />;
+    }
+    return <Message emoji="⏳" title="Phase finale" sub="Ton match s’affiche dès qu’il est connu." />;
+  }
+  if (!wave) return <Message emoji="🕐" title="En attente de la prochaine salve" />;
+  if (wave.sitOuts.includes(playerId)) {
+    return <Message emoji="🪑" title="Tu ne joues pas cette salve" sub="Tu reviens à la suivante. Aucun point ce tour-ci." />;
+  }
+  const group = wave.groups.find((g) => g.playerIds.includes(playerId));
+  if (!group) return <Message emoji="🕐" title="Tu joues à la prochaine salve" sub="Tu es arrivé après le tirage." />;
+  const names = group.playerIds.map((id) => pseudoOf(state, id)).join(', ');
+  if (group.places) {
+    const place = group.places.indexOf(playerId) + 1;
+    const pts = group.counts ? `${group.points[playerId] ?? 0} pts` : 'Hors classement de poule';
+    return <Message emoji="✅" title={`Tu finis ${place}${place === 1 ? 'er' : 'e'}`} sub={pts} />;
+  }
+  if (group.status === 'queued') return <Message emoji="⏳" title="Ton groupe est en file" sub={names} />;
+  return <Message emoji="🎮" title="C’est à ton groupe de jouer" sub={names} />;
+}
+
 function MatchesTab({ state, playerId }: { state: TournamentPublicState; playerId: string }) {
+  if (state.format === 'waves') {
+    const rows = state.waves.flatMap((w) =>
+      w.groups
+        .filter((g) => g.playerIds.includes(playerId))
+        .map((g) => ({ wave: w, group: g })),
+    );
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <h2 className="mb-2 shrink-0 text-lg font-black uppercase tracking-widest">Mes matchs</h2>
+        {rows.length === 0 ? (
+          <p className="text-sm text-white/50">Aucun match pour l’instant.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {rows.slice(-8).map(({ wave, group }) => (
+              <p key={group.id} className="truncate rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
+                {wave.kind === 'barrage' ? 'Barrage' : `Salve ${wave.number}`}
+                {' · '}
+                {group.status === 'queued' ? 'en file' : group.places ? `${group.places.indexOf(playerId) + 1}e` : 'à jouer'}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
   const matches = myMatches(state, playerId).slice(-8);
   return (
     <div className="flex min-h-0 flex-1 flex-col">

@@ -9,6 +9,7 @@ import { EtapesConnexionVue } from '../../screen/ScreenApp';
 import { currentRoundOf, fmtScore, roundLabel, tournamentUrl } from '../tournamentClient';
 import type { TournamentPublicState } from '../tournamentTypes';
 import { EventChip, PodiumStep } from './parts';
+import WavesBar from './WavesBar';
 
 function statusLine(state: TournamentPublicState, now: number): string {
   const round = currentRoundOf(state);
@@ -28,6 +29,7 @@ function statusLine(state: TournamentPublicState, now: number): string {
 }
 
 export default function TournamentBar({ state, now }: { state: TournamentPublicState; now: number }) {
+  if (state.format === 'waves') return <WavesBar state={state} now={now} />;
   if (state.phase === 'final') {
     const ranked = state.standings.filter((s) => s.status !== 'excluded');
     return (

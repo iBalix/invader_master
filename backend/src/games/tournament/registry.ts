@@ -10,10 +10,12 @@ import {
   DEFAULT_TOURNAMENT_CONFIG,
   httpErr,
   type ByePolicy,
+  type BracketSeeding,
   type MatchDecide,
   type MatchScoring,
   type TournamentConfig,
   type TournamentGameId,
+  type WaveGrouping,
 } from './types.js';
 
 export interface TournamentGameDef {
@@ -36,9 +38,37 @@ export const TOURNAMENT_GAMES: Record<TournamentGameId, TournamentGameDef> = {
     defaultByePolicy: 'floater',
     liveView: true,
   },
+  mariokart: {
+    id: 'mariokart',
+    label: 'Mario Kart',
+    results: 'manual',
+    supportsDraw: false,
+    defaultByePolicy: 'points',
+    liveView: false,
+  },
+  smash: {
+    id: 'smash',
+    label: 'Smash Bros',
+    results: 'manual',
+    supportsDraw: false,
+    defaultByePolicy: 'points',
+    liveView: false,
+  },
 };
 
-export const TOURNAMENT_FORMATS = { swiss: { id: 'swiss', label: 'Rondes suisses' } } as const;
+export const TOURNAMENT_FORMATS = {
+  swiss: { id: 'swiss', label: 'Rondes suisses' },
+  waves: { id: 'waves', label: 'Salves' },
+} as const;
+
+/** taille de groupe imposée par le jeu. Les échecs n'utilisent pas les salves. */
+export function groupSizeFor(game: TournamentGameId): number {
+  return game === 'mariokart' ? 4 : 2;
+}
+
+export function isWavesGame(game: TournamentGameId): boolean {
+  return game === 'mariokart' || game === 'smash';
+}
 
 function bad(detail: string): Error {
   return httpErr(`error_tournament_bad_config: ${detail}`, 400);
@@ -61,6 +91,12 @@ function num(v: unknown, min: number, max: number, fallback: number, name: strin
   return n;
 }
 
+function placementList(v: unknown, fallback: number[]): number[] {
+  if (v === undefined) return fallback;
+  if (!Array.isArray(v) || v.length < 2 || v.length > 4) throw bad('le barème de places doit avoir 2 à 4 valeurs');
+  return v.map((item, i) => num(item, 0, 100, fallback[i] ?? 0, `place ${i + 1}`));
+}
+
 function text(v: unknown, max: number, fallback: string): string {
   if (typeof v !== 'string') return fallback;
   const t = v.trim();
@@ -79,10 +115,14 @@ export function normalizeTournamentConfig(input: unknown, base: TournamentConfig
   const display = (src.display && typeof src.display === 'object' ? src.display : {}) as Record<string, unknown>;
   const texts = (src.texts && typeof src.texts === 'object' ? src.texts : {}) as Record<string, unknown>;
 
-  const format = src.format ?? base.format;
-  if (format !== 'swiss') throw bad('mode de compétition inconnu');
   const game = (src.game ?? base.game) as TournamentGameId;
   if (!TOURNAMENT_GAMES[game]) throw bad('jeu inconnu');
+  const format = src.format ?? (isWavesGame(game) ? 'waves' : 'swiss');
+  if (format !== 'swiss' && format !== 'waves') throw bad('mode de compétition inconnu');
+  if (game === 'chess' && format !== 'swiss') throw bad('les échecs se jouent en rondes suisses');
+  if (isWavesGame(game) && format !== 'waves') throw bad('ce jeu se joue en salves');
+  const grouping = (src.grouping ?? base.grouping) as WaveGrouping;
+  if (grouping !== 'swiss' && grouping !== 'random') throw bad('composition des groupes inconnue');
 
   const decide = (match.decide ?? base.match.decide) as MatchDecide;
   if (decide !== 'best_of' && decide !== 'all') throw bad('décision de match inconnue');
@@ -99,8 +139,19 @@ export function normalizeTournamentConfig(input: unknown, base: TournamentConfig
     title: text(src.title, 60, base.title),
     templateId: typeof src.templateId === 'string' ? src.templateId : base.templateId,
     templateName: typeof src.templateName === 'string' ? src.templateName.slice(0, 60) : base.templateName,
-    format: 'swiss',
+    format,
     game,
+    groupSize: groupSizeFor(game),
+    placementPoints: placementList(src.placementPoints, base.placementPoints),
+    poolWinPoints: num(src.poolWinPoints, 0, 100, base.poolWinPoints, 'poolWinPoints'),
+    grouping,
+    parallelSlots: int(
+      src.parallelSlots,
+      1,
+      12,
+      isWavesGame(game) ? (base.format === 'waves' ? base.parallelSlots : 2) : base.parallelSlots,
+      'parallelSlots',
+    ),
     registrationMin: int(src.registrationMin, 1, 120, base.registrationMin, 'registrationMin'),
     lateJoin: typeof src.lateJoin === 'boolean' ? src.lateJoin : base.lateJoin,
     plannedRounds,
@@ -145,7 +196,19 @@ export function patchTournamentConfig(current: TournamentConfig, patch: unknown)
     texts: { ...current.texts, ...((rest.texts as object) ?? {}) },
   };
   const next = normalizeTournamentConfig(merged, current);
-  return { ...next, game: current.game, format: current.format, testMode: current.testMode, templateId: current.templateId, templateName: current.templateName };
+  return {
+    ...next,
+    game: current.game,
+    format: current.format,
+    groupSize: current.groupSize,
+    testMode: current.testMode,
+    templateId: current.templateId,
+    templateName: current.templateName,
+  };
+}
+
+export function isBracketSeeding(v: unknown): v is BracketSeeding {
+  return v === 'seeded' || v === 'random';
 }
 
 /**

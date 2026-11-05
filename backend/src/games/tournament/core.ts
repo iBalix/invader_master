@@ -7,7 +7,9 @@
  * vérification les appelle directement, sans base.
  *
  * Correspondance avec le statut de session (tournamentFlow) :
- *   registration -> lobby ; round / round_done -> playing ; final -> end.
+ *   registration -> lobby ;
+ *   round / round_done / wave / wave_done / barrage / bracket -> playing ;
+ *   final -> end.
  */
 
 import {
@@ -21,6 +23,7 @@ import {
   shuffle,
   assignColor,
 } from './swiss.js';
+import { computeWaveStandings, detachLeaver } from './waves.js';
 import {
   FEED_MAX,
   IGNORED_MAX,
@@ -63,6 +66,9 @@ export function createInitialState(now: number): TournamentState {
     ignored: [],
     feed: [],
     feedSeq: 0,
+    waves: [],
+    bracket: null,
+    bracketWinnerId: null,
     pin: null,
     waitingForPlayers: false,
     lastMutationAt: new Date(now).toISOString(),
@@ -123,7 +129,7 @@ function pushIgnored(state: TournamentState, ctx: CoreCtx, ref: string, reason: 
 
 /** à appeler après toute mutation : classement recalculé, horodatage */
 export function commit(state: TournamentState, ctx: CoreCtx): void {
-  state.standings = computeStandings(state);
+  state.standings = ctx.cfg.format === 'waves' ? computeWaveStandings(state) : computeStandings(state);
   state.lastMutationAt = iso(ctx);
 }
 
@@ -178,6 +184,8 @@ export interface AddPlayerInput {
 /** refus possible AVANT l'insert game_players : mêmes règles que addPlayer */
 export function assertCanJoin(state: TournamentState, ctx: CoreCtx, key: string, byGm: boolean): void {
   if (state.phase === 'final') throw httpErr('error_tournament_over', 409);
+  // la phase finale (tableau) ferme les inscriptions, GM compris
+  if (state.phase === 'bracket') throw httpErr('error_registrations_closed', 409);
   if (state.phase !== 'registration' && !ctx.cfg.lateJoin && !byGm) {
     throw httpErr('error_registrations_closed', 409);
   }
@@ -230,6 +238,7 @@ export function leavePlayer(
   }
   if (entry.status !== 'active') return false;
   entry.status = by === 'gm' ? 'excluded' : 'left';
+  detachLeaver(state, playerId);
   pushFeed(state, ctx, 'leave', `${entry.pseudo} quitte le tournoi`);
   const round = currentRound(state);
   if (round && state.phase === 'round') {
@@ -834,7 +843,10 @@ export function finishTournament(state: TournamentState, ctx: CoreCtx): void {
   state.finishedAt = iso(ctx);
   state.pin = null;
   commit(state, ctx);
-  const winner = state.standings.find((r) => r.status !== 'excluded');
+  const winnerId = state.bracketWinnerId;
+  const winner = winnerId
+    ? state.standings.find((r) => r.playerId === winnerId) ?? state.standings.find((r) => r.status !== 'excluded')
+    : state.standings.find((r) => r.status !== 'excluded');
   pushFeed(
     state,
     ctx,

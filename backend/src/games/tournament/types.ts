@@ -18,8 +18,12 @@ import { DEFAULT_CONFIG, type SessionRow } from '../types.js';
 // Configuration (figée à la création depuis le modèle)
 // ---------------------------------------------------------------------------
 
-export type TournamentFormat = 'swiss';
-export type TournamentGameId = 'chess';
+export type TournamentFormat = 'swiss' | 'waves';
+export type TournamentGameId = 'chess' | 'mariokart' | 'smash';
+/** salves : voisins au classement, ou tirage au sort */
+export type WaveGrouping = 'swiss' | 'random';
+/** premier tour de la phase finale */
+export type BracketSeeding = 'seeded' | 'random';
 /** best_of : le match s'arrête dès qu'un joueur a la majorité ; all : toutes les parties */
 export type MatchDecide = 'best_of' | 'all';
 /** barème appliqué au résultat du match, ou à chaque partie */
@@ -52,6 +56,19 @@ export interface TournamentConfig {
   match: { games: number; decide: MatchDecide; scoring: MatchScoring };
   points: TournamentPoints;
   byePolicy: ByePolicy;
+  /**
+   * Salves (Mario Kart, Smash) : ignoré par les échecs.
+   * groupSize est imposé par le jeu (4 ou 2), pas choisi à la main.
+   * placementPoints : places MK, le 1er d'abord. Même barème quel que soit
+   * le nombre de joueurs dans le groupe.
+   * poolWinPoints : Smash en poules, 1 point par match gagné.
+   * parallelSlots : matchs joués en même temps. Le reste attend dans la file.
+   */
+  groupSize: number;
+  placementPoints: number[];
+  poolWinPoints: number;
+  grouping: WaveGrouping;
+  parallelSlots: number;
   /** rotation du projecteur : classement, matchs de la ronde, match en direct */
   display: { standingsMs: number; roundMs: number; liveMs: number };
   wifiSsid: string;
@@ -76,6 +93,11 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   match: { games: 1, decide: 'best_of', scoring: 'match' },
   points: { win: 2, draw: 1, loss: 0, forfeit: 2, bye: 2 },
   byePolicy: 'floater',
+  groupSize: 2,
+  placementPoints: [4, 3, 2, 1],
+  poolWinPoints: 1,
+  grouping: 'swiss',
+  parallelSlots: 1,
   display: { standingsMs: 8_000, roundMs: 8_000, liveMs: 45_000 },
   wifiSsid: DEFAULT_CONFIG.wifiSsid,
   wifiPassword: DEFAULT_CONFIG.wifiPassword,
@@ -87,7 +109,15 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
 // État (runtime.tournament)
 // ---------------------------------------------------------------------------
 
-export type TournamentPhase = 'registration' | 'round' | 'round_done' | 'final';
+export type TournamentPhase =
+  | 'registration'
+  | 'round'
+  | 'round_done'
+  | 'wave'
+  | 'wave_done'
+  | 'barrage'
+  | 'bracket'
+  | 'final';
 export type RosterStatus = 'active' | 'left' | 'excluded';
 export type Side = 'a' | 'b';
 export type ChessSide = 'w' | 'b';
@@ -190,6 +220,59 @@ export interface FeedEntry {
   matchId?: string;
 }
 
+export type GroupStatus = 'queued' | 'playing' | 'done';
+export type WaveKind = 'pool' | 'barrage';
+export type BracketRound = 'qf' | 'sf' | 'semi' | 'final';
+
+/** un groupe de salve, un match de barrage, ou un carton du tableau */
+export interface WaveGroup {
+  id: string;
+  wave: number;
+  board: number;
+  playerIds: string[];
+  status: GroupStatus;
+  /** index 0 = premier. null tant que le GM n'a pas saisi */
+  places: string[] | null;
+  /** points de poule. Vide quand counts est faux (barrage, tableau) */
+  points: Record<string, number>;
+  /** false : le résultat ordonne, il n'entre pas dans le classement */
+  counts: boolean;
+  scoredAt: string | null;
+}
+
+export interface WaveRound {
+  number: number;
+  kind: WaveKind;
+  startedAt: string;
+  finishedAt: string | null;
+  grouping: WaveGrouping;
+  parallel: number;
+  /** Smash en nombre impair : un joueur ne joue pas cette salve */
+  sitOuts: string[];
+  groups: WaveGroup[];
+}
+
+export interface BracketMatch {
+  id: string;
+  round: BracketRound;
+  board: number;
+  label: string;
+  playerIds: string[];
+  status: 'waiting' | 'pending' | 'done';
+  places: string[] | null;
+  /** Smash en élimination : manches du perdant, 0, 1 ou 2. Le vainqueur en a 3. */
+  loserGames: 0 | 1 | 2 | null;
+  scoredAt: string | null;
+}
+
+export interface BracketState {
+  seeding: BracketSeeding;
+  startedAt: string;
+  /** têtes de série au tirage, le meilleur d'abord */
+  seeds: string[];
+  matches: BracketMatch[];
+}
+
 export type CloseReason = 'close' | 'abort' | 'final_ttl' | 'preempted' | 'idle';
 
 export interface IgnoredGame {
@@ -213,6 +296,12 @@ export interface TournamentState {
   ignored: IgnoredGame[];
   feed: FeedEntry[];
   feedSeq: number;
+  /** salves et barrage. Vide pour un tournoi d'échecs. */
+  waves: WaveRound[];
+  /** phase finale. null tant qu'elle n'est pas lancée. */
+  bracket: BracketState | null;
+  /** vainqueur du tableau, affiché sur l'écran trophée */
+  bracketWinnerId: string | null;
   /** vue imposée au projecteur par le GM */
   pin: { view: 'standings' | 'round' | 'match'; matchId: string | null; until: string } | null;
   /** compte à rebours écoulé avec moins de 2 joueurs : on attend le GM */
@@ -227,6 +316,10 @@ export function tournamentStateOf(session: SessionRow): TournamentState {
   if (!state) {
     throw Object.assign(new Error('Session sans état tournoi'), { httpStatus: 500 });
   }
+  // sessions d'échecs créées avant les salves : ces champs n'existaient pas
+  if (!state.waves) state.waves = [];
+  if (state.bracket === undefined) state.bracket = null;
+  if (state.bracketWinnerId === undefined) state.bracketWinnerId = null;
   return state;
 }
 

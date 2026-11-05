@@ -76,36 +76,59 @@ export const tournamentApi = {
 };
 
 // ---------------------------------------------------------------------------
-// Identité : UNE entrée par tournoi (l'identité du quiz est un emplacement
-// unique, un quiz joué le même soir l'écraserait)
+// Identité : plusieurs personnes peuvent partager un téléphone, échecs compris.
+// L'ancien format (un seul jeton) reste lisible.
 // ---------------------------------------------------------------------------
 
 const IDENTITY_KEY = 'invader_tournament_identity';
 
-interface IdentityEntry {
+export interface IdentityEntry {
   playerToken: string;
   pseudo: string;
   savedAt: number;
 }
 
-function readAll(): Record<string, IdentityEntry> {
+interface PhoneBook {
+  active: string | null;
+  players: IdentityEntry[];
+}
+
+function isEntry(v: unknown): v is IdentityEntry {
+  if (!v || typeof v !== 'object') return false;
+  const o = v as Record<string, unknown>;
+  return typeof o.playerToken === 'string' && typeof o.pseudo === 'string';
+}
+
+function readStore(): Record<string, unknown> {
   try {
     const raw = localStorage.getItem(IDENTITY_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, IdentityEntry>) : {};
+    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
   } catch {
     return {};
   }
 }
 
-export function loadTournamentIdentity(sessionId: string): IdentityEntry | null {
-  return readAll()[sessionId] ?? null;
+function bookOf(value: unknown): PhoneBook {
+  if (!value || typeof value !== 'object') return { active: null, players: [] };
+  const v = value as Record<string, unknown>;
+  if (Array.isArray(v.players)) {
+    const players = v.players.filter(isEntry);
+    const active = typeof v.active === 'string' && players.some((p) => p.playerToken === v.active) ? v.active : players[0]?.playerToken ?? null;
+    return { active, players };
+  }
+  if (isEntry(v)) return { active: v.playerToken, players: [{ ...v, savedAt: v.savedAt ?? Date.now() }] };
+  return { active: null, players: [] };
 }
 
-export function saveTournamentIdentity(sessionId: string, playerToken: string, pseudo: string): void {
-  const all = readAll();
-  all[sessionId] = { playerToken, pseudo, savedAt: Date.now() };
-  // 10 tournois au plus : les plus anciens partent
-  const entries = Object.entries(all).sort((a, b) => b[1].savedAt - a[1].savedAt).slice(0, 10);
+function newest(book: PhoneBook): number {
+  return book.players.reduce((max, p) => Math.max(max, p.savedAt ?? 0), 0);
+}
+
+function writeStore(all: Record<string, unknown>): void {
+  const entries = Object.entries(all)
+    .map(([id, value]) => [id, bookOf(value)] as const)
+    .sort((a, b) => newest(b[1]) - newest(a[1]))
+    .slice(0, 10);
   try {
     localStorage.setItem(IDENTITY_KEY, JSON.stringify(Object.fromEntries(entries)));
   } catch {
@@ -113,14 +136,62 @@ export function saveTournamentIdentity(sessionId: string, playerToken: string, p
   }
 }
 
-export function clearTournamentIdentity(sessionId: string): void {
-  const all = readAll();
-  delete all[sessionId];
-  try {
-    localStorage.setItem(IDENTITY_KEY, JSON.stringify(all));
-  } catch {
-    /* ignore */
+function writeBook(sessionId: string, book: PhoneBook): void {
+  const all = readStore();
+  all[sessionId] = book;
+  writeStore(all);
+}
+
+export function listPhonePlayers(sessionId: string): IdentityEntry[] {
+  return bookOf(readStore()[sessionId]).players;
+}
+
+export function loadTournamentIdentity(sessionId: string): IdentityEntry | null {
+  const book = bookOf(readStore()[sessionId]);
+  return book.players.find((p) => p.playerToken === book.active) ?? book.players[0] ?? null;
+}
+
+/** ajoute ou met à jour un inscrit de ce téléphone, et le rend actif */
+export function saveTournamentIdentity(sessionId: string, playerToken: string, pseudo: string): void {
+  const book = bookOf(readStore()[sessionId]);
+  const existing = book.players.find((p) => p.playerToken === playerToken);
+  if (existing) {
+    existing.pseudo = pseudo;
+    existing.savedAt = Date.now();
+  } else {
+    book.players.push({ playerToken, pseudo, savedAt: Date.now() });
   }
+  book.active = playerToken;
+  writeBook(sessionId, book);
+}
+
+export function selectPhonePlayer(sessionId: string, playerToken: string): void {
+  const book = bookOf(readStore()[sessionId]);
+  if (!book.players.some((p) => p.playerToken === playerToken)) return;
+  book.active = playerToken;
+  writeBook(sessionId, book);
+}
+
+/** retire un inscrit de ce téléphone. Renvoie le jeton encore actif, ou null. */
+export function forgetPhonePlayer(sessionId: string, playerToken: string): string | null {
+  const all = readStore();
+  const book = bookOf(all[sessionId]);
+  book.players = book.players.filter((p) => p.playerToken !== playerToken);
+  if (book.players.length === 0) {
+    delete all[sessionId];
+    writeStore(all);
+    return null;
+  }
+  if (!book.players.some((p) => p.playerToken === book.active)) book.active = book.players[0].playerToken;
+  all[sessionId] = book;
+  writeStore(all);
+  return book.active;
+}
+
+export function clearTournamentIdentity(sessionId: string): void {
+  const all = readStore();
+  delete all[sessionId];
+  writeStore(all);
 }
 
 // ---------------------------------------------------------------------------
@@ -199,9 +270,32 @@ export function rankLabel(rank: number): string {
   return rank === 1 ? '1er' : `${rank}e`;
 }
 
-/** « Match en 1 partie · Victoire 2 · Nul 1 · Défaite 0 » */
-export function formatSummary(state: { config: Pick<TournamentPublicState['config'], 'match' | 'points'> }): string {
-  const { match, points } = state.config;
+/** « Match en 1 partie · Victoire 2 · Nul 1 · Défaite 0 », ou le résumé d'une salve */
+export function formatSummary(state: {
+  format?: string;
+  game?: string;
+  config: Pick<TournamentPublicState['config'], 'match' | 'points'> & {
+    format?: string;
+    game?: string;
+    groupSize?: number;
+    placementPoints?: number[];
+    parallelSlots?: number;
+    poolWinPoints?: number;
+    grouping?: 'swiss' | 'random';
+  };
+}): string {
+  const cfg = state.config;
+  const formatKind = cfg.format ?? state.format;
+  const game = cfg.game ?? state.game;
+  if (formatKind === 'waves' || game === 'mariokart' || game === 'smash') {
+    const slots = cfg.parallelSlots ?? 2;
+    if (game === 'smash') {
+      return `Matchs à 2 · ${cfg.poolWinPoints ?? 1} pt par victoire en poules · ${slots} en même temps`;
+    }
+    const bareme = (cfg.placementPoints ?? [4, 3, 2, 1]).join('/');
+    return `Groupes de ${cfg.groupSize ?? 4} max · ${bareme} · ${slots} en même temps · ${cfg.grouping === 'random' ? 'tirage au sort' : 'selon le classement'}`;
+  }
+  const { match, points } = cfg;
   const format =
     match.games === 1
       ? 'Matchs en 1 partie'

@@ -47,7 +47,7 @@ export function EventChip({ state, big = false }: { state: TournamentPublicState
         big ? 'px-7 py-2.5 text-2xl' : 'px-5 py-1.5 text-lg'
       }`}
     >
-      <span className="text-[1.3em] leading-none">♞</span>
+      <span className="text-[1.3em] leading-none">{state.game === 'chess' ? '♞' : state.game === 'smash' ? '🥊' : '🏁'}</span>
       {state.formatLabel} · {state.gameLabel}
       {state.config.testMode && <span className="rounded-full bg-amber-500 px-2 text-sm text-white">TEST</span>}
     </span>
@@ -67,7 +67,7 @@ export function ScreenProgress({ start, endsAt, now }: { start: number | null; e
 
 /** QR compact d'inscription, dans l'angle des écrans du projecteur */
 export function JoinCorner({ state, size = 110 }: { state: TournamentPublicState; size?: number }) {
-  if (state.phase === 'final' || (!state.config.lateJoin && state.phase !== 'registration')) return null;
+  if (state.phase === 'final' || state.phase === 'bracket' || (!state.config.lateJoin && state.phase !== 'registration')) return null;
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-violet-400/40 bg-violet-500/10 px-4 py-3">
       <QrCanvas value={tournamentUrl(state.joinCode)} size={size} />

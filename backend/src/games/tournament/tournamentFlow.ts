@@ -32,10 +32,19 @@ import {
   validatePseudo,
   withSession,
 } from '../engine.js';
-import { switchScreensToDefault, switchScreensToGame } from '../screens.js';
+import { switchScreensToGame } from '../screens.js';
 import * as core from './core.js';
 import { decideMatch, pointsFor, pseudoKey } from './swiss.js';
-import { normalizeTournamentConfig, patchTournamentConfig } from './registry.js';
+import { isBracketSeeding, normalizeTournamentConfig, patchTournamentConfig } from './registry.js';
+import {
+  recomputePoolPoints,
+  recomposeWave,
+  scoreBracket,
+  scoreGroup,
+  startBarrage,
+  startBracket,
+  startPoolWave,
+} from './waves.js';
 import { buildTournamentPublicState } from './tournamentViews.js';
 import {
   TOURNAMENT_FINAL_TTL_MS,
@@ -319,9 +328,33 @@ export interface TournamentActionParams {
   view?: string | null;
   seconds?: number;
   config?: unknown;
+  grouping?: string;
+  seeding?: string;
+  places?: string[];
+  groups?: string[][];
+  groupId?: string;
+  loserGames?: number;
 }
 
 const GM_RESULTS = new Set(['a', 'b', 'draw', 'forfeit_a', 'forfeit_b', 'cancelled', 'bye', 'reset']);
+
+function waveGrouping(v: unknown): 'swiss' | 'random' | undefined {
+  if (v === 'swiss' || v === 'random') return v;
+  return undefined;
+}
+
+function placesOf(v: unknown): string[] {
+  if (!Array.isArray(v)) throw httpErr('error_tournament_bad_result', 400);
+  return v.map((id) => String(id));
+}
+
+function groupsOf(v: unknown): string[][] {
+  if (!Array.isArray(v)) throw httpErr('error_tournament_bad_result', 400);
+  return v.map((row) => {
+    if (!Array.isArray(row)) throw httpErr('error_tournament_bad_result', 400);
+    return row.map((id) => String(id));
+  });
+}
 
 /** barème modifié en cours de route : les points des matchs joués suivent */
 function recomputeMatchPoints(state: TournamentState, cfg: TournamentConfig): void {
@@ -373,7 +406,8 @@ export async function tournamentGmAction(
     switch (action) {
       case 'start-now': {
         if (st.phase !== 'registration') throw httpErr('error_tournament_already_started', 409);
-        core.startRound(st, ctx);
+        if (tournamentConfigOf(s).format === 'waves') startPoolWave(st, ctx, waveGrouping(params.grouping));
+        else core.startRound(st, ctx);
         s.started_at = iso();
         s.phase_started_at = iso();
         s.phase_ends_at = null;
@@ -390,9 +424,50 @@ export async function tournamentGmAction(
         break;
       }
       case 'next-round': {
-        if (st.phase !== 'round_done') throw httpErr('error_tournament_round_in_progress', 409);
-        core.startRound(st, ctx);
+        if (tournamentConfigOf(s).format === 'waves') {
+          startPoolWave(st, ctx, waveGrouping(params.grouping));
+        } else {
+          if (st.phase !== 'round_done') throw httpErr('error_tournament_round_in_progress', 409);
+          core.startRound(st, ctx);
+        }
         s.phase_started_at = iso();
+        break;
+      }
+      case 'start-wave': {
+        startPoolWave(st, ctx, waveGrouping(params.grouping));
+        if (!s.started_at) s.started_at = iso();
+        s.phase_started_at = iso();
+        s.phase_ends_at = null;
+        break;
+      }
+      case 'score-group':
+        scoreGroup(st, ctx, String(params.groupId ?? ''), placesOf(params.places));
+        break;
+      case 'recompose-wave':
+        recomposeWave(st, ctx, waveGrouping(params.grouping));
+        break;
+      case 'start-barrage':
+        startBarrage(st, ctx, groupsOf(params.groups));
+        s.phase_started_at = iso();
+        break;
+      case 'start-bracket': {
+        if (!isBracketSeeding(params.seeding)) throw httpErr('error_tournament_bad_result', 400);
+        startBracket(st, ctx, params.seeding);
+        s.phase_started_at = iso();
+        break;
+      }
+      case 'score-bracket': {
+        const finished = scoreBracket(
+          st,
+          ctx,
+          String(params.matchId ?? ''),
+          placesOf(params.places),
+          params.loserGames === undefined || params.loserGames === null ? null : Number(params.loserGames),
+        );
+        if (finished) {
+          s.phase_started_at = iso();
+          s.phase_ends_at = iso(Date.now() + TOURNAMENT_FINAL_TTL_MS);
+        }
         break;
       }
       case 'record-game': {
@@ -478,6 +553,7 @@ export async function tournamentGmAction(
         const next = patchTournamentConfig(tournamentConfigOf(s), params.config);
         s.config = next as unknown as SessionRow['config'];
         recomputeMatchPoints(st, next);
+        if (next.format === 'waves') recomputePoolPoints(st, next);
         core.commit(st, { ...ctx, cfg: next });
         break;
       }
@@ -497,6 +573,7 @@ export async function tournamentGmAction(
       default:
         throw httpErr(`Action inconnue pour un tournoi : ${action}`, 400);
     }
+    core.commit(st, ctx);
     syncStatus(s, st);
     markDirty(s);
     return s;
@@ -584,7 +661,13 @@ function tournamentAdvance(session: SessionRow): boolean {
     // fin du compte à rebours : tirage de la ronde 1, ou attente du GM
     if (core.activeIds(st).length >= 2) {
       try {
-        core.startRound(st, ctxOf(session));
+        if (tournamentConfigOf(session).format === 'waves') {
+          const ctx = ctxOf(session);
+          startPoolWave(st, ctx);
+          core.commit(st, ctx);
+        } else {
+          core.startRound(st, ctxOf(session));
+        }
         session.status = 'playing';
         session.started_at = iso(now);
         session.phase_started_at = iso(now);
@@ -617,9 +700,13 @@ registerAdvancer('tournament', tournamentAdvance);
 registerSyncPayload('tournament', (session) => ({ snapshot: buildTournamentPublicState(session) }));
 
 /**
- * Tournoi clos : les postes du bar reviennent à leur écran par défaut, sauf
- * tournoi de test (il n'avait rien basculé) ou clôture par le lancement forcé
- * d'un quiz (qui vient de prendre les écrans).
+ * Tournoi clos : on NE renvoie PAS les postes sur kioskURL.txt.
+ * Ce fichier, sur les PC du comptoir, peut encore ouvrir l'ancienne page PHP,
+ * qui affiche un écran blanc avec une erreur dès qu'il n'y a plus d'événement.
+ * Les TV sont déjà sur /screen/PROJO et /screen/BAR depuis le lancement : la
+ * page voit la session terminée et repasse toute seule sur l'attente INVADER.
+ * Un redémarrage du PC, lui, relit kioskURL.txt : ce fichier doit pointer vers
+ * ces mêmes URL V2, sinon le poste revient au PHP.
  */
 registerCommitListener((session, before) => {
   if (session.mode !== 'tournament') return;
@@ -627,5 +714,5 @@ registerCommitListener((session, before) => {
   const cfg = tournamentConfigOf(session);
   const reason = tournamentStateOf(session).closeReason;
   if (cfg.testMode || reason === 'preempted') return;
-  switchScreensToDefault(`tournament ${reason ?? 'end'}`);
+  console.log(`[tournament] clôture ${reason ?? 'end'} : les écrans restent sur la page V2`);
 });

@@ -21,7 +21,7 @@ import { TournamentGmBody } from '../components/Tournament/TournamentGmBody';
 import TemplateForm, { mergeConfig, type TemplateFormValue } from '../components/Tournament/TemplateForm';
 import { Badge, Btn, Card } from '../components/Tournament/ui';
 import { formatSummary } from '../game/tournament/tournamentClient';
-import type { CompetitionTemplate, TournamentGmState } from '../game/tournament/tournamentTypes';
+import { LAUNCH_PRESETS, type CompetitionTemplate, type TournamentGmState } from '../game/tournament/tournamentTypes';
 
 interface SessionListItem {
   id: string;
@@ -317,8 +317,28 @@ function Launcher({
       <div>
         <h1 className="text-2xl font-black">Gestionnaire d'événements</h1>
         <p className="text-sm text-slate-400">
-          Tournoi en rondes suisses sur les échecs des tables : QR d'inscription sur les TV du bar, tirage et classement au projecteur, résultats remontés tout seuls.
+          Échecs, Mario Kart ou Smash Bros. Un bouton bascule le projecteur et les deux TV du comptoir ensemble.
         </p>
+      </div>
+
+      <div className="grid gap-2">
+        {LAUNCH_PRESETS.map((preset) => (
+          <Btn
+            key={preset.id}
+            variant="primary"
+            big
+            full
+            disabled={busy}
+            onClick={() =>
+              void launchWith(async (force) => {
+                const { data } = await api.post('/api/game', { mode: 'tournament', config: preset.config, force });
+                return data.data as { id: string };
+              })
+            }
+          >
+            {preset.label}
+          </Btn>
+        ))}
       </div>
 
       <Btn
@@ -344,7 +364,11 @@ function Launcher({
                     <div className="min-w-0">
                       <p className="truncate font-black">{tpl.name}</p>
                       <p className="text-xs text-slate-400">
-                        ♞ Rondes suisses · Échecs · {cfg.registrationMin} min d'inscription
+                        {cfg.game === 'mariokart' ? 'Mario Kart' : cfg.game === 'smash' ? 'Smash Bros' : 'Échecs'}
+                        {' · '}
+                        {cfg.format === 'waves' ? 'Salves' : 'Rondes suisses'}
+                        {' · '}
+                        {cfg.registrationMin} min d'inscription
                         {tpl.lastUsedAt ? ` · lancé le ${new Date(tpl.lastUsedAt).toLocaleDateString('fr-FR')}` : ''}
                       </p>
                     </div>

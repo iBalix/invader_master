@@ -35,6 +35,14 @@ export function useTournamentSession(idOrCode: string | null, playerToken: strin
   const versionRef = useRef(0);
   const tokenRef = useRef(playerToken);
   tokenRef.current = playerToken;
+  // Le jeton change (autre personne du même téléphone) avant que l'effet ne
+  // voie youAbsent. On l'efface pendant le rendu, sinon l'effet du parent
+  // effacerait le nouvel inscrit.
+  const tokenSeen = useRef(playerToken);
+  if (tokenSeen.current !== playerToken) {
+    tokenSeen.current = playerToken;
+    if (youAbsent) setYouAbsent(false);
+  }
   const refreshing = useRef(false);
   const pending = useRef(false);
   const [tempsReel, setTempsReel] = useState(true);
