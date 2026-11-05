@@ -14,6 +14,7 @@ import {
   httpErr,
   type BracketMatch,
   type BracketRound,
+  type ScoreClaim,
   type BracketSeeding,
   type BracketState,
   type TournamentConfig,
@@ -142,6 +143,7 @@ function makeGroup(waveNumber: number, board: number, playerIds: string[], count
     points: {},
     counts,
     scoredAt: null,
+    claims: [],
   };
 }
 
@@ -243,6 +245,7 @@ export function scoreGroup(state: TournamentState, ctx: WaveCtx, groupId: string
   group.scoredAt = iso(ctx);
   group.points = group.counts ? pointsForPlaces(places, ctx.cfg) : {};
   group.status = 'done';
+  group.claims = [];
   armQueue(wave);
   const names = places.map((id) => pseudo(state, id)).join(', ');
   if (wave.groups.every((g) => g.places)) {
@@ -388,6 +391,7 @@ function matchShell(id: string, round: BracketRound, board: number, label: strin
     places: null,
     loserGames: null,
     scoredAt: null,
+    claims: [],
   };
 }
 
@@ -529,6 +533,7 @@ export function scoreBracket(
   match.places = [...places];
   match.status = 'done';
   match.scoredAt = iso(ctx);
+  match.claims = [];
   advanceBracket(state.bracket);
   const final = state.bracket.matches.find((m) => m.round === 'final');
   if (final?.places) {
@@ -541,6 +546,83 @@ export function scoreBracket(
   }
   pushFeed(state, ctx, `${pseudo(state, places[0])} passe au tour suivant`);
   return false;
+}
+
+function claimSignature(claim: Pick<ScoreClaim, 'places' | 'loserGames'>): string {
+  return `${claim.loserGames ?? ''}:${claim.places.join(',')}`;
+}
+
+/** deux propositions différentes : le GM doit trancher. Une seule, ou toutes identiques : à valider. */
+export function claimsConflict(claims: ScoreClaim[] | undefined): boolean {
+  const list = claims ?? [];
+  if (list.length < 2) return false;
+  const first = claimSignature(list[0]);
+  return list.some((claim) => claimSignature(claim) !== first);
+}
+
+function rememberClaim(list: ScoreClaim[] | undefined, claim: ScoreClaim): ScoreClaim[] {
+  return [...(list ?? []).filter((item) => item.playerId !== claim.playerId), claim];
+}
+
+function assertActiveHere(state: TournamentState, playerId: string, playerIds: string[]): void {
+  if (state.roster[playerId]?.status !== 'active' || !playerIds.includes(playerId)) {
+    throw httpErr('error_tournament_not_in_match', 403);
+  }
+}
+
+/**
+ * Le joueur propose le résultat de SON groupe. Rien n'est compté : le GM
+ * valide. Le jeton a déjà été traduit en playerId par la route.
+ */
+export function submitGroupClaim(
+  state: TournamentState,
+  ctx: WaveCtx,
+  playerId: string,
+  groupId: string,
+  places: string[],
+): void {
+  if (ctx.cfg.format !== 'waves') throw httpErr('error_tournament_bad_config: saisie réservée aux salves', 400);
+  const wave = openWave(state);
+  if (!wave) throw httpErr('error_tournament_claim_closed', 409);
+  const group = wave.groups.find((item) => item.id === groupId);
+  if (!group || group.places) throw httpErr('error_tournament_claim_closed', 409);
+  if (group.status !== 'playing') throw httpErr('error_tournament_claim_closed', 409);
+  assertActiveHere(state, playerId, group.playerIds);
+  assertPlaces(group.playerIds, places);
+  group.claims = rememberClaim(group.claims, {
+    playerId,
+    places: [...places],
+    loserGames: null,
+    at: iso(ctx),
+  });
+}
+
+/** proposition sur un match du tableau. En Smash, le score est 3-0, 3-1 ou 3-2. */
+export function submitBracketClaim(
+  state: TournamentState,
+  ctx: WaveCtx,
+  playerId: string,
+  matchId: string,
+  places: string[],
+  loserGames: number | null,
+): void {
+  if (ctx.cfg.format !== 'waves') throw httpErr('error_tournament_bad_config: saisie réservée aux salves', 400);
+  if (state.phase !== 'bracket' || !state.bracket) throw httpErr('error_tournament_claim_closed', 409);
+  const match = state.bracket.matches.find((item) => item.id === matchId);
+  if (!match || match.places || match.status !== 'pending') throw httpErr('error_tournament_claim_closed', 409);
+  assertActiveHere(state, playerId, match.playerIds);
+  assertPlaces(match.playerIds, places);
+  let games: 0 | 1 | 2 | null = null;
+  if (ctx.cfg.game === 'smash') {
+    if (loserGames !== 0 && loserGames !== 1 && loserGames !== 2) throw httpErr('error_tournament_bad_result', 400);
+    games = loserGames;
+  }
+  match.claims = rememberClaim(match.claims, {
+    playerId,
+    places: [...places],
+    loserGames: games,
+    at: iso(ctx),
+  });
 }
 
 /** barème modifié en cours de poules : on recalcule les groupes déjà saisis */

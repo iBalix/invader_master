@@ -83,6 +83,14 @@ export interface TRound {
   matches: TMatch[];
 }
 
+/** proposition d'un joueur, en attente de validation par l'animateur */
+export interface TClaim {
+  playerId: string;
+  places: string[];
+  loserGames: 0 | 1 | 2 | null;
+  at: number | null;
+}
+
 export interface TWaveGroup {
   id: string;
   wave: number;
@@ -93,6 +101,7 @@ export interface TWaveGroup {
   points: Record<string, number>;
   counts: boolean;
   scoredAt: number | null;
+  claims: TClaim[];
 }
 
 export interface TWave {
@@ -116,6 +125,7 @@ export interface TBracketMatch {
   places: string[] | null;
   loserGames: 0 | 1 | 2 | null;
   scoredAt: number | null;
+  claims: TClaim[];
 }
 
 export interface TBracket {

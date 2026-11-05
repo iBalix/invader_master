@@ -73,6 +73,22 @@ export const tournamentApi = {
         body: JSON.stringify({ playerToken }),
       }),
     ),
+  claim: (
+    idOrCode: string,
+    body: {
+      playerToken: string;
+      groupId?: string;
+      matchId?: string;
+      places: string[];
+      loserGames?: 0 | 1 | 2 | null;
+    },
+  ) =>
+    timed(() =>
+      request<StateResponse>(`/public/tournament/${encodeURIComponent(idOrCode)}/claim`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    ),
 };
 
 // ---------------------------------------------------------------------------
@@ -325,6 +341,9 @@ const ERROR_LABELS: Record<string, string> = {
   error_tournament_not_found: 'Tournoi introuvable',
   error_tournament_excluded: "L'animateur t'a retiré du tournoi",
   error_unknown_player: 'Joueur inconnu, réinscris-toi',
+  error_tournament_not_in_match: 'Tu ne joues pas ce match',
+  error_tournament_claim_closed: 'Ce résultat ne peut plus être saisi',
+  error_tournament_bad_result: 'Ordre ou score invalide',
 };
 
 export function tournamentErrorLabel(err: unknown): string {

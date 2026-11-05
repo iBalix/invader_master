@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { findPlayerByToken, isAdvanceDue, loadSession, withSession } from '../games/engine.js';
 // import à effet de bord indispensable : enregistre l'advancer 'tournament'
-import { joinTournament, leaveTournament, rejoinTournament } from '../games/tournament/tournamentFlow.js';
+import { claimTournamentResult, joinTournament, leaveTournament, rejoinTournament } from '../games/tournament/tournamentFlow.js';
 // idem : écouteur des parties d'échecs + réconciliateur
 import { chessGameContext, lookupMany, lookupParticipant } from '../games/tournament/chessBridge.js';
 import { buildTournamentPublicState, buildTournamentYou } from '../games/tournament/tournamentViews.js';
@@ -189,6 +189,47 @@ tournamentPublicRoutes.post('/:idOrCode/leave', async (req, res) => {
       data: {
         state: buildTournamentPublicState(committed),
         you: still ? buildTournamentYou(committed, still) : null,
+      },
+    });
+  } catch (err) {
+    httpError(res, err);
+  }
+});
+
+/**
+ * Proposition de résultat (Mario Kart, Smash). Le joueur est celui du jeton :
+ * un playerId dans le corps est ignoré, et un autre inscrit du même téléphone
+ * ne saisit que s'il est lui-même dans le groupe ou le match.
+ */
+tournamentPublicRoutes.post('/:idOrCode/claim', async (req, res) => {
+  try {
+    const session = ensureTournament(await loadSession(req.params.idOrCode));
+    const body = req.body as {
+      playerToken?: string;
+      groupId?: unknown;
+      matchId?: unknown;
+      places?: unknown;
+      loserGames?: unknown;
+    };
+    const player = await findPlayerByToken(session.id, body.playerToken);
+    if (!player) {
+      res.status(401).json({ status: 'error', message: 'error_unknown_player' });
+      return;
+    }
+    const places = Array.isArray(body.places) ? body.places.map((id) => String(id)) : [];
+    const rawGames = body.loserGames;
+    const loserGames = rawGames === undefined || rawGames === null || rawGames === '' ? null : Number(rawGames);
+    const committed = await claimTournamentResult(session.id, player, {
+      groupId: typeof body.groupId === 'string' ? body.groupId : undefined,
+      matchId: typeof body.matchId === 'string' ? body.matchId : undefined,
+      places,
+      loserGames: loserGames !== null && Number.isFinite(loserGames) ? loserGames : null,
+    });
+    res.json({
+      status: 'success',
+      data: {
+        state: buildTournamentPublicState(committed),
+        you: buildTournamentYou(committed, player),
       },
     });
   } catch (err) {

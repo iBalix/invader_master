@@ -354,6 +354,7 @@ function waveGroup(wave: number, board: number, ids: string[], status: TWaveGrou
     points: {},
     counts,
     scoredAt: null,
+    claims: [],
   };
 }
 
@@ -429,6 +430,30 @@ function mkWave(anchor: number): TournamentPublicState {
   );
 }
 
+function mkWaiting(anchor: number): TournamentPublicState {
+  const s = mkWave(anchor);
+  const group = s.waves[0]?.groups[0];
+  if (group) {
+    group.claims = [
+      { playerId: group.playerIds[1], places: [...group.playerIds].reverse(), loserGames: null, at: anchor - 20_000 },
+      { playerId: 'p1', places: [...group.playerIds], loserGames: null, at: anchor },
+    ];
+  }
+  return s;
+}
+
+function mkConflict(anchor: number): TournamentPublicState {
+  const s = mkWave(anchor);
+  const group = s.waves[0]?.groups[0];
+  if (!group) return s;
+  const reversed = [...group.playerIds].reverse();
+  group.claims = [
+    { playerId: group.playerIds[1], places: reversed, loserGames: null, at: anchor - 20_000 },
+    { playerId: group.playerIds[0], places: [...group.playerIds], loserGames: null, at: anchor },
+  ];
+  return s;
+}
+
 function mkSemis(anchor: number): TournamentPublicState {
   const s = mkWave(anchor);
   const id = (i: number) => s.players[i].id;
@@ -439,9 +464,9 @@ function mkSemis(anchor: number): TournamentPublicState {
     startedAt: anchor,
     seeds: s.players.slice(0, 8).map((p) => p.id),
     matches: [
-      { id: 'bk-s1', round: 'semi', board: 1, label: 'Demi-finale A', playerIds: [id(0), id(2), id(5), id(7)], status: 'pending', places: null, loserGames: null, scoredAt: null },
-      { id: 'bk-s2', round: 'semi', board: 2, label: 'Demi-finale B', playerIds: [id(1), id(3), id(4), id(6)], status: 'pending', places: null, loserGames: null, scoredAt: null },
-      { id: 'bk-f', round: 'final', board: 1, label: 'Finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
+      { id: 'bk-s1', round: 'semi', board: 1, label: 'Demi-finale A', playerIds: [id(0), id(2), id(5), id(7)], status: 'pending', places: null, loserGames: null, scoredAt: null, claims: [] },
+      { id: 'bk-s2', round: 'semi', board: 2, label: 'Demi-finale B', playerIds: [id(1), id(3), id(4), id(6)], status: 'pending', places: null, loserGames: null, scoredAt: null, claims: [] },
+      { id: 'bk-f', round: 'final', board: 1, label: 'Finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null, claims: [] },
     ],
   };
   return s;
@@ -511,6 +536,7 @@ function sbBracket(anchor: number): TournamentPublicState {
     places: null,
     loserGames: null,
     scoredAt: null,
+    claims: [],
   });
   const s = base(
     {
@@ -533,9 +559,9 @@ function sbBracket(anchor: number): TournamentPublicState {
           pair(2, 1, 6, '2e contre 7e'),
           pair(3, 2, 5, '3e contre 6e'),
           pair(4, 3, 4, '4e contre 5e'),
-          { id: 'bk-sf1', round: 'sf', board: 1, label: 'Demi-finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
-          { id: 'bk-sf2', round: 'sf', board: 2, label: 'Demi-finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
-          { id: 'bk-f', round: 'final', board: 1, label: 'Finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null },
+          { id: 'bk-sf1', round: 'sf', board: 1, label: 'Demi-finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null, claims: [] },
+          { id: 'bk-sf2', round: 'sf', board: 2, label: 'Demi-finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null, claims: [] },
+          { id: 'bk-f', round: 'final', board: 1, label: 'Finale', playerIds: [], status: 'waiting', places: null, loserGames: null, scoredAt: null, claims: [] },
         ],
       },
     },
@@ -656,7 +682,13 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
   { cle: 't-projo-sb-salve', surface: 'projo', label: 'Smash salve', description: '1 match, 1 en file, 1 assis', state: (a) => sbWave(a) },
   { cle: 't-projo-sb-quarts', surface: 'projo', label: 'Smash quarts', description: '1 contre 8, 2 contre 7, 3 contre 6, 4 contre 5', state: (a) => sbBracket(a) },
   { cle: 't-gm-mk-salve', surface: 'gm', label: 'MK saisie', description: 'Ordre des arrivées et file', state: (a) => mkWave(a) },
-  { cle: 't-tel-mk-groupe', surface: 'joueur', label: 'MK mon groupe', description: 'Le téléphone montre le groupe, pas une table d’échecs', state: (a) => mkWave(a), you: 'p1' },
+  { cle: 't-gm-mk-conflit', surface: 'gm', label: 'MK saisies contradictoires', description: 'Deux ordres, la dernière est en bas, le GM tranche', state: (a) => mkConflict(a) },
+  { cle: 't-tel-mk-groupe', surface: 'joueur', label: 'MK mon groupe', description: 'Le joueur saisit l’ordre de son groupe', state: (a) => mkWave(a), you: 'p1' },
+  { cle: 't-tel-mk-file', surface: 'joueur', label: 'MK en file', description: 'Pas de saisie tant que le groupe n’est pas sur la piste', state: (a) => mkWave(a), you: 'p3' },
+  { cle: 't-tel-mk-attente', surface: 'joueur', label: 'MK en attente', description: 'Proposition envoyée, une autre ne concorde pas, l’animateur tranche', state: (a) => mkWaiting(a), you: 'p1' },
+  { cle: 't-tel-sb-vainqueur', surface: 'joueur', label: 'Smash vainqueur', description: 'Le joueur propose qui a gagné la poule', state: (a) => sbWave(a), you: 'p1' },
+  { cle: 't-tel-sb-assis', surface: 'joueur', label: 'Smash assis', description: 'Le joueur impair ne saisit rien cette salve', state: (a) => sbWave(a), you: 'p5' },
+  { cle: 't-tel-sb-elim', surface: 'joueur', label: 'Smash 3-0', description: 'Élimination : vainqueur puis 3-0, 3-1 ou 3-2', state: (a) => sbBracket(a), you: 'p1' },
   // ---- tables
   { cle: 't-table-pastilles', surface: 'table', label: 'Pastilles tournoi', description: 'Modales, partie, récap', state: (a) => midTournament(a, a - 60_000, 13) },
 ];
@@ -680,6 +712,27 @@ export function labGmState(state: TournamentPublicState): TournamentGmState {
     const file = wave.groups.filter((g) => g.status === 'queued').length;
     if (file > 0) alerts.push(`${file} groupe${file > 1 ? 's' : ''} en file : ils s’affichent « à suivre » sur les écrans.`);
     if (wave.sitOuts.length > 0) alerts.push('Un joueur ne joue pas cette salve. Il marque 0 et revient à la suivante.');
+    for (const g of wave.groups) {
+      if (g.places || g.status !== 'playing' || g.claims.length === 0) continue;
+      const last = g.claims[g.claims.length - 1];
+      const name = state.players.find((p) => p.id === last.playerId)?.pseudo ?? '?';
+      const letter = String.fromCharCode(64 + g.board);
+      const sig = (c: (typeof g.claims)[number]) => c.places.join(',');
+      const conflict = g.claims.some((c) => sig(c) !== sig(g.claims[0]));
+      alerts.push(
+        conflict
+          ? `Saisies contradictoires sur le groupe ${letter}. Dernière proposition : ${name}. À trancher.`
+          : `${name} a saisi le groupe ${letter}. À valider.`,
+      );
+    }
+  }
+  if (state.phase === 'bracket' && state.bracket) {
+    for (const m of state.bracket.matches) {
+      if (m.places || m.status !== 'pending' || m.claims.length === 0) continue;
+      const last = m.claims[m.claims.length - 1];
+      const name = state.players.find((p) => p.id === last.playerId)?.pseudo ?? '?';
+      alerts.push(`${name} a saisi ${m.label.toLowerCase()}. À valider.`);
+    }
   }
   return {
     ...state,

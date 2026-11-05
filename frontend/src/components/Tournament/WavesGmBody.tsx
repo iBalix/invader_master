@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { pseudoOf } from '../../game/tournament/tournamentClient';
 import { useServerNow } from '../../game/tournament/useTournamentSession';
-import type { TWaveGroup, TournamentGmState } from '../../game/tournament/tournamentTypes';
+import type { TClaim, TWaveGroup, TournamentGmState } from '../../game/tournament/tournamentTypes';
 import type { GmAction } from './TournamentGmBody';
 import { Badge, Btn, Card } from './ui';
 
@@ -208,6 +208,15 @@ function GroupScore({
   const title = `${queued ? 'File' : group.status === 'playing' ? 'En cours' : 'Terminé'} · ${String.fromCharCode(64 + group.board)}`;
   return (
     <Card title={title} right={queued ? <Badge tone="amber">à suivre</Badge> : group.status === 'playing' ? <Badge tone="cyan">joue</Badge> : <Badge>ok</Badge>}>
+      {!done && !queued && (
+        <PlayerClaims
+          state={state}
+          claims={group.claims}
+          busy={busy}
+          readOnly={readOnly}
+          onValidate={(claim) => void act('score-group', { groupId: group.id, places: claim.places })}
+        />
+      )}
       {done ? (
         <ol className="space-y-1">
           {done.map((id, i) => (
@@ -241,6 +250,52 @@ function GroupScore({
         </div>
       )}
     </Card>
+  );
+}
+
+function claimsDisagree(claims: TClaim[]): boolean {
+  if (claims.length < 2) return false;
+  const sig = (c: TClaim) => `${c.loserGames ?? ''}:${c.places.join(',')}`;
+  return claims.some((c) => sig(c) !== sig(claims[0]));
+}
+
+function claimLine(state: TournamentGmState, claim: TClaim): string {
+  const order = claim.places.map((id, i) => `${i + 1}. ${pseudoOf(state, id)}`).join(', ');
+  return claim.loserGames === null ? order : `${order} (3-${claim.loserGames})`;
+}
+
+function PlayerClaims({
+  state, claims, busy, readOnly, onValidate,
+}: {
+  state: TournamentGmState;
+  claims: TClaim[] | undefined;
+  busy: boolean;
+  readOnly: boolean;
+  onValidate: (claim: TClaim) => void;
+}) {
+  const list = claims ?? [];
+  if (list.length === 0) return null;
+  const last = list[list.length - 1];
+  const conflict = claimsDisagree(list);
+  return (
+    <div className={`mb-3 rounded-lg border px-3 py-2 text-sm ${conflict ? 'border-amber-400/50 bg-amber-400/10' : 'border-cyan-400/30 bg-cyan-400/5'}`}>
+      <p className="mb-1 font-bold">{conflict ? 'Saisies contradictoires. La dernière est en bas.' : 'Saisie des joueurs, à valider'}</p>
+      <ul className="space-y-1">
+        {list.map((c, i) => (
+          <li key={`${c.playerId}-${c.at ?? i}`}>
+            <span className="font-semibold">{pseudoOf(state, c.playerId)}</span>
+            {' : '}
+            {claimLine(state, c)}
+            {i === list.length - 1 ? ' · dernière' : ''}
+          </li>
+        ))}
+      </ul>
+      {!readOnly && (
+        <div className="mt-2">
+          <Btn variant="primary" disabled={busy} onClick={() => onValidate(last)}>Valider la dernière saisie</Btn>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -387,12 +442,25 @@ function Tableau({
               <p className="font-bold">{m.places.map((id, i) => `${i + 1}. ${pseudoOf(state, id)}`).join(' · ')}</p>
               {m.loserGames !== null && <p className="text-sm text-amber-200">3-{m.loserGames}</p>}
             </div>
-          ) : m.playerIds.length < 2 || readOnly ? (
-            <p className="text-slate-400">{m.playerIds.length >= 2 ? m.playerIds.map((id) => pseudoOf(state, id)).join(', ') : 'En attente des qualifiés'}</p>
-          ) : mk ? (
-            <BracketPlaces state={state} matchId={m.id} ids={m.playerIds} busy={busy} act={act} />
+          ) : m.playerIds.length < 2 ? (
+            <p className="text-slate-400">En attente des qualifiés</p>
           ) : (
-            <SmashScore state={state} matchId={m.id} ids={m.playerIds} busy={busy} act={act} />
+            <>
+              <PlayerClaims
+                state={state}
+                claims={m.claims}
+                busy={busy}
+                readOnly={readOnly}
+                onValidate={(claim) => void act('score-bracket', { matchId: m.id, places: claim.places, loserGames: claim.loserGames })}
+              />
+              {readOnly ? (
+                <p className="text-slate-400">{m.playerIds.map((id) => pseudoOf(state, id)).join(', ')}</p>
+              ) : mk ? (
+                <BracketPlaces state={state} matchId={m.id} ids={m.playerIds} busy={busy} act={act} />
+              ) : (
+                <SmashScore state={state} matchId={m.id} ids={m.playerIds} busy={busy} act={act} />
+              )}
+            </>
           )}
         </Card>
       ))}

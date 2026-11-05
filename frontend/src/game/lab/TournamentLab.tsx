@@ -124,6 +124,7 @@ export function TournamentLabScene({
               onJoin={() => undefined}
               onLeave={() => undefined}
               onRejoin={() => undefined}
+              onAdd={() => undefined}
               initialTab={scenario.tab}
             />
           </div>

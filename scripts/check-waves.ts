@@ -13,11 +13,14 @@ import {
   planBracket,
   pointsForPlaces,
   qualifyCount,
+  claimsConflict,
   scoreBracket,
   recomposeWave,
   scoreGroup,
   startBracket,
   startPoolWave,
+  submitBracketClaim,
+  submitGroupClaim,
 } from '../backend/src/games/tournament/waves.js';
 import {
   DEFAULT_TOURNAMENT_CONFIG,
@@ -248,6 +251,86 @@ function withPlayers(cfg: TournamentConfig, n: number): TournamentState {
   const q4 = state.bracket?.matches.find((m) => m.id === 'bk-q4')?.places?.[0];
   check(sf1?.playerIds.join() === `${q1},${q4}`, 'demie : vainqueur 1v8 contre vainqueur 4v5');
   check(state.bracket?.matches.find((m) => m.id === 'bk-q1')?.loserGames === 1, '3-1 enregistré');
+}
+
+function expectCode(fn: () => void, code: string): void {
+  try {
+    fn();
+    check(false, `${code} aurait dû échouer`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    check(msg.startsWith(code), `${code} attendu, reçu ${msg}`);
+  }
+}
+
+// Le joueur propose. Le classement ne bouge qu'à la validation du GM.
+{
+  const state = withPlayers(mk, 10);
+  const c = ctx(mk, 40_000);
+  startPoolWave(state, c);
+  const playing = state.waves[0].groups.find((g) => g.status === 'playing');
+  const queued = state.waves[0].groups.find((g) => g.status === 'queued');
+  if (playing && queued) {
+    const outsider = queued.playerIds[0];
+    const before = computeWaveStandings(state).map((s) => s.points).join();
+    expectCode(() => submitGroupClaim(state, c, outsider, playing.id, [...playing.playerIds]), 'error_tournament_not_in_match');
+    expectCode(() => submitGroupClaim(state, c, queued.playerIds[0], queued.id, [...queued.playerIds]), 'error_tournament_claim_closed');
+    submitGroupClaim(state, c, playing.playerIds[0], playing.id, [...playing.playerIds]);
+    const reversed = [...playing.playerIds].reverse();
+    submitGroupClaim(state, { ...c, now: 41_000 }, playing.playerIds[1], playing.id, reversed);
+    check(claimsConflict(playing.claims), 'deux ordres différents : à trancher');
+    check(playing.places === null, 'une proposition ne pose pas le résultat');
+    core.commit(state, c);
+    check(computeWaveStandings(state).map((s) => s.points).join() === before, 'le classement n\'a pas bougé');
+    submitGroupClaim(state, { ...c, now: 42_000 }, playing.playerIds[0], playing.id, reversed);
+    check(playing.claims.filter((cl) => cl.playerId === playing.playerIds[0]).length === 1, 'une proposition par joueur');
+    check(playing.claims[playing.claims.length - 1].playerId === playing.playerIds[0], 'la dernière saisie remplace la précédente');
+    state.roster[playing.playerIds[2]].status = 'left';
+    expectCode(
+      () => submitGroupClaim(state, c, playing.playerIds[2], playing.id, [...playing.playerIds]),
+      'error_tournament_not_in_match',
+    );
+  }
+  const agree = withPlayers(mk, 8);
+  const ca = ctx(mk, 50_000);
+  startPoolWave(agree, ca);
+  const g = agree.waves[0].groups[0];
+  const order = [...g.playerIds];
+  submitGroupClaim(agree, ca, g.playerIds[0], g.id, order);
+  submitGroupClaim(agree, ca, g.playerIds[1], g.id, order);
+  check(!claimsConflict(g.claims) && g.claims.length === 2, 'deux saisies identiques : pas de conflit, à valider quand même');
+  scoreGroup(agree, ca, g.id, order);
+  check(g.claims.length === 0 && g.places?.join() === order.join(), 'la validation du GM efface les propositions');
+}
+
+// Smash : poule sans 3-n, élimination 3-0 / 3-1 / 3-2, un autre match est refusé.
+{
+  const state = withPlayers(sb, 8);
+  const c = ctx(sb, 60_000);
+  startPoolWave(state, c);
+  const g = state.waves[0].groups[0];
+  submitGroupClaim(state, c, g.playerIds[0], g.id, [...g.playerIds]);
+  check(g.claims[0]?.loserGames === null, 'poule smash : pas de score en manches');
+  for (const grp of [...state.waves[0].groups]) {
+    if (!grp.places) scoreGroup(state, c, grp.id, [...grp.playerIds]);
+  }
+  startBracket(state, c, 'seeded');
+  const q = state.bracket?.matches[0];
+  const stranger = state.bracket?.matches[1]?.playerIds[0];
+  if (q && stranger) {
+    expectCode(() => submitBracketClaim(state, c, stranger, q.id, [...q.playerIds], 0), 'error_tournament_not_in_match');
+    expectCode(() => submitBracketClaim(state, c, q.playerIds[0], q.id, [...q.playerIds], 4), 'error_tournament_bad_result');
+    submitBracketClaim(state, c, q.playerIds[0], q.id, [...q.playerIds], 2);
+    check(q.places === null && q.claims[0]?.loserGames === 2, '3-2 proposé, pas encore officiel');
+    scoreBracket(state, c, q.id, [...q.playerIds], 0);
+    check(q.claims.length === 0 && q.loserGames === 0 && q.places?.[0] === q.playerIds[0], 'le GM corrige le 3-2 en 3-0');
+  }
+}
+
+{
+  const chess = { ...DEFAULT_TOURNAMENT_CONFIG };
+  const state = withPlayers(chess, 4);
+  expectCode(() => submitGroupClaim(state, ctx(chess), 'p1', 'nope', ['p1', 'p2']), 'error_tournament_bad_config');
 }
 
 // un échecs par défaut ne gagne pas de salves vides qui casseraient le classement suisse
