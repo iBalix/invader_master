@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { DEFAULT_TOURNAMENT_INPUT, LAUNCH_PRESETS, type TournamentConfigInput } from '../../game/tournament/tournamentTypes';
 import { formatSummary } from '../../game/tournament/tournamentClient';
 import { Btn, Card, Field, NarrowContext, NumberInput, Segmented, Toggle, inputClass, useMeasuredNarrow } from './ui';
+import { GameGlyph } from '../../game/tournament/arcade/kit';
 
 export function mergeConfig(partial: Partial<TournamentConfigInput> | undefined): TournamentConfigInput {
   const p = partial ?? {};
@@ -56,7 +57,7 @@ export default function TemplateForm({
   return (
     <NarrowContext.Provider value={narrow}>
       <div ref={ref} className="space-y-4">
-        <Card title={isEdit ? 'Modifier l’événement' : 'Nouvel événement'}>
+        <Card tone="indigo" title={isEdit ? 'Modifier l’événement' : 'Nouvel événement'}>
           <div className={pair}>
             <Field label="Nom du modèle" hint="Pour le retrouver et le relancer en un clic">
               <input className={inputClass} value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="Tournoi d'échecs du jeudi" />
@@ -65,7 +66,7 @@ export default function TemplateForm({
               <input className={inputClass} value={cfg.title} maxLength={60} onChange={(e) => set('title', e.target.value)} placeholder={name || 'Tournoi'} />
             </Field>
             <Field label="Mode de compétition" hint={cfg.format === 'waves' ? 'Salves, puis barrage et tableau si tu le décides' : 'Rondes suisses sur les tables d’échecs'}>
-              <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm font-semibold text-slate-200">
+              <p className="ia-px ia-px--deep flex min-h-[48px] items-center px-3 text-sm font-bold text-ia-ink">
                 {cfg.format === 'waves' ? 'Salves' : 'Rondes suisses'}
               </p>
             </Field>
@@ -148,7 +149,7 @@ export default function TemplateForm({
                 </Field>
               </div>
             )}
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-ia-muted">
               {cfg.game === 'mariokart'
                 ? 'Groupes de 4 maximum. S’il reste des joueurs, on fait plutôt des groupes de 3. Le barème ne change pas avec la taille du groupe.'
                 : 'Matchs à 2. En phase finale seulement, le score se saisit 3-0, 3-1 ou 3-2.'}
@@ -221,7 +222,7 @@ export default function TemplateForm({
             ]}
             onChange={(v) => set('byePolicy', v)}
           />
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-ia-muted">
             {cfg.byePolicy === 'floater'
               ? "Au premier match terminé de la ronde, un de ses deux joueurs (tiré au hasard) affronte l'exempt. Seul l'exempt marque des points."
               : "L'exempt marque les points ci-dessous sans jouer."}
@@ -237,7 +238,7 @@ export default function TemplateForm({
         )}
 
         <Card title="Projecteur">
-          <p className="mb-3 text-xs text-slate-500">Rotation pendant une ronde, durées en secondes : classement et matchs de la ronde (par page), puis chaque partie en cours, l'une après l'autre.</p>
+          <p className="mb-3 text-xs text-ia-muted">Rotation pendant une ronde, durées en secondes : classement et matchs de la ronde (par page), puis chaque partie en cours, l'une après l'autre.</p>
           <div className="grid grid-cols-3 gap-3">
             <Field label="Classement">
               <NumberInput value={cfg.display.standingsMs / 1000} min={5} max={300} onChange={(v) => set('display', { ...cfg.display, standingsMs: Math.round(Math.min(300, Math.max(5, v))) * 1000 })} />
@@ -275,14 +276,17 @@ export default function TemplateForm({
           </div>
         </Card>
 
-        <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">{formatSummary({ config: cfg })}</p>
+        <p className="ia-px ia-px--deep flex items-center gap-3 px-3 py-2.5 text-xs text-ia-soft">
+          <GameGlyph game={cfg.game} scale={2} />
+          {formatSummary({ config: cfg })}
+        </p>
 
         <div className={narrow ? 'flex flex-col gap-2' : 'grid grid-cols-2 gap-2'}>
           <Btn variant="primary" big disabled={busy || !canSave} onClick={() => onLaunch(value(), true)}>
-            🚀 Enregistrer et lancer
+            ▶ Enregistrer et lancer
           </Btn>
           <Btn variant="secondary" big disabled={busy || !canSave} onClick={() => onSave(value())}>
-            💾 Enregistrer le modèle
+            Enregistrer le modèle
           </Btn>
           <Btn variant="secondary" big disabled={busy} onClick={() => onLaunch(value(), false)}>
             Lancer sans enregistrer

@@ -9,7 +9,7 @@
 
 import { useContext, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MonitorPlay, QrCode, RefreshCw, Smartphone, Square, Tv } from 'lucide-react';
+import { MonitorPlay, PenLine, QrCode, RefreshCw, Smartphone, Square, Tv } from 'lucide-react';
 import { QrCanvas } from '../../game/ui/bits';
 import { useServerNow } from '../../game/tournament/useTournamentSession';
 import {
@@ -23,6 +23,8 @@ import {
 } from '../../game/tournament/tournamentClient';
 import type { TMatch, TournamentGmState, TRound, TStanding } from '../../game/tournament/tournamentTypes';
 import { Badge, Btn, Card, NarrowContext, Sheet, inputClass, useMeasuredNarrow } from './ui';
+import { Crown, GameGlyph, Invader, Meter, Pawn, Trophy, invaderTone, mmss, rankClass, rankText } from '../../game/tournament/arcade/kit';
+import { CHECK, HOURGLASS, PixelSprite } from '../../game/tournament/arcade/pixel';
 import { WavesGmBody } from './WavesGmBody';
 
 export type GmAction = (name: string, params?: Record<string, unknown>, confirm?: string) => Promise<void>;
@@ -77,15 +79,7 @@ export function TournamentGmBody({
     <NarrowContext.Provider value={narrow}>
       <div ref={ref} className="mx-auto max-w-[1200px] px-3 pb-16 pt-3 sm:px-5">
         <Header state={state} onRefresh={onRefresh} action={act} onClosed={onClosed} readOnly={readOnly} />
-        {state.gm.alerts.length > 0 && !readOnly && (
-          <div className="mt-3 space-y-2">
-            {state.gm.alerts.map((a) => (
-              <p key={a} className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200">
-                ⚠️ {a}
-              </p>
-            ))}
-          </div>
-        )}
+        {!readOnly && <GmAlerts alerts={state.gm.alerts} />}
         {!readOnly && (
           <div className="mt-3">
             <MainAction state={state} busy={busy} action={act} onClosed={onClosed} />
@@ -99,7 +93,7 @@ export function TournamentGmBody({
           {tab === 'historique' && <HistoryTab state={state} onMatch={setMatchOpen} />}
           {tab === 'ecrans' && <ScreensTab state={state} busy={busy} action={act} readOnly={readOnly} />}
         </div>
-        <p className="mt-6 text-center text-xs text-slate-500">{formatSummary(state)}</p>
+        <p className="mt-6 text-center text-xs text-ia-muted">{formatSummary(state)}</p>
       </div>
       {selectedMatch && (
         <MatchSheet state={state} m={selectedMatch} busy={busy} action={act} readOnly={readOnly} onClose={() => setMatchOpen(null)} />
@@ -128,72 +122,139 @@ function Header({
   onClosed: () => void;
   readOnly: boolean;
 }) {
-  const narrow = useContext(NarrowContext);
   const [qr, setQr] = useState(false);
   const round = currentRoundOf(state);
-  const screenQuery = state.config.testMode ? `?tournament=${state.id}` : '';
-  const bouton = 'inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-white/15 px-2.5 text-xs font-semibold text-slate-300 hover:bg-white/5';
   return (
-    <div className="sticky top-0 z-30 -mx-3 border-b border-white/10 bg-slate-950/95 px-3 py-2.5 backdrop-blur sm:-mx-5 sm:px-5">
-      <div className="flex items-center justify-between gap-2">
+    <GmHeader
+      state={state}
+      phaseLabel={state.ended ? 'Clos' : PHASE_LABELS[state.phase] ?? state.phase}
+      phaseTone={state.ended ? 'slate' : state.phase === 'round' ? 'cyan' : state.phase === 'final' ? 'amber' : 'indigo'}
+      sub={round ? roundLabel(state, round.number) : null}
+      onRefresh={onRefresh}
+      onQr={() => setQr(true)}
+      stop={
+        readOnly
+          ? null
+          : {
+              label: 'Arrêter',
+              run: async () => {
+                await action('abort', {}, "Arrêter l'événement ? Le tournoi est clos tout de suite. Les écrans restent sur la page du bar.");
+                onClosed();
+              },
+            }
+      }
+    >
+      {qr && <QrOverlay state={state} onClose={() => setQr(false)} />}
+    </GmHeader>
+  );
+}
+
+/**
+ * En-tête collant commun aux consoles (échecs et salves) : jeu, titre, phase,
+ * code, puis les raccourcis (rafraîchir, QR, téléphone, projecteur, TV).
+ */
+export function GmHeader({
+  state,
+  phaseLabel,
+  phaseTone,
+  sub,
+  onRefresh,
+  onQr,
+  stop,
+  children,
+}: {
+  state: TournamentGmState;
+  phaseLabel: string;
+  phaseTone: 'slate' | 'cyan' | 'amber' | 'indigo' | 'emerald';
+  sub: string | null;
+  onRefresh: () => void;
+  onQr: () => void;
+  stop: { label: string; run: () => void | Promise<void> } | null;
+  children?: React.ReactNode;
+}) {
+  const narrow = useContext(NarrowContext);
+  const screenQuery = state.config.testMode ? `?tournament=${state.id}` : '';
+  const tool = 'ia-btn ia-btn--ghost min-h-[44px] px-3 text-xs';
+  return (
+    <div className="sticky top-0 z-30 -mx-3 bg-ia-night/95 px-3 pb-3 pt-3 backdrop-blur sm:-mx-5 sm:px-5">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className={`flex min-w-0 gap-2 ${narrow ? 'flex-col items-start gap-1' : 'items-center'}`}>
-            <h1 className="max-w-full truncate text-sm font-black lg:text-lg">♞ {state.title}</h1>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Badge tone={state.ended ? 'slate' : state.phase === 'round' ? 'indigo' : state.phase === 'final' ? 'amber' : 'cyan'}>
-                {state.ended ? 'Clos' : PHASE_LABELS[state.phase] ?? state.phase}
-              </Badge>
-              {state.config.testMode && <Badge tone="amber">🧪 TEST</Badge>}
-            </div>
+          <div className="flex items-center gap-2">
+            <GameGlyph game={state.game} scale={2} />
+            <span className="ia-pixel truncate text-[11px] text-ia-cyan">
+              {state.gameLabel} · {state.formatLabel}
+            </span>
           </div>
-          <p className="mt-0.5 truncate text-[11px] text-slate-400 lg:text-xs">
-            {round ? `${roundLabel(state, round.number)} · ` : ''}
-            <span className="font-bold text-slate-200">{state.playerCount}</span> joueur{state.playerCount > 1 ? 's' : ''} ·{' '}
-            <span className="font-mono font-bold text-slate-200">{state.joinCode}</span>
-          </p>
+          <h1 className={`mt-1 truncate font-black text-white ${narrow ? 'text-lg' : 'text-2xl'}`}>{state.title}</h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Badge tone={phaseTone}>{phaseLabel}</Badge>
+            {state.config.testMode && <Badge tone="amber">Test</Badge>}
+            {sub && <span className="text-xs font-bold text-ia-soft">{sub}</span>}
+            <span className="text-xs text-ia-soft">
+              <b className="text-ia-ink">{state.playerCount}</b> joueur{state.playerCount > 1 ? 's' : ''}
+            </span>
+            <span className="text-xs text-ia-muted">
+              code <span className="ia-pixel text-ia-pink">{state.joinCode}</span>
+            </span>
+          </div>
         </div>
-        {!readOnly && (
-          <button
-            type="button"
-            onClick={async () => {
-              await action('abort', {}, "Arrêter l'événement ? Le tournoi est clos tout de suite. Les écrans restent sur la page du bar.");
-              onClosed();
-            }}
-            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-lg border border-rose-400/40 bg-rose-400/10 px-2.5 text-xs font-semibold text-rose-300 hover:bg-rose-400/20"
-          >
-            <Square size={14} /> Arrêter
+        {stop && (
+          <button type="button" onClick={() => void stop.run()} className="ia-btn ia-btn--ghost-red min-h-[44px] shrink-0 px-3 text-xs">
+            <Square size={14} /> {stop.label}
           </button>
         )}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <button type="button" onClick={onRefresh} className={bouton} aria-label="Rafraîchir">
-          <RefreshCw size={14} />
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        <button type="button" onClick={onRefresh} className={tool} aria-label="Rafraîchir">
+          <RefreshCw size={15} />
         </button>
-        <button type="button" onClick={() => setQr(true)} className={bouton}>
-          <QrCode size={14} /> {!narrow && 'QR inscription'}
+        <button type="button" onClick={onQr} className={tool}>
+          <QrCode size={15} /> {!narrow && 'QR inscription'}
         </button>
-        <a href={tournamentUrl(state.joinCode)} target="_blank" rel="noreferrer" className={bouton}>
-          <Smartphone size={14} /> {!narrow && 'Joueur ↗'}
+        <a href={tournamentUrl(state.joinCode)} target="_blank" rel="noreferrer" className={tool}>
+          <Smartphone size={15} /> {!narrow && 'Joueur ↗'}
         </a>
-        <a href={`${window.location.origin}/screen/PROJO${screenQuery}`} target="_blank" rel="noreferrer" className={bouton}>
-          <MonitorPlay size={14} /> {!narrow && 'Projo ↗'}
+        <a href={`${window.location.origin}/screen/PROJO${screenQuery}`} target="_blank" rel="noreferrer" className={tool}>
+          <MonitorPlay size={15} /> {!narrow && 'Projo ↗'}
         </a>
-        <a href={`${window.location.origin}/screen/BAR${screenQuery}`} target="_blank" rel="noreferrer" className={bouton}>
-          <Tv size={14} /> {!narrow && 'Bar ↗'}
+        <a href={`${window.location.origin}/screen/BAR${screenQuery}`} target="_blank" rel="noreferrer" className={tool}>
+          <Tv size={15} /> {!narrow && 'Bar ↗'}
         </a>
       </div>
-      {qr &&
-        createPortal(
-          <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 px-6" onClick={() => setQr(false)}>
-            <div className="rounded-2xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
-              <h3 className="mb-3 font-bold text-gray-900">Inscription au tournoi</h3>
-              <QrCanvas value={tournamentUrl(state.joinCode)} size={240} />
-              <p className="mt-3 font-mono text-2xl font-black tracking-[0.3em] text-gray-900">{state.joinCode}</p>
-              <p className="mt-1 break-all text-xs text-gray-400">{tournamentUrl(state.joinCode)}</p>
-            </div>
-          </div>,
-          document.body,
-        )}
+      <div className="absolute bottom-0 left-3 right-3 h-0.5 sm:left-5 sm:right-5" style={{ background: 'linear-gradient(90deg, #ff2bd6, #8b3dff 40%, #33e2ff)' }} />
+      {children}
+    </div>
+  );
+}
+
+/** QR d'inscription en grand, à montrer à un joueur */
+export function QrOverlay({ state, onClose }: { state: TournamentGmState; onClose: () => void }) {
+  return createPortal(
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 px-6" onClick={onClose}>
+      <div className="ia-px ia-px--pink px-6 py-6 text-center" onClick={(e) => e.stopPropagation()}>
+        <h3 className="ia-pixel mb-4 text-sm text-ia-pink">Inscription au tournoi</h3>
+        <div className="ia-clip inline-block bg-white p-2">
+          <QrCanvas value={tournamentUrl(state.joinCode)} size={240} />
+        </div>
+        <p className="ia-pixel mt-4 text-4xl tracking-[0.12em] text-white">{state.joinCode}</p>
+        <p className="mt-1 break-all text-xs text-ia-muted">{tournamentUrl(state.joinCode)}</p>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** alertes du moteur (partie figée, saisie à valider...) */
+export function GmAlerts({ alerts }: { alerts: string[] }) {
+  if (alerts.length === 0) return null;
+  return (
+    <div className="mt-3 space-y-1.5">
+      {alerts.map((a) => (
+        <p key={a} className="ia-px ia-px--amber flex items-start gap-3 px-3 py-2.5 text-sm font-semibold text-ia-gold">
+          <span className="ia-pixel ia-clip ia-clip--sm mt-0.5 shrink-0 bg-ia-gold px-1.5 text-[11px] leading-5 text-ia-night">!</span>
+          <span>{a}</span>
+        </p>
+      ))}
     </div>
   );
 }
@@ -201,11 +262,6 @@ function Header({
 // ---------------------------------------------------------------------------
 // Le bouton du moment
 // ---------------------------------------------------------------------------
-
-function mmss(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
 
 function MainAction({ state, busy, action, onClosed }: { state: TournamentGmState; busy: boolean; action: GmAction; onClosed: () => void }) {
   const now = useServerNow(1000);
@@ -215,7 +271,7 @@ function MainAction({ state, busy, action, onClosed }: { state: TournamentGmStat
   if (state.ended) {
     return (
       <Card tone="indigo">
-        <p className="text-sm text-slate-300">Cet événement est clos. Les écrans sont revenus à leur affichage par défaut.</p>
+        <p className="text-sm text-ia-soft">Cet événement est clos. Les écrans sont revenus à leur affichage par défaut.</p>
         <div className="mt-3">
           <Btn variant="secondary" onClick={onClosed}>
             Retour aux événements
@@ -228,25 +284,20 @@ function MainAction({ state, busy, action, onClosed }: { state: TournamentGmStat
   if (state.phase === 'registration') {
     const reste = state.phaseEndsAt ? state.phaseEndsAt - now : null;
     return (
-      <Card tone="indigo">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <Card tone="cyan">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-indigo-300">Inscriptions ouvertes</p>
-            <p className="text-3xl font-black tabular-nums text-white">
+            <p className="ia-pixel text-[11px] text-ia-cyan">Inscriptions ouvertes</p>
+            <p className="ia-pixel mt-1 text-4xl tabular-nums text-white">
               {state.waitingForPlayers || reste === null ? 'En attente' : reste > 0 ? mmss(reste) : 'Tirage...'}
             </p>
-            <p className="text-sm text-slate-400">
-              {actifs} inscrit{actifs > 1 ? 's' : ''} · tirage automatique à zéro
-            </p>
           </div>
+          <p className="text-sm text-ia-soft">
+            <b className="text-ia-ink">{actifs}</b> inscrit{actifs > 1 ? 's' : ''} · tirage automatique à zéro
+          </p>
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          <Btn
-            variant="primary"
-            big
-            disabled={busy || actifs < 2}
-            onClick={() => void action('start-now', {}, `Lancer la ronde 1 maintenant avec ${actifs} joueurs ?`)}
-          >
+        <div className="mt-4 grid gap-2 sm:grid-cols-[2fr_1fr_1fr]">
+          <Btn variant="primary" big disabled={busy || actifs < 2} onClick={() => void action('start-now', {}, `Lancer la ronde 1 maintenant avec ${actifs} joueurs ?`)}>
             ▶ Démarrer maintenant
           </Btn>
           <Btn variant="secondary" big disabled={busy} onClick={() => void action('add-time', { minutes: 2 })}>
@@ -264,26 +315,28 @@ function MainAction({ state, busy, action, onClosed }: { state: TournamentGmStat
     const done = round.matches.filter((m) => m.status === 'done' || m.status === 'cancelled').length;
     const total = round.matches.length;
     return (
-      <Card tone="indigo">
-        <p className="text-xs font-bold uppercase tracking-wider text-indigo-300">{roundLabel(state, round.number)} en cours</p>
-        <p className="text-3xl font-black text-white">
-          {done}/{total} <span className="text-lg font-bold text-slate-400">{total > 1 ? 'matchs terminés' : 'match terminé'}</span>
-        </p>
-        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-emerald-400" style={{ width: `${total ? (done / total) * 100 : 0}%`, transition: 'width 500ms ease' }} />
+      <Card tone="cyan">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="ia-pixel text-[11px] text-ia-cyan">{roundLabel(state, round.number)} en cours</p>
+            <p className="mt-1 flex items-baseline gap-2">
+              <span className="ia-pixel text-4xl tabular-nums text-white">
+                {done}/{total}
+              </span>
+              <span className="text-sm font-bold text-ia-soft">{total > 1 ? 'matchs terminés' : 'match terminé'}</span>
+            </p>
+          </div>
         </div>
+        <Meter ratio={total ? done / total : 0} className="mt-3" />
         {round.waiting && (
-          <p className="mt-2 text-sm text-violet-200">⏳ {pseudoOf(state, round.waiting)} est exempt et attend un adversaire.</p>
+          <p className="mt-3 flex items-center gap-2 text-sm text-[#c7a8ff]">
+            <PixelSprite sprite={HOURGLASS} scale={2} className="text-ia-violet" />
+            {pseudoOf(state, round.waiting)} est exempt et attend un adversaire.
+          </p>
         )}
-        <p className="mt-2 text-xs text-slate-500">La ronde se termine seule quand tous les matchs sont joués.</p>
+        <p className="mt-2 text-xs text-ia-muted">La ronde se termine seule quand tous les matchs sont joués.</p>
         <div className="mt-3">
-          <Btn
-            variant="danger"
-            disabled={busy}
-            onClick={() =>
-              void action('close-round', {}, 'Clôturer la ronde maintenant ? Les matchs non joués sont annulés (aucun point).')
-            }
-          >
+          <Btn variant="danger" disabled={busy} onClick={() => void action('close-round', {}, 'Clôturer la ronde maintenant ? Les matchs non joués sont annulés (aucun point).')}>
             Clôturer la ronde
           </Btn>
         </div>
@@ -293,21 +346,18 @@ function MainAction({ state, busy, action, onClosed }: { state: TournamentGmStat
 
   if (state.phase === 'round_done' && round) {
     return (
-      <Card tone="indigo">
-        <p className="text-xs font-bold uppercase tracking-wider text-emerald-300">✅ {roundLabel(state, round.number)} terminée</p>
-        <p className="mt-1 text-sm text-slate-300">
+      <Card tone="mint">
+        <p className="ia-pixel flex items-center gap-2 text-[11px] text-ia-mint">
+          <PixelSprite sprite={CHECK} scale={2} className="text-ia-mint" /> {roundLabel(state, round.number)} terminée
+        </p>
+        <p className="mt-2 text-sm text-ia-soft">
           {actifs} joueur{actifs > 1 ? 's' : ''} actif{actifs > 1 ? 's' : ''} pour la suite. Le projecteur affiche les résultats et le classement.
         </p>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <Btn variant="primary" big disabled={busy || actifs < 2} onClick={() => void action('next-round')}>
             ▶ Lancer la ronde {round.number + 1}
           </Btn>
-          <Btn
-            variant="warn"
-            big
-            disabled={busy}
-            onClick={() => void action('finish', {}, 'Terminer le tournoi ? Le classement final et le podium s’affichent.')}
-          >
+          <Btn variant="warn" big disabled={busy} onClick={() => void action('finish', {}, 'Terminer le tournoi ? Le classement final et le podium s’affichent.')}>
             🏁 Terminer le tournoi
           </Btn>
         </div>
@@ -318,12 +368,15 @@ function MainAction({ state, busy, action, onClosed }: { state: TournamentGmStat
   // final
   const reste = state.phaseEndsAt ? state.phaseEndsAt - now : null;
   return (
-    <Card tone="amber">
-      <p className="text-xs font-bold uppercase tracking-wider text-amber-300">🏆 Podium affiché</p>
-      <p className="mt-1 text-sm text-slate-300">
-        Vainqueur : <b className="text-amber-200">{state.standings.find((s) => s.status !== 'excluded')?.pseudo ?? '?'}</b>
-        {reste !== null && reste > 0 && <> · écrans libérés automatiquement dans {mmss(reste)}</>}
-      </p>
+    <Card tone="gold">
+      <div className="flex items-center gap-4">
+        <Trophy scale={3} />
+        <div className="min-w-0">
+          <p className="ia-pixel text-[11px] text-ia-gold">Podium affiché</p>
+          <p className="mt-1 truncate text-2xl font-black text-ia-gold">{state.standings.find((s) => s.status !== 'excluded')?.pseudo ?? '?'}</p>
+          {reste !== null && reste > 0 && <p className="text-sm text-ia-soft">Écrans libérés automatiquement dans {mmss(reste)}</p>}
+        </div>
+      </div>
       <div className="mt-3">
         <Btn
           variant="primary"
@@ -346,7 +399,6 @@ function MainAction({ state, busy, action, onClosed }: { state: TournamentGmStat
 // ---------------------------------------------------------------------------
 
 function Tabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
-  const narrow = useContext(NarrowContext);
   const items: Array<{ key: Tab; label: string }> = [
     { key: 'ronde', label: 'Ronde' },
     { key: 'classement', label: 'Classement' },
@@ -354,18 +406,23 @@ function Tabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
     { key: 'historique', label: 'Historique' },
     { key: 'ecrans', label: 'Écrans' },
   ];
+  return <GmTabs items={items} tab={tab} onTab={onTab} />;
+}
+
+/** onglets de la console : étiquettes pixel, l'actif en cyan */
+export function GmTabs<T extends string>({ items, tab, onTab }: { items: Array<{ key: T; label: string; count?: number }>; tab: T; onTab: (t: T) => void }) {
+  const narrow = useContext(NarrowContext);
   return (
-    <div className={`mt-4 gap-1 rounded-xl border border-white/10 bg-white/5 p-1 ${narrow ? 'grid grid-cols-3' : 'flex'}`}>
+    <div className={`ia-px ia-px--deep mt-4 gap-1 p-1.5 ${narrow ? 'grid grid-cols-3' : 'flex'}`}>
       {items.map((it) => (
         <button
           key={it.key}
           type="button"
           onClick={() => onTab(it.key)}
-          className={`min-h-[44px] flex-1 rounded-lg px-2 text-sm font-bold ${
-            tab === it.key ? 'bg-indigo-500 text-white' : 'text-slate-300 hover:bg-white/5'
-          }`}
+          className={`ia-clip ia-clip--sm ia-pixel min-h-[48px] flex-1 px-2 text-[11px] ${tab === it.key ? 'bg-ia-cyan text-ia-night' : 'text-ia-soft hover:bg-white/5'}`}
         >
           {it.label}
+          {it.count !== undefined && <span className="ml-1 opacity-70">{it.count}</span>}
         </button>
       ))}
     </div>
@@ -392,10 +449,11 @@ function MatchRow({ state, m, onOpen }: { state: TournamentGmState; m: TMatch; o
   const w = winnerId(m);
   const live = m.live ? state.gm.liveInfo[m.live.ref] : undefined;
   const idleMin = live?.lastMoveAt ? Math.floor((Date.now() - live.lastMoveAt) / 60_000) : null;
-  const name = (id: string | null, color: 'w' | 'b' | null) => (
-    <span className={`min-w-0 truncate font-semibold ${w === id ? 'text-emerald-300' : w && id ? 'text-slate-500' : 'text-slate-100'}`}>
-      {color && <span className="mr-1 inline-block h-2.5 w-2.5 rounded-full border border-white/50 align-middle" style={{ background: color === 'w' ? '#F5F2FF' : '#14101B' }} />}
-      {pseudoOf(state, id)}
+  const name = (id: string | null, color: 'w' | 'b' | null, right = false) => (
+    <span className={`flex min-w-0 items-center gap-1.5 ${right ? 'justify-end text-right' : ''}`}>
+      {!right && <Pawn color={color} scale={2} />}
+      <span className={`min-w-0 truncate font-bold ${w === id ? 'text-ia-mint' : w && id ? 'text-ia-muted' : 'text-ia-ink'}`}>{pseudoOf(state, id)}</span>
+      {right && <Pawn color={color} scale={2} />}
     </span>
   );
   const colorB = m.colorA ? (m.colorA === 'w' ? 'b' : 'w') : null;
@@ -403,28 +461,26 @@ function MatchRow({ state, m, onOpen }: { state: TournamentGmState; m: TMatch; o
     <button
       type="button"
       onClick={onOpen}
-      className={`w-full rounded-lg border px-3 py-2.5 text-left hover:bg-white/10 ${
-        m.status === 'playing' ? 'border-cyan-400/30 bg-cyan-500/[0.06]' : 'border-white/10 bg-white/[0.03]'
-      }`}
+      className={`ia-px w-full px-3 py-2.5 text-left transition hover:brightness-125 ${m.status === 'playing' ? 'ia-px--cyan' : 'ia-px--deep'}`}
     >
       <div className={`flex gap-2 text-sm ${narrow ? 'flex-wrap items-center' : 'items-center'}`}>
-        <span className="w-8 shrink-0 text-xs font-black text-slate-500">#{m.board}</span>
+        <span className="ia-pixel w-8 shrink-0 text-xs text-ia-muted">#{m.board}</span>
         {narrow && <span className="ml-auto shrink-0">{statusBadge(m)}</span>}
         {m.kind === 'bye' ? (
-          <span className={`truncate font-semibold text-amber-200 ${narrow ? 'w-full' : 'flex-1'}`}>
+          <span className={`truncate font-bold text-ia-gold ${narrow ? 'w-full' : 'flex-1'}`}>
             {pseudoOf(state, m.a)} exempt (+{fmtScore(m.points.a)})
           </span>
         ) : (
-          <span className={`flex min-w-0 items-center gap-1.5 ${narrow ? 'w-full text-base' : 'flex-1'}`}>
-            {name(m.a, m.colorA)}
-            <span className="shrink-0 text-xs text-slate-500">{m.games.length > 0 ? `${fmtScore(m.score.a)}-${fmtScore(m.score.b)}` : 'vs'}</span>
+          <span className={`grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 ${narrow ? 'w-full text-base' : 'flex-1'}`}>
+            {name(m.a, m.colorA, true)}
+            <span className="ia-pixel shrink-0 text-[11px] text-ia-pink">{m.games.length > 0 ? `${fmtScore(m.score.a)}-${fmtScore(m.score.b)}` : 'vs'}</span>
             {name(m.b, colorB)}
           </span>
         )}
         {!narrow && <span className="shrink-0">{statusBadge(m)}</span>}
       </div>
       {(m.kind === 'floater' || m.rematch || m.gmLocked || idleMin !== null) && (
-        <div className={`mt-1 flex flex-wrap gap-1.5 ${narrow ? '' : 'pl-10'}`}>
+        <div className={`mt-1.5 flex flex-wrap gap-1.5 ${narrow ? '' : 'pl-10'}`}>
           {m.kind === 'floater' && <Badge tone="violet">bonus, compte pour {pseudoOf(state, m.a)}</Badge>}
           {m.rematch && <Badge tone="amber">revanche</Badge>}
           {m.gmLocked && <Badge tone="indigo">saisi par le GM</Badge>}
@@ -457,7 +513,7 @@ function RoundTab({
   if (!round) {
     return (
       <Card>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-ia-soft">
           Pas encore de ronde : le tirage de la ronde 1 a lieu à la fin du compte à rebours (ou avec « Démarrer maintenant »).
         </p>
       </Card>
@@ -480,7 +536,7 @@ function RoundTab({
       </Card>
       {waitingId && state.phase === 'round' && !readOnly && (
         <Card tone="indigo" title="Exempt">
-          <p className="text-sm text-slate-300">
+          <p className="text-sm text-ia-soft">
             {round.waiting
               ? `${pseudoOf(state, waitingId)} attend : le premier match terminé lui donnera un adversaire (tiré au hasard).`
               : `${pseudoOf(state, waitingId)} a reçu un adversaire, la partie n'a pas commencé : tu peux le changer.`}
@@ -503,7 +559,7 @@ function RoundTab({
       )}
       {picker && (
         <Sheet title={`Adversaire de ${pseudoOf(state, waitingId)}`} onClose={() => setPicker(false)}>
-          <p className="mb-3 text-sm text-slate-400">Joueurs libres (sans match en cours) :</p>
+          <p className="mb-3 text-sm text-ia-soft">Joueurs libres (sans match en cours) :</p>
           <div className="grid gap-1.5">
             {candidates.map((p) => (
               <Btn
@@ -527,9 +583,9 @@ function RoundTab({
 
 function StandingsTab({ state, onPlayer }: { state: TournamentGmState; onPlayer: (id: string) => void }) {
   return (
-    <Card title="Classement" right={<span className="text-xs text-slate-500">pts · V/N/D · Buchholz</span>}>
+    <Card title="Classement" right={<span className="text-xs text-ia-muted">pts · V/N/D · Buchholz</span>}>
       {state.standings.length === 0 ? (
-        <p className="text-sm text-slate-400">Personne pour l'instant.</p>
+        <p className="text-sm text-ia-soft">Personne pour l'instant.</p>
       ) : (
         <div className="space-y-1">
           {state.standings.map((s) => (
@@ -546,22 +602,30 @@ function StandingButton({ s, onOpen }: { s: TStanding; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className={`flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm hover:bg-white/10 ${s.status !== 'active' ? 'opacity-50' : ''}`}
+      className={`ia-px flex min-h-[48px] w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:brightness-125 ${
+        s.rank === 1 ? 'ia-px--gold' : s.rank === 2 ? 'ia-px--silver' : s.rank === 3 ? 'ia-px--amber' : 'ia-px--deep'
+      } ${s.status !== 'active' ? 'opacity-50' : ''}`}
     >
-      <span className={`w-9 shrink-0 font-black ${s.rank <= 3 ? 'text-amber-300' : 'text-slate-500'}`}>
-        {s.rank}
+      <span className={`ia-pixel w-10 shrink-0 text-right text-xs ${rankClass(s.rank)}`}>
+        {rankText(s.rank)}
         {s.tied ? '=' : ''}
       </span>
-      <span className="min-w-0 flex-1 truncate font-semibold">
+      <span className="flex w-6 shrink-0 justify-center">{s.rank === 1 ? <Crown scale={2} /> : <Invader seed={s.playerId} scale={2} className={invaderTone(s.playerId)} />}</span>
+      <span className="min-w-0 flex-1 truncate font-bold text-ia-ink">
         {s.pseudo}
-        {s.status === 'left' && <span className="ml-1.5 text-xs text-slate-500">parti</span>}
-        {s.status === 'excluded' && <span className="ml-1.5 text-xs text-rose-300">exclu</span>}
+        {s.status === 'left' && <span className="ml-1.5 text-xs text-ia-muted">parti</span>}
+        {s.status === 'excluded' && <span className="ml-1.5 text-xs text-[#ff8ea3]">exclu</span>}
       </span>
-      {s.adjustment !== 0 && <Badge tone="indigo">{s.adjustment > 0 ? '+' : ''}{fmtScore(s.adjustment)} GM</Badge>}
-      <span className="shrink-0 text-xs tabular-nums text-slate-400">
+      {s.adjustment !== 0 && (
+        <Badge tone="indigo">
+          {s.adjustment > 0 ? '+' : ''}
+          {fmtScore(s.adjustment)} GM
+        </Badge>
+      )}
+      <span className="shrink-0 text-xs tabular-nums text-ia-muted">
         {s.wins}/{s.draws}/{s.losses} · {fmtScore(s.buchholz)}
       </span>
-      <span className="w-10 shrink-0 text-right font-mono font-black text-indigo-300">{fmtScore(s.points)}</span>
+      <span className="ia-display w-10 shrink-0 text-right text-2xl tabular-nums text-ia-cyan">{fmtScore(s.points)}</span>
     </button>
   );
 }
@@ -584,7 +648,7 @@ function PlayersTab({
   return (
     <div className="space-y-3">
       {!readOnly && state.phase !== 'final' && (
-        <Card title="Inscrire un joueur à la main" right={<span className="text-xs text-slate-500">sans téléphone</span>}>
+        <Card title="Inscrire un joueur à la main" right={<span className="text-xs text-ia-muted">sans téléphone</span>}>
           <div className="flex gap-2">
             <input
               className={inputClass}
@@ -606,14 +670,14 @@ function PlayersTab({
               Ajouter
             </Btn>
           </div>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-ia-muted">
             S'il scanne le QR plus tard avec ce même pseudo, son téléphone reprend cette inscription.
           </p>
         </Card>
       )}
       <Card title={`Joueurs (${roster.length})`}>
         {roster.length === 0 ? (
-          <p className="text-sm text-slate-400">Personne pour l'instant : le QR est affiché sur les TV du bar.</p>
+          <p className="text-sm text-ia-soft">Personne pour l'instant : le QR est affiché sur les TV du bar.</p>
         ) : (
           <div className="space-y-1">
             {roster.map((p) => (
@@ -621,10 +685,11 @@ function PlayersTab({
                 key={p.id}
                 type="button"
                 onClick={() => onPlayer(p.id)}
-                className={`flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm hover:bg-white/10 ${p.status !== 'active' ? 'opacity-50' : ''}`}
+                className={`ia-px ia-px--deep flex min-h-[48px] w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm transition hover:brightness-125 ${p.status !== 'active' ? 'opacity-50' : ''}`}
               >
-                <span className="shrink-0">{p.gmAdded ? '✍️' : '📱'}</span>
-                <span className="min-w-0 flex-1 truncate font-semibold">{p.pseudo}</span>
+                <Invader seed={p.id} scale={2} className={invaderTone(p.id)} />
+                <span className="min-w-0 flex-1 truncate font-bold text-ia-ink">{p.pseudo}</span>
+                <span className="shrink-0 text-ia-muted">{p.gmAdded ? <PenLine size={14} /> : <Smartphone size={14} />}</span>
                 {p.gmAdded && <Badge tone="slate">sans téléphone</Badge>}
                 {p.status === 'left' && <Badge tone="slate">parti</Badge>}
                 {p.status === 'excluded' && <Badge tone="rose">exclu</Badge>}
@@ -643,14 +708,14 @@ function HistoryTab({ state, onMatch }: { state: TournamentGmState; onMatch: (id
     <div className="space-y-3">
       {rounds.length === 0 && (
         <Card>
-          <p className="text-sm text-slate-400">Aucune ronde jouée.</p>
+          <p className="text-sm text-ia-soft">Aucune ronde jouée.</p>
         </Card>
       )}
       {rounds.map((r: TRound) => (
         <Card
           key={r.number}
           title={roundLabel(state, r.number)}
-          right={<span className="text-xs text-slate-500">{r.finishedAt ? 'terminée' : 'en cours'}</span>}
+          right={<span className="text-xs text-ia-muted">{r.finishedAt ? 'terminée' : 'en cours'}</span>}
         >
           <div className="space-y-1.5">
             {r.matches.map((m) => (
@@ -661,8 +726,8 @@ function HistoryTab({ state, onMatch }: { state: TournamentGmState; onMatch: (id
       ))}
       {state.gm.ignored.length > 0 && (
         <Card title="Parties écartées">
-          <p className="mb-2 text-xs text-slate-500">Remontées automatiques non comptées (match déjà décidé, résultat saisi par le GM...).</p>
-          <div className="space-y-1 text-xs text-slate-400">
+          <p className="mb-2 text-xs text-ia-muted">Remontées automatiques non comptées (match déjà décidé, résultat saisi par le GM...).</p>
+          <div className="space-y-1 text-xs text-ia-soft">
             {state.gm.ignored.map((g) => (
               <p key={g.ref}>
                 <span className="font-mono">{g.ref.slice(0, 8)}</span> · {g.reason === 'gm_locked' ? 'résultat déjà saisi par le GM' : 'match déjà décidé'}
@@ -671,7 +736,7 @@ function HistoryTab({ state, onMatch }: { state: TournamentGmState; onMatch: (id
           </div>
         </Card>
       )}
-      <p className="text-center text-xs text-slate-500">{state.gm.countedGames} partie{state.gm.countedGames > 1 ? 's' : ''} d'échecs remontée{state.gm.countedGames > 1 ? 's' : ''} automatiquement</p>
+      <p className="text-center text-xs text-ia-muted">{state.gm.countedGames} partie{state.gm.countedGames > 1 ? 's' : ''} d'échecs remontée{state.gm.countedGames > 1 ? 's' : ''} automatiquement</p>
     </div>
   );
 }
@@ -683,12 +748,12 @@ function ScreensTab({ state, busy, action, readOnly }: { state: TournamentGmStat
   return (
     <div className="space-y-3">
       <Card title="Projecteur">
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-ia-soft">
           Rotation automatique : classement {d.standingsMs / 1000} s, matchs {d.roundMs / 1000} s
           {d.liveMs > 0 ? `, puis chaque partie en cours ${Math.round(d.liveMs / 1000)} s, l'une après l'autre` : ''}.
         </p>
         {pinned && (
-          <p className="mt-2 text-sm font-semibold text-indigo-200">
+          <p className="mt-2 text-sm font-semibold text-ia-cyan">
             📌 Vue imposée ({pinned.view === 'standings' ? 'classement' : pinned.view === 'round' ? 'matchs' : 'match'}) encore {Math.round(((pinned.until ?? now) - now) / 1000)} s
           </p>
         )}
@@ -705,14 +770,14 @@ function ScreensTab({ state, busy, action, readOnly }: { state: TournamentGmStat
             </Btn>
           </div>
         )}
-        <p className="mt-2 text-xs text-slate-500">Pour montrer un match précis, ouvre-le dans l'onglet Ronde.</p>
+        <p className="mt-2 text-xs text-ia-muted">Pour montrer un match précis, ouvre-le dans l'onglet Ronde.</p>
       </Card>
       {!readOnly && (
         <Card title="Écrans du bar (PROJO, BAR01, BAR02)">
           {state.config.testMode ? (
-            <p className="text-sm text-amber-200">Tournoi de test : les écrans du bar ne sont pas basculés.</p>
+            <p className="text-sm text-ia-gold">Tournoi de test : les écrans du bar ne sont pas basculés.</p>
           ) : (
-            <p className="text-sm text-slate-400">Si un écran n'a pas basculé au lancement (agent du bar absent), renvoie-les sur le tournoi.</p>
+            <p className="text-sm text-ia-soft">Si un écran n'a pas basculé au lancement (agent du bar absent), renvoie-les sur le tournoi.</p>
           )}
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <Btn disabled={busy || state.config.testMode} onClick={() => void action('rescreen')}>
@@ -772,19 +837,19 @@ function MatchSheet({
           <Badge tone="slate">{roundLabel(state, m.round)}</Badge>
         </div>
         {m.games.length > 0 && (
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
-            <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">Parties</p>
+          <div className="ia-px ia-px--deep p-3 text-sm">
+            <p className="ia-pixel mb-1 text-[11px] text-ia-muted">Parties</p>
             {m.games.map((g, i) => (
-              <p key={i} className="text-slate-300">
+              <p key={i} className="text-ia-soft">
                 Partie {i + 1} : {g.winner === null ? 'nulle' : `${g.winner === 'a' ? a : b} gagne`}
-                <span className="text-slate-500"> · {g.source === 'gm' ? 'saisie GM' : g.reason ?? 'auto'}</span>
+                <span className="text-ia-muted"> · {g.source === 'gm' ? 'saisie GM' : g.reason ?? 'auto'}</span>
               </p>
             ))}
-            {multi && <p className="mt-1 font-bold text-slate-200">Score du match : {fmtScore(m.score.a)} - {fmtScore(m.score.b)}</p>}
+            {multi && <p className="mt-1 font-bold text-ia-ink">Score du match : {fmtScore(m.score.a)} - {fmtScore(m.score.b)}</p>}
           </div>
         )}
         {m.status === 'done' && m.kind !== 'bye' && (
-          <p className="text-sm text-slate-300">
+          <p className="text-sm text-ia-soft">
             Points : {a} +{fmtScore(m.points.a)}
             {m.kind === 'normal' && <> · {b} +{fmtScore(m.points.b)}</>}
           </p>
@@ -808,7 +873,7 @@ function MatchSheet({
           <>
             {isCurrent && open && (
               <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+                <p className="ia-pixel mb-2 text-[11px] text-ia-soft">
                   {multi ? 'Saisir une partie' : 'Saisir le résultat'}
                 </p>
                 <div className="grid grid-cols-3 gap-2">
@@ -825,7 +890,7 @@ function MatchSheet({
               </div>
             )}
             <div>
-              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Imposer le résultat du match</p>
+              <p className="ia-pixel mb-2 text-[11px] text-ia-soft">Imposer le résultat du match</p>
               <div className="grid grid-cols-2 gap-2">
                 <Btn disabled={busy} onClick={() => set('a', `${a} gagne le match`)}>
                   {a} gagne
@@ -847,7 +912,7 @@ function MatchSheet({
                 </Btn>
               </div>
               {m.live && (
-                <p className="mt-2 text-xs text-amber-200">
+                <p className="mt-2 text-xs text-ia-gold">
                   Une partie est en cours sur une table : un résultat imposé la fera ignorer.
                 </p>
               )}
@@ -911,7 +976,7 @@ function PlayerSheet({
         </div>
         {!readOnly && state.phase !== 'registration' && (
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Modifier le score</p>
+            <p className="ia-pixel mb-2 text-[11px] text-ia-soft">Modifier le score</p>
             <div className="grid grid-cols-4 gap-2">
               {[-2, -1, 1, 2].map((n) => (
                 <Btn key={n} variant={n > 0 ? 'success' : 'danger'} disabled={busy} onClick={() => adjust(n)}>
@@ -927,7 +992,7 @@ function PlayerSheet({
               </Btn>
             </div>
             {adjustments.length > 0 && (
-              <div className="mt-2 rounded-lg border border-white/10 bg-black/20 p-2 text-xs text-slate-400">
+              <div className="mt-2 ia-px ia-px--deep p-2 text-xs text-ia-soft">
                 {adjustments.map((a, i) => (
                   <p key={i}>
                     {a.delta > 0 ? '+' : ''}
@@ -938,7 +1003,7 @@ function PlayerSheet({
                   type="button"
                   disabled={busy}
                   onClick={() => void action('clear-adjustments', { playerId }, `Effacer les ajustements de ${player.pseudo} ?`)}
-                  className="mt-1 font-bold text-rose-300"
+                  className="mt-1 font-bold text-[#ff8ea3]"
                 >
                   Effacer les ajustements
                 </button>
@@ -948,8 +1013,8 @@ function PlayerSheet({
         )}
         {!readOnly && (
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Corriger le pseudo</p>
-            <p className="mb-2 text-xs text-slate-500">Doit correspondre à celui tapé sur la table d'échecs pour que les parties comptent.</p>
+            <p className="ia-pixel mb-2 text-[11px] text-ia-soft">Corriger le pseudo</p>
+            <p className="mb-2 text-xs text-ia-muted">Doit correspondre à celui tapé sur la table d'échecs pour que les parties comptent.</p>
             <div className="flex gap-2">
               <input className={inputClass} value={rename} maxLength={16} onChange={(e) => setRename(e.target.value)} />
               <Btn

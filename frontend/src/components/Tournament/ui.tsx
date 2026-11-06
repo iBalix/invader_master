@@ -1,10 +1,14 @@
 /**
- * Primitives de la console du gestionnaire d'événements (fond sombre, pensée
- * pour le téléphone de l'animateur : cibles de 48 px minimum, une main).
+ * Primitives de la console du gestionnaire d'événements, à l'identité arcade
+ * des tournois (cf. game/tournament/arcade). Pensée pour le téléphone ou
+ * l'iPad de l'animateur en plein service : cibles de 48 px minimum, une main,
+ * le contenu en Inter pour la lecture rapide, la police pixel pour les
+ * étiquettes seulement.
  */
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import '../../game/tournament/arcade/arcade.css';
 
 /** console étroite (mesurée sur SA largeur, pas sur la fenêtre : cf. labo) */
 export const NarrowContext = createContext(false);
@@ -24,12 +28,13 @@ export function useMeasuredNarrow(threshold = 900): [React.RefObject<HTMLDivElem
 
 type Variant = 'primary' | 'secondary' | 'warn' | 'danger' | 'success';
 
+/** boutons de borne (cf. arcade.css) : aplat néon pour agir, contour pour le reste */
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-indigo-500 text-white hover:bg-indigo-400',
-  secondary: 'border border-white/15 text-slate-200 hover:bg-white/10',
-  warn: 'border border-amber-400/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25',
-  danger: 'border border-rose-400/40 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25',
-  success: 'bg-emerald-500 text-white hover:bg-emerald-400',
+  primary: 'ia-btn--pink',
+  secondary: 'ia-btn--ghost',
+  warn: 'ia-btn--ghost-gold',
+  danger: 'ia-btn--ghost-red',
+  success: 'ia-btn--mint',
 };
 
 export function Btn({
@@ -56,27 +61,40 @@ export function Btn({
       title={title}
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 font-semibold disabled:opacity-40 ${
-        big ? 'min-h-[56px] text-base' : 'min-h-[48px] text-sm'
-      } ${full || narrow ? 'w-full' : ''} ${VARIANTS[variant]}`}
+      className={`ia-btn ${VARIANTS[variant]} ${big ? 'min-h-[60px] text-base' : 'min-h-[48px] text-sm'} ${full || narrow ? 'w-full' : ''}`}
     >
       {children}
     </button>
   );
 }
 
-export function Card({ title, right, children, tone }: { title?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode; tone?: 'amber' | 'indigo' }) {
-  const toneClass =
-    tone === 'amber'
-      ? 'border-amber-400/30 bg-amber-500/[0.07]'
-      : tone === 'indigo'
-        ? 'border-indigo-400/30 bg-indigo-500/[0.08]'
-        : 'border-white/10 bg-white/5';
+const CARD_TONES = {
+  plain: 'ia-px--plain',
+  amber: 'ia-px--amber',
+  indigo: 'ia-px--violet',
+  cyan: 'ia-px--cyan',
+  gold: 'ia-px--gold',
+  red: 'ia-px--red',
+  mint: 'ia-px--mint',
+} as const;
+
+/** panneau à coins de pixels ; le titre est une étiquette de borne */
+export function Card({
+  title,
+  right,
+  children,
+  tone,
+}: {
+  title?: React.ReactNode;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+  tone?: keyof typeof CARD_TONES;
+}) {
   return (
-    <div className={`rounded-xl border p-4 ${toneClass}`}>
+    <div className={`ia-px ${CARD_TONES[tone ?? 'plain']} p-4`}>
       {(title || right) && (
         <div className="mb-3 flex items-center justify-between gap-3">
-          {title && <h2 className="font-bold text-slate-100">{title}</h2>}
+          {title && <h2 className="ia-pixel text-[13px] text-white">{title}</h2>}
           {right}
         </div>
       )}
@@ -97,15 +115,15 @@ export function Segmented<T extends string | number>({
   disabled?: boolean;
 }) {
   return (
-    <div className={`flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/20 p-1 ${disabled ? 'opacity-40' : ''}`}>
+    <div className={`ia-px ia-px--deep flex flex-wrap gap-1 p-1.5 ${disabled ? 'opacity-40' : ''}`}>
       {options.map((o) => (
         <button
           key={String(o.value)}
           type="button"
           disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`min-h-[44px] flex-1 rounded-lg px-3 text-sm font-bold transition ${
-            value === o.value ? 'bg-indigo-500 text-white' : 'text-slate-300 hover:bg-white/5'
+          className={`ia-clip ia-clip--sm min-h-[44px] flex-1 px-3 text-sm font-bold transition ${
+            value === o.value ? 'bg-ia-cyan text-ia-night' : 'text-ia-soft hover:bg-white/5'
           }`}
         >
           {o.label}
@@ -118,15 +136,14 @@ export function Segmented<T extends string | number>({
 export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      <span className="ia-pixel mb-1.5 block text-[11px] text-ia-muted">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-ia-muted">{hint}</span>}
     </label>
   );
 }
 
-export const inputClass =
-  'min-h-[48px] w-full rounded-lg border border-white/15 bg-slate-900 px-3 text-base text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-400';
+export const inputClass = 'ia-input ia-clip';
 
 export function NumberInput({
   value,
@@ -147,7 +164,7 @@ export function NumberInput({
     <input
       type="number"
       inputMode="decimal"
-      className={inputClass}
+      className={`${inputClass} font-bold tabular-nums`}
       value={text}
       min={min}
       max={max}
@@ -162,19 +179,20 @@ export function NumberInput({
   );
 }
 
+/** interrupteur : carré qui glisse dans une piste en pixels */
 export function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
   return (
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className="flex min-h-[48px] w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-left"
+      className="ia-px ia-px--deep flex min-h-[56px] w-full items-center justify-between gap-3 px-3 py-2 text-left"
     >
       <span>
-        <span className="block text-sm font-semibold text-slate-100">{label}</span>
-        {hint && <span className="block text-xs text-slate-500">{hint}</span>}
+        <span className="block text-sm font-bold text-ia-ink">{label}</span>
+        {hint && <span className="block text-xs text-ia-muted">{hint}</span>}
       </span>
-      <span className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? 'bg-indigo-500' : 'bg-white/15'}`}>
-        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${checked ? 'left-6' : 'left-1'}`} />
+      <span className={`ia-clip ia-clip--sm relative h-8 w-14 shrink-0 transition ${checked ? 'bg-ia-mint' : 'bg-ia-line'}`}>
+        <span className={`ia-clip ia-clip--sm absolute top-1 h-6 w-6 bg-ia-night transition-all ${checked ? 'left-7' : 'left-1'}`} />
       </span>
     </button>
   );
@@ -190,14 +208,15 @@ export function Sheet({ title, onClose, children }: { title: React.ReactNode; on
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/70 sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/75 sm:items-center" onClick={onClose}>
       <div
-        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-white/15 bg-slate-900 p-5 text-slate-100 shadow-2xl sm:rounded-2xl"
+        className="ia-px ia-px--violet max-h-[90dvh] w-full max-w-lg overflow-y-auto p-5 text-ia-ink"
+        style={{ '--bg': '#140b2c' } as React.CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
-          <h3 className="text-lg font-black">{title}</h3>
-          <button type="button" onClick={onClose} className="min-h-[40px] rounded-lg px-3 text-sm font-bold text-slate-400 hover:bg-white/10">
+          <h3 className="ia-display text-3xl text-white">{title}</h3>
+          <button type="button" onClick={onClose} className="ia-btn ia-btn--ghost min-h-[44px] px-3 text-xs">
             Fermer
           </button>
         </div>
@@ -208,15 +227,21 @@ export function Sheet({ title, onClose, children }: { title: React.ReactNode; on
   );
 }
 
-export function Badge({ tone = 'slate', children }: { tone?: 'slate' | 'indigo' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet'; children: React.ReactNode }) {
-  const tones = {
-    slate: 'bg-white/10 text-slate-300',
-    indigo: 'bg-indigo-500/20 text-indigo-300',
-    emerald: 'bg-emerald-500/20 text-emerald-300',
-    amber: 'bg-amber-500/20 text-amber-300',
-    rose: 'bg-rose-500/20 text-rose-300',
-    cyan: 'bg-cyan-500/20 text-cyan-300',
-    violet: 'bg-violet-500/20 text-violet-300',
-  };
-  return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${tones[tone]}`}>{children}</span>;
+const BADGE_TONES = {
+  slate: 'bg-white/10 text-ia-soft',
+  indigo: 'bg-ia-violet/25 text-[#c7a8ff]',
+  emerald: 'bg-ia-mint/20 text-ia-mint',
+  amber: 'bg-ia-gold/15 text-ia-gold',
+  rose: 'bg-ia-red/20 text-[#ff8ea3]',
+  cyan: 'bg-ia-cyan/15 text-ia-cyan',
+  violet: 'bg-ia-violet/25 text-[#c7a8ff]',
+} as const;
+
+/** puce d'état en police pixel */
+export function Badge({ tone = 'slate', children }: { tone?: keyof typeof BADGE_TONES; children: React.ReactNode }) {
+  return (
+    <span className={`ia-pixel ia-clip ia-clip--sm inline-flex items-center gap-1 whitespace-nowrap px-2 py-1 text-[10px] leading-none ${BADGE_TONES[tone]}`}>
+      {children}
+    </span>
+  );
 }

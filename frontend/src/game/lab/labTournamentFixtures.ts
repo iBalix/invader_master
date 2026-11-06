@@ -571,6 +571,51 @@ function sbBracket(anchor: number): TournamentPublicState {
   return s;
 }
 
+/** MK : inscriptions ouvertes (console et écrans) */
+function mkLobby(anchor: number): TournamentPublicState {
+  const s = mkWave(anchor);
+  return {
+    ...s,
+    status: 'lobby',
+    phase: 'registration',
+    waves: [],
+    standings: ranked(s.players, []),
+    startedAt: null,
+    phaseStartedAt: anchor - 2 * 60_000,
+    phaseEndsAt: anchor + 4 * 60_000 + 12_000,
+  };
+}
+
+/** MK : salve 2 terminée, le GM choisit la suite (salve, barrage, tableau) */
+function mkDone(anchor: number): TournamentPublicState {
+  const s = mkWave(anchor);
+  s.phase = 'wave_done';
+  s.waves[0].finishedAt = anchor;
+  s.waves[0].groups = s.waves[0].groups.map((g) => ({
+    ...g,
+    status: 'done',
+    places: g.playerIds,
+    scoredAt: anchor,
+    points: Object.fromEntries(g.playerIds.map((id, i) => [id, s.config.placementPoints[i] ?? 0])),
+  }));
+  return s;
+}
+
+/** Smash : quarts, un joueur a proposé son résultat */
+function sbBracketClaim(anchor: number): TournamentPublicState {
+  const s = sbBracket(anchor);
+  const m = s.bracket?.matches[0];
+  if (m) m.claims = [{ playerId: m.playerIds[0], places: [m.playerIds[0], m.playerIds[1]], loserGames: 1, at: anchor - 15_000 }];
+  const done = s.bracket?.matches[1];
+  if (done) {
+    done.status = 'done';
+    done.places = [done.playerIds[1], done.playerIds[0]];
+    done.loserGames = 2;
+    done.scoredAt = anchor - 60_000;
+  }
+  return s;
+}
+
 const DRAW_SAUTS: Array<[string, number]> = [
   ['Titre', 0],
   ['Matchs', 6_000],
@@ -689,6 +734,13 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
   { cle: 't-tel-sb-vainqueur', surface: 'joueur', label: 'Smash vainqueur', description: 'Le joueur propose qui a gagné la poule', state: (a) => sbWave(a), you: 'p1' },
   { cle: 't-tel-sb-assis', surface: 'joueur', label: 'Smash assis', description: 'Le joueur impair ne saisit rien cette salve', state: (a) => sbWave(a), you: 'p5' },
   { cle: 't-tel-sb-elim', surface: 'joueur', label: 'Smash 3-0', description: 'Élimination : vainqueur puis 3-0, 3-1 ou 3-2', state: (a) => sbBracket(a), you: 'p1' },
+  { cle: 't-gm-lanceur', surface: 'gm', label: 'Lanceur', description: 'Trois lancements, modèles, événements passés', state: (a) => lobby(a, 0) },
+  { cle: 't-gm-mk-inscriptions', surface: 'gm', label: 'MK inscriptions', description: 'Compte à rebours, réglages de salve', state: (a) => mkLobby(a) },
+  { cle: 't-gm-mk-suite', surface: 'gm', label: 'MK fin de salve', description: 'Salve suivante, barrage ou phase finale', state: (a) => mkDone(a) },
+  { cle: 't-gm-sb-tableau', surface: 'gm', label: 'Smash tableau', description: 'Quarts, une proposition à valider', state: (a) => sbBracketClaim(a) },
+  { cle: 't-projo-mk-classement', surface: 'projo', label: 'MK fin de salve', description: 'Classement après la salve', state: (a) => mkDone(a) },
+  { cle: 't-bar-sb-tableau', surface: 'bar', label: 'Smash tableau', description: 'Tableau sur la TV du comptoir', state: (a) => sbBracketClaim(a) },
+  { cle: 't-bar-mk-vainqueur', surface: 'bar', label: 'MK vainqueur', description: 'Champion sur la TV du comptoir', state: (a) => mkWinner(a) },
   // ---- tables
   { cle: 't-table-pastilles', surface: 'table', label: 'Pastilles tournoi', description: 'Modales, partie, récap', state: (a) => midTournament(a, a - 60_000, 13) },
 ];

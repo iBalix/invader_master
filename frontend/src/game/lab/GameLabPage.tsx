@@ -42,16 +42,34 @@ const GABARITS: Array<{ cle: Gabarit; label: string; note: string }> = [
   { cle: 'projo', label: '📽 Projecteur', note: '1920×1080' },
 ];
 
+/**
+ * Lien direct vers une scène du tournoi (captures, revue) :
+ * /game-lab?tournoi=<cle>&saut=<ms>&gabarit=mini|phone|table&nu=1
+ * `nu=1` n'affiche que la scène, sans le panneau du labo.
+ */
+function lienTournoi() {
+  const p = new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+  const cle = p.get('tournoi');
+  const gabarit = p.get('gabarit');
+  return {
+    cle,
+    saut: Number(p.get('saut') ?? 0) || 0,
+    gabarit: gabarit === 'mini' || gabarit === 'phone' || gabarit === 'table' ? (gabarit as Gabarit) : null,
+    nu: p.get('nu') === '1',
+  };
+}
+
 export default function GameLabPage() {
+  const [lien] = useState(lienTournoi);
   // Deux axes de navigation : QUEL JEU (quiz/blindtest ou battle), puis QUELLE
   // SURFACE (le telephone du joueur, l'ecran de la salle, la console de
   // l'animateur). La liste a plat depassait quarante entrees : on ne trouvait
   // plus rien.
-  const [jeu, setJeu] = useState<LabJeu>('quiz');
+  const [jeu, setJeu] = useState<LabJeu>(lien.cle ? 'tournoi' : 'quiz');
   const [scenarioCle, setScenarioCle] = useState(SCENARIOS[0].cle);
   /** surface console : scenario choisi, independant des scenarios d'ecran */
   const [gmCle, setGmCle] = useState<string | null>(null);
-  const [gabarit, setGabarit] = useState<Gabarit>('mini');
+  const [gabarit, setGabarit] = useState<Gabarit>(lien.gabarit ?? 'mini');
   const [runId, setRunId] = useState(0);
   /**
    * Saut dans le temps de la sequence : regenere l'etat avec un phaseStartedAt
@@ -59,7 +77,7 @@ export default function GameLabPage() {
    * (verdict / serie / jokers) sans attendre. Tres utile pour regler un ecran
    * precis, et pour les captures.
    */
-  const [sautMs, setSautMs] = useState(0);
+  const [sautMs, setSautMs] = useState(lien.saut);
   /** regles : chapitre fige, ou null pour laisser la sequence tourner */
   const [chapitre, setChapitre] = useState<number | null>(null);
   /**
@@ -70,7 +88,7 @@ export default function GameLabPage() {
    */
   const [sonActif, setSonActif] = useState(gameAudio.enabled);
   /** tournoi : scenario choisi (ses etats ne sont pas des PublicState de quiz) */
-  const [tCle, setTCle] = useState('t-projo-lobby');
+  const [tCle, setTCle] = useState(lien.cle ?? 't-projo-lobby');
   const tScenario = tournamentScenario(tCle);
 
   // DEVERROUILLAGE AU PREMIER GESTE, n'importe lequel : choisir un scenario
@@ -128,6 +146,8 @@ export default function GameLabPage() {
   // le gabarit projecteur n'a de sens que pour les scenarios projecteur, et
   // inversement : on bascule automatiquement pour eviter les etats absurdes
   useEffect(() => {
+    // le tournoi a ses propres gabarits (et peut arriver par un lien direct)
+    if (jeu === 'tournoi') return;
     if (gmCle) {
       if (gabarit === 'projo') setGabarit('phone');
       return;
@@ -136,6 +156,20 @@ export default function GameLabPage() {
     if (scenario.surface !== 'projo' && gabarit === 'projo') setGabarit('mini');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenario.surface, gmCle]);
+
+  if (lien.nu && jeu === 'tournoi') {
+    return (
+      <div className="min-h-dvh bg-[#0a0817] text-white">
+        <TournamentLabScene
+          key={`${tCle}-${runId}`}
+          scenario={tScenario}
+          sautMs={sautMs}
+          phoneHeight={gabarit === 'phone' ? HAUTEURS.phone : HAUTEURS.mini}
+          gmPhone={gabarit !== 'table'}
+        />
+      </div>
+    );
+  }
 
   return (
     // h-dvh + overflow-hidden sur la coque : chaque colonne gere SON propre

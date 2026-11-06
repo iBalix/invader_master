@@ -85,7 +85,7 @@ export function TournamentPseudoHint({
         <button
           type="button"
           onClick={() => onUsePseudo(lookup.player.pseudo)}
-          className="shrink-0 rounded-xl border border-white/25 bg-white/10 px-3 py-2 font-display text-[15px] uppercase tracking-wider active:scale-95"
+          className="min-h-[72px] shrink-0 rounded-xl border border-white/25 bg-white/10 px-5 py-2 font-display text-[18px] uppercase tracking-wider active:scale-95"
         >
           {fill(t('table.chess.tournament.usePseudo'), { pseudo: lookup.player.pseudo })}
         </button>

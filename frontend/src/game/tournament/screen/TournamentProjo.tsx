@@ -10,7 +10,6 @@
  */
 
 import { useMemo, useRef, useState } from 'react';
-import { EtapesConnexionVue } from '../../screen/ScreenApp';
 import {
   currentRoundOf,
   fmtScore,
@@ -18,7 +17,6 @@ import {
   pseudoOf,
   rankLabel,
   roundLabel,
-  tournamentUrl,
 } from '../tournamentClient';
 import type { TournamentPublicState, TRound } from '../tournamentTypes';
 import {
@@ -35,15 +33,21 @@ import {
 import {
   EventChip,
   FeedToasts,
+  LobbyScreen,
   MatchCard,
+  PageDots,
   PodiumStep,
   ScreenProgress,
+  SectionHead,
   StandingsGrid,
+  StandingsLegend,
   TopBar,
   WaitingCard,
   matchLayout,
 } from './parts';
 import WavesProjo from './WavesProjo';
+import { ArcadeStage, Chrome, PixelConfetti } from '../arcade/kit';
+import { CHECK, CUP, PixelSprite } from '../arcade/pixel';
 import { LiveChessBoard } from '../../../tables/games/chess/components/SpectatorBoard';
 import type { ChessColor, ChessPublicState } from '../../../tables/games/chess/lib/chessTypes';
 
@@ -66,15 +70,16 @@ export default function TournamentProjo({ state, now, renderLive }: TournamentPr
   const { view, key, endsAt } = rotation;
   if (startRef.current.key !== key) startRef.current = { key, at: now };
 
+  const lobby = view.kind === 'lobby' || view.kind === 'final_podium';
   return (
-    <div className="game-bg relative flex h-full w-full flex-col overflow-hidden text-white">
+    <ArcadeStage className="flex h-full w-full flex-col overflow-hidden" floor={lobby ? 0.22 : 0.14} floorOpacity={lobby ? 0.45 : 0.25}>
       <div key={key} className="flex min-h-0 flex-1 flex-col">
         <ViewBody state={state} view={view} now={now} renderLive={renderLive} />
       </div>
       {/* le podium raconte seul la fin : pas de bandeaux par-dessus */}
       {view.kind !== 'final_podium' && view.kind !== 'final_standings' && <FeedToasts state={state} />}
       <ScreenProgress start={startRef.current.at} endsAt={endsAt} now={now} />
-    </div>
+    </ArcadeStage>
   );
 }
 
@@ -121,88 +126,8 @@ function ViewBody({
 // Inscriptions
 // ---------------------------------------------------------------------------
 
-function Countdown({ state, now }: { state: TournamentPublicState; now: number }) {
-  if (state.waitingForPlayers || !state.phaseEndsAt) {
-    return (
-      <div className="anim-suspense rounded-3xl border border-amber-300/40 bg-amber-400/10 px-10 py-6 text-center">
-        <p className="text-4xl font-black uppercase tracking-[0.2em] text-amber-200">En attente de joueurs</p>
-        <p className="mt-2 text-2xl text-amber-100/70">Il faut au moins deux inscrits pour lancer la ronde 1</p>
-      </div>
-    );
-  }
-  const reste = Math.max(0, state.phaseEndsAt - now);
-  if (reste <= 0) {
-    return (
-      <p className="anim-suspense text-6xl font-black uppercase tracking-[0.25em] text-amber-300">⏳ Tirage imminent !</p>
-    );
-  }
-  const mm = Math.floor(reste / 60_000);
-  const ss = Math.floor((reste % 60_000) / 1000);
-  const urgent = reste <= 10_000;
-  return (
-    <div className="flex flex-col items-start gap-2">
-      <span className="text-2xl font-bold uppercase tracking-[0.3em] text-white/50">Début du tournoi dans</span>
-      <span
-        key={urgent ? ss : 'normal'}
-        className={`rounded-3xl border-2 px-10 py-2 font-black tabular-nums leading-none ${
-          urgent
-            ? 'anim-pop border-rose-400/60 bg-rose-500/15 text-rose-200'
-            : 'border-cyan-400/50 bg-cyan-400/10 text-cyan-100'
-        }`}
-        style={{ fontSize: '9rem' }}
-      >
-        {mm}:{String(ss).padStart(2, '0')}
-      </span>
-    </div>
-  );
-}
-
 function LobbyView({ state, now }: { state: TournamentPublicState; now: number }) {
-  const actifs = state.players.filter((p) => p.status === 'active');
-  const dense = actifs.length > 24;
-  return (
-    <div className="flex min-h-0 flex-1 gap-12 px-14 py-12">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <EventChip state={state} big />
-        <h1 className="anim-title-glow mt-5 text-balance text-8xl font-black leading-[1.05]">{state.title}</h1>
-        <p className="mt-4 text-3xl text-white/60">{formatSummary(state)}</p>
-        <div className="mt-10">
-          <Countdown state={state} now={now} />
-        </div>
-        <div className="mt-10 flex min-h-0 flex-1 flex-col">
-          <p className="mb-4 text-3xl font-bold">
-            <span className="font-black text-cyan-300 tabular-nums">{actifs.length}</span>
-            <span className="text-white/60"> inscrit{actifs.length > 1 ? 's' : ''}</span>
-          </p>
-          {actifs.length === 0 ? (
-            <p className="text-2xl text-white/35">Sois le premier à t'inscrire !</p>
-          ) : (
-            <div className="flex min-h-0 flex-wrap content-start gap-3 overflow-hidden">
-              {actifs.map((p) => (
-                <span
-                  key={p.id}
-                  className={`anim-pop rounded-full border border-white/15 bg-white/5 font-bold ${dense ? 'px-5 py-2 text-2xl' : 'px-6 py-2.5 text-3xl'}`}
-                >
-                  {p.pseudo}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="flex w-[46rem] shrink-0 flex-col justify-center">
-        <EtapesConnexionVue
-          wifiSsid={state.config.wifiSsid}
-          wifiPassword={state.config.wifiPassword}
-          url={tournamentUrl(state.joinCode)}
-          titreQr="Scanne pour t'inscrire"
-          texteQr="Un pseudo, et tu es dans le tournoi."
-          code={state.joinCode}
-          qrSize={260}
-        />
-      </div>
-    </div>
-  );
+  return <LobbyScreen state={state} now={now} qrText="Un pseudo, et tu es dans le tournoi." summary={formatSummary(state)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,16 +142,18 @@ function DrawView({ state, round, elapsed }: { state: TournamentPublicState; rou
   const appear = (i: number): React.CSSProperties => ({
     opacity: elapsed >= revealAt(i) ? 1 : 0,
     transform: elapsed >= revealAt(i) ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.96)',
-    transition: 'opacity 380ms ease, transform 480ms cubic-bezier(0.3, 1.25, 0.4, 1)',
+    transition: 'opacity 300ms steps(4, end), transform 420ms steps(5, end)',
   });
   return (
     <div className="flex min-h-0 flex-1 flex-col px-14 py-10">
-      <div className="mb-8 flex items-end justify-between">
+      <div className="mb-8 flex items-end justify-between gap-10">
         <div>
-          <p className="text-3xl font-bold uppercase tracking-[0.35em] text-cyan-300">Tirage des matchs</p>
-          <h1 className="anim-stomp text-9xl font-black leading-none">{roundLabel(state, round.number)}</h1>
+          <p className="ia-pixel text-4xl text-ia-cyan">Tirage des matchs</p>
+          <h1 className="ia-zoom mt-4 text-[9rem] leading-none">
+            <Chrome>{roundLabel(state, round.number)}</Chrome>
+          </h1>
         </div>
-        <p className="max-w-2xl text-right text-2xl text-white/55">
+        <p className="max-w-2xl text-right text-3xl leading-snug text-ia-soft">
           {round.number === 1 ? 'Premier tour tiré au sort.' : 'Les premiers du classement s’affrontent : 1 contre 2, 3 contre 4...'}
         </p>
       </div>
@@ -247,17 +174,6 @@ function DrawView({ state, round, elapsed }: { state: TournamentPublicState; rou
 // Classement / matchs de la ronde
 // ---------------------------------------------------------------------------
 
-function PageDots({ page, pages }: { page: number; pages: number }) {
-  if (pages <= 1) return null;
-  return (
-    <div className="flex items-center gap-2">
-      {Array.from({ length: pages }, (_, i) => (
-        <span key={i} className={`h-3 rounded-full transition-all ${i === page ? 'w-10 bg-cyan-300' : 'w-3 bg-white/20'}`} />
-      ))}
-    </div>
-  );
-}
-
 function StandingsView({
   state,
   page,
@@ -274,19 +190,20 @@ function StandingsView({
   return (
     <>
       <TopBar state={state} />
-      <div className="flex min-h-0 flex-1 flex-col px-12 py-6">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-5xl font-black uppercase tracking-widest">
-            {final ? '🏆 Classement final' : 'Classement'}
-            {note && !final && <span className="ml-5 align-middle text-3xl font-bold normal-case tracking-normal text-amber-200">{note}</span>}
-          </h2>
-          <div className="flex items-center gap-6">
-            <span className="text-2xl text-white/45">points · V / N / D</span>
-            <PageDots page={page} pages={pages} />
-          </div>
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col px-12 pb-8 pt-6">
+        <SectionHead
+          icon={<PixelSprite sprite={CUP} scale={4} className="text-ia-gold" />}
+          title={final ? 'Classement final' : 'Classement'}
+          note={note && !final ? note : undefined}
+          right={
+            <div className="flex items-center gap-10">
+              <StandingsLegend />
+              <PageDots page={page} pages={pages} />
+            </div>
+          }
+        />
         {state.standings.length === 0 ? (
-          <p className="text-3xl text-white/40">Aucun joueur pour l'instant.</p>
+          <p className="ia-pixel text-2xl text-ia-muted">Aucun joueur pour l'instant.</p>
         ) : (
           <StandingsGrid state={state} page={page} perPage={STANDINGS_PER_PAGE} revealFrom />
         )}
@@ -305,16 +222,17 @@ function RoundView({ state, round, page, pages }: { state: TournamentPublicState
   return (
     <>
       <TopBar state={state} />
-      <div className="flex min-h-0 flex-1 flex-col px-12 py-6">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-5xl font-black uppercase tracking-widest">
-            {finished ? `Résultats · ${roundLabel(state, round.number)}` : `Matchs · ${roundLabel(state, round.number)}`}
-          </h2>
-          <PageDots page={page} pages={pages} />
-        </div>
+      <div className="flex min-h-0 flex-1 flex-col px-12 pb-8 pt-6">
+        <SectionHead
+          title={finished ? `Résultats · ${roundLabel(state, round.number)}` : `Matchs · ${roundLabel(state, round.number)}`}
+          right={<PageDots page={page} pages={pages} />}
+        />
         {finished && (
-          <div className="anim-pop mb-5 rounded-2xl border border-amber-300/40 bg-amber-400/10 px-8 py-4 text-3xl font-black text-amber-100">
-            ✅ Ronde {round.number} terminée · la suite arrive, restez dans le coin !
+          <div className="anim-pop ia-px ia-px--lg ia-px--gold mb-5 flex items-center gap-6 px-8 py-4">
+            <PixelSprite sprite={CHECK} scale={5} className="text-ia-gold" />
+            <p className="ia-pixel text-3xl leading-snug text-ia-gold">
+              Ronde {round.number} terminée · la suite arrive, restez dans le coin !
+            </p>
           </div>
         )}
         <div
@@ -384,9 +302,9 @@ function LiveView({
         <TopBar state={state} />
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-12">
           {pinnedMatch ? (
-            <div className="w-[70rem]">
+            <div className="w-[76rem]">
               <MatchCard state={state} m={pinnedMatch} size="lg" />
-              <p className="mt-6 text-center text-3xl text-white/50">
+              <p className="ia-pixel mt-8 text-center text-3xl text-ia-soft">
                 {pinnedMatch.status === 'done' || pinnedMatch.status === 'cancelled'
                   ? 'Match terminé.'
                   : pinnedMatch.games.length > 0
@@ -395,7 +313,7 @@ function LiveView({
               </p>
             </div>
           ) : (
-            <p className="text-4xl text-white/40">Aucune partie en cours pour l'instant.</p>
+            <p className="ia-pixel text-4xl text-ia-muted">Aucune partie en cours pour l'instant.</p>
           )}
         </div>
       </>
@@ -407,18 +325,22 @@ function LiveView({
       <TopBar
         state={state}
         right={
-          <span className="anim-suspense rounded-full border border-rose-400/60 bg-rose-500/20 px-6 py-2 text-3xl font-black uppercase tracking-[0.25em] text-rose-100">
-            ● En direct
+          <span className="ia-px ia-px--lg ia-px--red ia-glow-red inline-flex items-center gap-4 px-6 py-4">
+            <span className="ia-blink inline-block h-5 w-5 bg-ia-red" />
+            <span className="ia-pixel text-3xl text-white">En direct</span>
           </span>
         }
       />
       <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center">
-        <p className="mb-4 text-3xl font-bold text-white/60">
-          Match {m.board} · {pseudoOf(state, m.a)} contre {pseudoOf(state, m.b)}
-          {m.kind === 'floater' && <span className="ml-3 text-violet-300">(partie bonus)</span>}
+        <p className="mb-5 flex items-center gap-5 text-3xl">
+          <span className="ia-pixel text-2xl text-ia-muted">Match {m.board}</span>
+          <span className="ia-display text-5xl text-white">{pseudoOf(state, m.a)}</span>
+          <span className="ia-pixel text-2xl italic text-ia-pink" style={{ textShadow: '2px 2px 0 #33e2ff' }}>VS</span>
+          <span className="ia-display text-5xl text-white">{pseudoOf(state, m.b)}</span>
+          {m.kind === 'floater' && <span className="ia-pixel text-xl text-ia-violet">partie bonus</span>}
           {state.config.match.games > 1 && (
-            <span className="ml-3 text-cyan-300">
-              score du match {fmtScore(m.score.a)}-{fmtScore(m.score.b)}
+            <span className="ia-pixel text-2xl text-ia-cyan">
+              match {fmtScore(m.score.a)}-{fmtScore(m.score.b)}
             </span>
           )}
         </p>
@@ -437,10 +359,10 @@ function DefaultLiveChess({ candidate, state }: { candidate: LiveCandidate; stat
     const s = seat ? ranks.get(seat.pseudo.toLowerCase()) : undefined;
     if (!s) return null;
     return (
-      <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-center">
-        <p className="text-4xl font-black tabular-nums text-cyan-300">{fmtScore(s.points)} pts</p>
+      <div className="ia-px ia-px--deep px-4 py-3 text-center">
+        <p className="ia-display text-5xl tabular-nums text-ia-cyan">{fmtScore(s.points)} pts</p>
         {state.standings.some((x) => x.played > 0) && (
-          <p className="text-xl font-bold text-white/55">{rankLabel(s.rank)} au classement</p>
+          <p className="ia-pixel mt-1 text-lg text-ia-soft">{rankLabel(s.rank)} au classement</p>
         )}
       </div>
     );
@@ -453,7 +375,7 @@ function DefaultLiveChess({ candidate, state }: { candidate: LiveCandidate; stat
         panelWidth={330}
         onState={setChess}
         panelExtra={extra}
-        fallback={<p className="text-3xl text-white/40">Chargement de la partie...</p>}
+        fallback={<p className="ia-pixel ia-blink text-3xl text-ia-muted">Chargement de la partie...</p>}
       />
       {chess?.result && <ResultBanner chess={chess} />}
     </div>
@@ -478,9 +400,9 @@ export function ResultBanner({ chess }: { chess: Pick<ChessPublicState, 'result'
   const winner = r.winner ? chess.seats[r.winner]?.pseudo ?? '?' : null;
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="anim-pop rounded-3xl border-2 border-emerald-300/60 bg-black/80 px-14 py-8 text-center shadow-2xl backdrop-blur">
-        <p className="text-7xl font-black text-emerald-200">{winner ? `${winner} gagne !` : 'Partie nulle'}</p>
-        <p className="mt-2 text-3xl font-bold text-white/60">{REASON_LABELS[r.reason] ?? r.reason}</p>
+      <div className={`ia-zoom ia-px ia-px--lg ${winner ? 'ia-px--mint ia-glow-mint' : 'ia-px--amber'} px-14 py-9 text-center`}>
+        <p className={`ia-display text-[7rem] leading-none ${winner ? 'text-ia-mint' : 'text-ia-amber'}`}>{winner ? `${winner} gagne !` : 'Partie nulle'}</p>
+        <p className="ia-pixel mt-4 text-3xl text-ia-soft">{REASON_LABELS[r.reason] ?? r.reason}</p>
       </div>
     </div>
   );
@@ -500,32 +422,19 @@ function FinalPodium({ state, elapsed }: { state: TournamentPublicState; elapsed
   const winnerText = state.config.texts.winner.replace(/#winner#/g, first?.pseudo ?? '');
   const premier = elapsed >= PODIUM_T1;
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center px-12">
-      {premier && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          {Array.from({ length: 28 }).map((_, i) => (
-            <span
-              key={i}
-              className="absolute text-4xl"
-              style={{
-                left: `${(i * 37) % 100}%`,
-                animation: `game-confetti-fall ${5 + (i % 5)}s linear ${(i % 10) * 0.5}s infinite`,
-              }}
-            >
-              {['🎉', '✨', '🏆', '♞'][i % 4]}
-            </span>
-          ))}
-        </div>
-      )}
+    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-end px-12 pb-0 pt-10">
+      {premier && <PixelConfetti count={40} size={16} />}
       <EventChip state={state} big />
-      <h1 className="mt-4 text-center text-7xl font-black uppercase tracking-widest">Classement final</h1>
+      <h1 className="mt-5 text-center text-7xl">
+        <Chrome>Classement final</Chrome>
+      </h1>
       <p
-        className="mt-4 min-h-[5rem] text-balance text-center text-5xl font-black text-amber-200"
-        style={{ opacity: premier ? 1 : 0, transition: 'opacity 600ms ease' }}
+        className="mt-4 min-h-[4.5rem] text-balance text-center text-6xl"
+        style={{ opacity: premier ? 1 : 0, transition: 'opacity 500ms steps(5, end)' }}
       >
-        {winnerText}
+        <Chrome gold>{winnerText}</Chrome>
       </p>
-      <div className="mt-10 flex items-end gap-10">
+      <div className="mt-4 flex items-end gap-12">
         <PodiumStep s={second} place={2} visible={elapsed >= PODIUM_T2} />
         <PodiumStep s={first} place={1} visible={premier} />
         <PodiumStep s={third} place={3} visible={elapsed >= PODIUM_T3} />
@@ -533,4 +442,3 @@ function FinalPodium({ state, elapsed }: { state: TournamentPublicState; elapsed
     </div>
   );
 }
-

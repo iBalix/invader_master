@@ -10,7 +10,7 @@
  * 375x667. Le corps est pur (TournamentPlayerScreen) pour le laboratoire.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSansZoom } from '../../../hooks/useSansZoom';
 import {
@@ -40,6 +40,8 @@ import {
 } from '../tournamentClient';
 import type { TClaim, TMatch, TournamentPublicState, TournamentYou } from '../tournamentTypes';
 import { useServerNow, useTournamentSession } from '../useTournamentSession';
+import { ArcadeStage, Chrome, Crown, GameGlyph, Invader, Pawn, Trophy, chromeSize, invaderTone, mmss, rankClass, rankText } from '../arcade/kit';
+import { CHECK, CROSS, CUP, CURSOR, DOOR, HOURGLASS, LIST, PixelSprite, STAR, type Sprite } from '../arcade/pixel';
 import '../../game.css';
 
 export default function TournamentPlayerApp() {
@@ -172,7 +174,8 @@ export default function TournamentPlayerApp() {
     return (
       <Shell>
         <Center>
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/15 border-t-cyan-400" />
+          <Invader seed={0} scale={6} animate className="text-ia-cyan" />
+          <p className="ia-pixel ia-blink mt-5 text-sm text-ia-soft">Chargement</p>
         </Center>
       </Shell>
     );
@@ -182,8 +185,11 @@ export default function TournamentPlayerApp() {
       <Shell>
         <Center>
           <div className="anim-fade-up text-center">
-            <h1 className="mb-3 text-3xl font-black">INVADER</h1>
-            <p className="text-white/60">
+            <Invader seed={1} scale={6} animate className="mx-auto text-ia-pink" />
+            <h1 className="mb-4 mt-6 text-5xl">
+              <Chrome>Invader</Chrome>
+            </h1>
+            <p className="text-balance text-base text-ia-soft">
               {loadError ? 'Tournoi introuvable. Rescanne le QR des écrans du bar.' : 'Aucun tournoi en cours pour le moment.'}
             </p>
           </div>
@@ -219,8 +225,17 @@ export default function TournamentPlayerApp() {
 // Coque
 // ---------------------------------------------------------------------------
 
+/** fond du téléphone (exporté pour le cadre téléphone du labo) */
+export function PlayerStage({ children, className = 'h-dvh' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <ArcadeStage className={`flex flex-col overflow-hidden ${className}`} floor={0.16} floorOpacity={0.3} cell={34} scan={0.06}>
+      {children}
+    </ArcadeStage>
+  );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="game-bg relative flex h-dvh flex-col overflow-hidden text-white">{children}</div>;
+  return <PlayerStage>{children}</PlayerStage>;
 }
 
 function Center({ children }: { children: React.ReactNode }) {
@@ -271,7 +286,7 @@ export function TournamentPlayerScreen(props: TournamentPlayerScreenProps) {
         {tab === 'classement' && <StandingsTab state={state} playerId={me.id} />}
         {tab === 'matchs' && <MatchesTab state={state} playerId={me.id} />}
       </div>
-      <TabBar tab={tab} onTab={setTab} />
+      <TabBar tab={tab} onTab={setTab} game={state.game} />
     </div>
   );
 }
@@ -292,6 +307,7 @@ function phaseChip(state: TournamentPublicState): string {
   return round ? roundLabel(state, round.number) : '';
 }
 
+/** HUD de jeu : tournoi et phase, joueur, points, rang */
 function StatusBar({
   state,
   playerId,
@@ -309,24 +325,23 @@ function StatusBar({
   const ranked = hasResults(state);
   const others = (phones ?? []).filter((p) => p.pseudo !== pseudo);
   return (
-    <div className="shrink-0 border-b border-white/10 bg-black/30 px-4 pb-2.5 pt-3">
+    <div className="shrink-0 border-b-2 border-ia-line bg-ia-night/80 px-4 pb-2.5 pt-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
-          {state.game === 'chess' ? '♞' : '🏆'} {state.title}
+        <p className="flex min-w-0 items-center gap-2">
+          <GameGlyph game={state.game} scale={2} />
+          <span className="ia-pixel truncate text-xs text-ia-soft">{state.title}</span>
         </p>
-        <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-bold text-white/70">
-          {phaseChip(state)}
-        </span>
+        <span className="ia-pixel ia-clip ia-clip--sm shrink-0 bg-ia-line px-2 py-1 text-[11px] text-white">{phaseChip(state)}</span>
       </div>
       {others.length > 0 && onPickPhone && (
-        <div className="mt-2 flex gap-2 overflow-x-auto">
+        <div className="mt-2 flex gap-1.5 overflow-x-auto">
           {phones?.map((p) => (
             <button
               key={p.playerToken}
               type="button"
               onClick={() => onPickPhone(p.playerToken)}
-              className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
-                p.pseudo === pseudo ? 'bg-cyan-400/20 text-cyan-200' : 'bg-white/10 text-white/60'
+              className={`ia-clip ia-clip--sm min-h-[36px] shrink-0 px-3 text-sm font-bold ${
+                p.pseudo === pseudo ? 'bg-ia-cyan text-ia-night' : 'bg-ia-panel text-ia-soft'
               }`}
             >
               {p.pseudo}
@@ -334,18 +349,26 @@ function StatusBar({
           ))}
         </div>
       )}
-      <div className="mt-1.5 flex items-center justify-between gap-3">
-        <p className="min-w-0 truncate text-xl font-black">{pseudo}</p>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p className="flex min-w-0 items-center gap-2.5">
+          <Invader seed={playerId} scale={3} className={invaderTone(playerId)} />
+          {/* police à casse conservée : c'est le pseudo exact tapé sur les tables */}
+          <span className="truncate text-2xl font-black text-white">{pseudo}</span>
+        </p>
         {s && state.phase !== 'registration' && (
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="rounded-full border border-cyan-400/40 bg-cyan-400/10 px-2.5 py-0.5 text-sm font-black tabular-nums text-cyan-200">
-              {fmtPoints(s.points)}
-            </span>
+          <div className="flex shrink-0 items-end gap-3">
+            <HudCounter label="Pts" value={fmtScore(s.points)} tone="text-ia-cyan" />
             {ranked && (
-              <span className="rounded-full border border-amber-300/40 bg-amber-300/10 px-2.5 py-0.5 text-sm font-black text-amber-200">
-                {rankLabel(s.rank)}
-                <span className="font-bold text-amber-100/60">/{state.standings.length}</span>
-              </span>
+              <HudCounter
+                label="Rang"
+                value={
+                  <>
+                    {rankText(s.rank)}
+                    <span className="text-lg text-ia-muted">/{state.standings.length}</span>
+                  </>
+                }
+                tone={rankClass(s.rank)}
+              />
             )}
           </div>
         )}
@@ -354,27 +377,38 @@ function StatusBar({
   );
 }
 
-function TabBar({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
-  const items: Array<{ key: Tab; label: string; icon: string }> = [
-    { key: 'moi', label: 'Mon tournoi', icon: '♞' },
-    { key: 'classement', label: 'Classement', icon: '🏆' },
-    { key: 'matchs', label: 'Mes matchs', icon: '📋' },
+function HudCounter({ label, value, tone }: { label: string; value: React.ReactNode; tone: string }) {
+  return (
+    <span className="flex flex-col items-end leading-none">
+      <span className="ia-pixel text-[10px] text-ia-muted">{label}</span>
+      <span className={`ia-display mt-0.5 text-3xl tabular-nums ${tone}`}>{value}</span>
+    </span>
+  );
+}
+
+function TabBar({ tab, onTab, game }: { tab: Tab; onTab: (t: Tab) => void; game: string }) {
+  const items: Array<{ key: Tab; label: string; icon: React.ReactNode }> = [
+    { key: 'moi', label: 'Mon tournoi', icon: <GameGlyph game={game} scale={2} /> },
+    { key: 'classement', label: 'Classement', icon: <PixelSprite sprite={CUP} scale={2} /> },
+    { key: 'matchs', label: 'Mes matchs', icon: <PixelSprite sprite={LIST} scale={2} /> },
   ];
   return (
-    <div className="grid shrink-0 grid-cols-3 border-t border-white/10 bg-black/40">
-      {items.map((it) => (
-        <button
-          key={it.key}
-          type="button"
-          onClick={() => onTab(it.key)}
-          className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 text-xs font-bold ${
-            tab === it.key ? 'text-cyan-300' : 'text-white/45'
-          }`}
-        >
-          <span className="text-lg leading-none">{it.icon}</span>
-          {it.label}
-        </button>
-      ))}
+    <div className="grid shrink-0 grid-cols-3 border-t-2 border-ia-line bg-ia-night/90 pb-[env(safe-area-inset-bottom)]">
+      {items.map((it) => {
+        const on = tab === it.key;
+        return (
+          <button
+            key={it.key}
+            type="button"
+            onClick={() => onTab(it.key)}
+            className={`relative flex min-h-[62px] flex-col items-center justify-center gap-1.5 ${on ? 'text-white' : 'text-ia-muted'}`}
+          >
+            {on && <span className="absolute left-1/2 top-0 h-1 w-14 -translate-x-1/2 bg-ia-pink" />}
+            <span className={on ? 'text-ia-pink' : ''}>{it.icon}</span>
+            <span className="ia-pixel text-[10px]">{it.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -387,19 +421,15 @@ function MiniCountdown({ state }: { state: TournamentPublicState }) {
   const now = useServerNow(500);
   if (state.phase !== 'registration') return null;
   if (state.waitingForPlayers || !state.phaseEndsAt) {
-    return <p className="mt-3 text-sm font-bold text-amber-200">En attente d'autres joueurs...</p>;
+    return <p className="ia-pixel ia-blink mt-4 text-xs text-ia-gold">En attente d'autres joueurs...</p>;
   }
   const reste = Math.max(0, state.phaseEndsAt - now);
-  if (reste <= 0) return <p className="anim-suspense mt-3 font-black uppercase tracking-widest text-amber-300">⏳ Tirage imminent !</p>;
-  const mm = Math.floor(reste / 60_000);
-  const ss = Math.floor((reste % 60_000) / 1000);
+  if (reste <= 0) return <p className="ia-pixel ia-blink mt-4 text-sm text-ia-gold">Tirage imminent !</p>;
   return (
-    <p className="mt-3 text-white/60">
-      Début dans{' '}
-      <span className="rounded-lg border border-cyan-400/40 bg-cyan-400/10 px-2.5 py-0.5 font-black tabular-nums text-cyan-200">
-        {mm}:{String(ss).padStart(2, '0')}
-      </span>
-    </p>
+    <div className="ia-px ia-px--cyan mt-4 inline-flex items-center gap-3 px-4 py-2">
+      <span className="ia-pixel text-[11px] text-ia-cyan">Début dans</span>
+      <span className="ia-pixel text-2xl tabular-nums text-white">{mmss(reste)}</span>
+    </div>
   );
 }
 
@@ -413,27 +443,28 @@ function JoinScreen({ state, busy, error, notice, onJoin }: TournamentPlayerScre
   };
   return (
     <Center>
-      <div className="anim-fade-up w-full max-w-sm text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-300">
-          {state.game === 'chess' ? '♞' : '🏆'} Tournoi · {state.formatLabel}
+      <div className="anim-fade-up flex w-full max-w-sm flex-col items-center text-center">
+        <p className="flex items-center gap-2">
+          <GameGlyph game={state.game} scale={2} />
+          <span className="ia-pixel text-[11px] text-ia-cyan">
+            Tournoi · {state.formatLabel}
+          </span>
         </p>
-        <h1 className="anim-title-glow mb-1 mt-1 text-balance text-3xl font-black">{state.title}</h1>
-        <p className="text-sm text-white/50">
+        <h1 className={`mt-3 text-balance leading-[1.12] ${chromeSize(state.title, ['text-4xl', 'text-3xl', 'text-2xl', 'text-xl'])}`}>
+          <Chrome>{state.title}</Chrome>
+        </h1>
+        <p className="ia-pixel mt-3 text-[11px] text-ia-soft">
           {state.playerCount} inscrit{state.playerCount > 1 ? 's' : ''} · {state.gameLabel}
         </p>
         <MiniCountdown state={state} />
-        {notice && (
-          <p className="anim-pop mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-200">
-            {notice}
-          </p>
-        )}
+        {notice && <p className="anim-pop ia-px ia-px--amber mt-4 w-full px-4 py-3 text-sm font-semibold text-ia-gold">{notice}</p>}
         {closed ? (
-          <p className="mt-6 rounded-xl border border-white/15 bg-white/5 px-4 py-4 text-white/70">
+          <p className="ia-px ia-px--plain mt-6 w-full px-4 py-4 text-ia-soft">
             {state.phase === 'final' ? 'Le tournoi est terminé.' : 'Les inscriptions sont fermées.'}
           </p>
         ) : (
-          <>
-            <label htmlFor="pseudo-tournoi" className="mb-2 mt-6 block text-left text-sm font-semibold text-white/70">
+          <div className="mt-6 w-full text-left">
+            <label htmlFor="pseudo-tournoi" className="ia-pixel mb-2 block text-xs text-ia-pink">
               Ton pseudo
             </label>
             <input
@@ -444,27 +475,20 @@ function JoinScreen({ state, busy, error, notice, onJoin }: TournamentPlayerScre
               maxLength={16}
               autoComplete="off"
               autoCapitalize="words"
-              className="mb-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3.5 text-center text-lg font-bold text-white placeholder-white/30 outline-none focus:border-cyan-400"
+              className="ia-input ia-clip mb-2 min-h-[60px] text-center text-2xl font-black"
               placeholder="PSEUDO"
             />
-            <p className="mb-3 text-left text-xs text-white/45">
+            <p className="mb-4 text-xs leading-snug text-ia-soft">
               {state.format === 'waves'
                 ? 'Plusieurs personnes peuvent s’inscrire depuis ce téléphone.'
                 : 'Retiens-le bien : c’est ce pseudo que tu taperas sur la table d’échecs. Tu pourras aussi inscrire quelqu’un d’autre ensuite.'}
             </p>
-            {error && <p className="anim-shake mb-3 text-sm font-semibold text-rose-400">{error}</p>}
-            <button
-              type="button"
-              onClick={submit}
-              disabled={busy || !pseudo.trim()}
-              className="anim-glow w-full rounded-xl bg-gradient-to-r from-cyan-400 to-violet-500 px-4 py-4 text-lg font-black uppercase tracking-wider text-[#0a0a14] disabled:opacity-40"
-            >
+            {error && <p className="anim-shake mb-3 text-center text-sm font-bold text-ia-red">{error}</p>}
+            <button type="button" onClick={submit} disabled={busy || !pseudo.trim()} className="ia-btn ia-btn--pink ia-btn--xl ia-pixel w-full text-lg">
               {busy ? '...' : started ? 'Rejoindre le tournoi' : 'Participer'}
             </button>
-            {started && (
-              <p className="mt-3 text-xs text-white/45">Le tournoi a commencé : tu joues dès la prochaine ronde.</p>
-            )}
-          </>
+            {started && <p className="mt-3 text-center text-xs text-ia-soft">Le tournoi a commencé : tu joues dès la prochaine ronde.</p>}
+          </div>
         )}
       </div>
     </Center>
@@ -478,42 +502,49 @@ function JoinScreen({ state, busy, error, notice, onJoin }: TournamentPlayerScre
 function ColorBadge({ color }: { color: 'w' | 'b' | null }) {
   if (!color) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 px-2.5 py-0.5 text-xs font-bold">
-      <span className="h-3 w-3 rounded-full border border-white/50" style={{ background: color === 'w' ? '#F5F2FF' : '#14101B' }} />
-      {color === 'w' ? 'Blancs' : 'Noirs'}
+    <span className={`ia-clip ia-clip--sm inline-flex items-center gap-2 px-2.5 py-1 ${color === 'w' ? 'bg-white text-ia-night' : 'bg-ia-night text-white ring-2 ring-inset ring-ia-soft'}`}>
+      <Pawn color={color} scale={2} />
+      <span className="ia-pixel text-[11px]">{color === 'w' ? 'Blancs' : 'Noirs'}</span>
     </span>
   );
 }
 
 function StatsRow({ state, playerId }: { state: TournamentPublicState; playerId: string }) {
   const s = standingOf(state, playerId);
-  if (!s || state.phase === 'registration') return null;
-  const cell = 'flex flex-1 flex-col items-center rounded-xl border border-white/10 bg-white/5 py-2';
+  // en salves, le HUD du haut suffit (points, rang) : la place va à la saisie
+  if (!s || state.phase === 'registration' || state.format === 'waves') return null;
+  const ranked = hasResults(state);
+  const cell = 'ia-px ia-px--deep flex flex-1 flex-col items-center justify-center py-2';
   return (
     <div className="mt-3 flex shrink-0 gap-2">
       <div className={cell}>
-        <span className="text-xl font-black tabular-nums text-cyan-300">{fmtScore(s.points)}</span>
-        <span className="text-[11px] uppercase tracking-wider text-white/45">points</span>
+        <span className="ia-display text-3xl tabular-nums text-ia-cyan">{fmtScore(s.points)}</span>
+        <span className="ia-pixel text-[10px] text-ia-muted">points</span>
       </div>
       <div className={cell}>
-        <span className="text-xl font-black text-amber-200">
-          {hasResults(state) ? rankLabel(s.rank) : '-'}
-          {hasResults(state) && s.tied ? '=' : ''}
+        <span className={`ia-display text-3xl ${rankClass(s.rank, ranked)}`}>
+          {ranked ? rankText(s.rank) : '-'}
+          {ranked && s.tied ? '=' : ''}
         </span>
-        <span className="text-[11px] uppercase tracking-wider text-white/45">sur {state.standings.length}</span>
+        <span className="ia-pixel text-[10px] text-ia-muted">sur {state.standings.length}</span>
       </div>
       <div className={cell}>
-        <span className="text-xl font-black tabular-nums">
+        <span className="ia-display text-3xl tabular-nums text-white">
           {s.wins}
-          <span className="text-white/35">/</span>
+          <span className="text-ia-muted">-</span>
           {s.draws}
-          <span className="text-white/35">/</span>
+          <span className="text-ia-muted">-</span>
           {s.losses}
         </span>
-        <span className="text-[11px] uppercase tracking-wider text-white/45">V / N / D</span>
+        <span className="ia-pixel text-[10px] text-ia-muted">V-N-D</span>
       </div>
     </div>
   );
+}
+
+/** pseudo exact à taper sur la table, casse conservée */
+function ExactPseudo({ children }: { children: React.ReactNode }) {
+  return <b className="ia-clip ia-clip--sm mx-0.5 inline-block bg-ia-cyan px-1.5 font-mono text-ia-night">{children}</b>;
 }
 
 function MatchInstructions({ state, m, playerId }: { state: TournamentPublicState; m: TMatch; playerId: string }) {
@@ -526,41 +557,42 @@ function MatchInstructions({ state, m, playerId }: { state: TournamentPublicStat
   const myScore = m.a === playerId ? m.score.a : m.score.b;
   const oppScore = m.a === playerId ? m.score.b : m.score.a;
   return (
-    <div className="anim-pop rounded-2xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
+    <div className="anim-pop ia-px ia-px--cyan ia-glow-cyan px-4 py-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="ia-pixel text-[11px] text-ia-cyan">
           {roundLabel(state, m.round)} · Match {m.board}
         </p>
         <ColorBadge color={color} />
       </div>
-      <p className="mt-2 text-sm text-white/60">{iCountForNothing ? 'Partie bonus contre' : 'Ton adversaire'}</p>
-      <p className="truncate text-3xl font-black">{oppPseudo}</p>
+      <p className="ia-pixel mt-3 text-[11px] text-ia-soft">{iCountForNothing ? 'Partie bonus contre' : 'Ton adversaire'}</p>
+      <p className="flex min-w-0 items-center gap-3">
+        <span className="ia-pixel text-lg italic text-ia-pink" style={{ textShadow: '2px 2px 0 #33e2ff' }}>
+          VS
+        </span>
+        <span className="ia-display truncate text-5xl text-white">{oppPseudo}</span>
+      </p>
       {multi && m.games.length > 0 && (
-        <p className="mt-1 text-sm font-bold text-cyan-200">
+        <p className="ia-pixel mt-1 text-xs text-ia-cyan">
           Score du match : {fmtScore(myScore)} - {fmtScore(oppScore)}
         </p>
       )}
       {m.status === 'playing' ? (
-        <p className="mt-3 text-sm font-bold text-emerald-300">♟ Partie en cours, bonne chance !</p>
+        <p className="ia-pixel mt-3 flex items-center gap-2 text-xs text-ia-mint">
+          <span className="ia-blink inline-block h-2 w-2 bg-ia-mint" /> Partie en cours, bonne chance !
+        </p>
       ) : color === 'w' ? (
-        <p className="mt-3 text-sm text-white/80">
-          Tu as les blancs : <b>crée la partie</b> sur une table d'échecs avec ton pseudo exact{' '}
-          <b className="text-cyan-200">{me}</b>. {oppPseudo} la rejoindra.
+        <p className="mt-3 text-sm leading-relaxed text-white">
+          Tu as les blancs : <b>crée la partie</b> sur une table d'échecs avec ton pseudo exact <ExactPseudo>{me}</ExactPseudo>. {oppPseudo} la rejoindra.
         </p>
       ) : (
-        <p className="mt-3 text-sm text-white/80">
-          {oppPseudo} a les blancs et crée la partie : <b>rejoins-la</b> depuis le lobby des échecs avec ton pseudo exact{' '}
-          <b className="text-cyan-200">{me}</b>.
+        <p className="mt-3 text-sm leading-relaxed text-white">
+          {oppPseudo} a les blancs et crée la partie : <b>rejoins-la</b> depuis le lobby des échecs avec ton pseudo exact <ExactPseudo>{me}</ExactPseudo>.
         </p>
       )}
       {iCountForNothing && (
-        <p className="mt-2 text-xs text-violet-200">
-          {oppPseudo} était exempt : cette partie ne compte que pour lui, merci de jouer le jeu !
-        </p>
+        <p className="mt-2 text-xs text-ia-violet">{oppPseudo} était exempt : cette partie ne compte que pour lui, merci de jouer le jeu !</p>
       )}
-      {m.kind === 'floater' && m.a === playerId && (
-        <p className="mt-2 text-xs text-violet-200">Partie bonus : elle compte pour toi, pas pour {oppPseudo}.</p>
-      )}
+      {m.kind === 'floater' && m.a === playerId && <p className="mt-2 text-xs text-ia-violet">Partie bonus : elle compte pour toi, pas pour {oppPseudo}.</p>}
     </div>
   );
 }
@@ -573,30 +605,24 @@ function ResultCard({ state, m, playerId }: { state: TournamentPublicState; m: T
   const total = round?.matches.length ?? 0;
   const look =
     out === 'win'
-      ? { emoji: '🏆', title: 'Victoire !', tone: 'border-emerald-300/40 bg-emerald-400/10 text-emerald-200' }
+      ? { icon: <Crown scale={4} />, title: 'Victoire !', tone: 'ia-px--gold ia-glow-gold', text: 'text-ia-gold' }
       : out === 'draw'
-        ? { emoji: '🤝', title: 'Match nul', tone: 'border-amber-300/40 bg-amber-300/10 text-amber-200' }
+        ? { icon: <PixelSprite sprite={STAR} scale={4} className="text-ia-amber" />, title: 'Match nul', tone: 'ia-px--amber', text: 'text-ia-amber' }
         : out === 'loss'
-          ? { emoji: '💪', title: 'Défaite', tone: 'border-white/15 bg-white/5 text-white' }
+          ? { icon: <Invader seed={playerId} scale={4} className="text-ia-soft" />, title: 'Défaite', tone: 'ia-px--plain', text: 'text-white' }
           : out === 'bye'
-            ? { emoji: '🎟️', title: 'Exempt', tone: 'border-amber-300/40 bg-amber-300/10 text-amber-200' }
-            : { emoji: '➖', title: 'Match annulé', tone: 'border-white/15 bg-white/5 text-white/70' };
+            ? { icon: <PixelSprite sprite={HOURGLASS} scale={4} className="text-ia-amber" />, title: 'Exempt', tone: 'ia-px--amber', text: 'text-ia-amber' }
+            : { icon: <PixelSprite sprite={CROSS} scale={4} className="text-ia-muted" />, title: 'Match annulé', tone: 'ia-px--plain', text: 'text-ia-soft' };
   const countsForMe = m.kind !== 'floater' || m.a === playerId;
   return (
-    <div className={`anim-pop rounded-2xl border px-4 py-4 text-center ${look.tone}`}>
-      <div className="text-4xl">{look.emoji}</div>
-      <p className="mt-1 text-2xl font-black">{look.title}</p>
-      {m.b && (
-        <p className="text-sm text-white/60">
-          {m.kind === 'bye' ? '' : `contre ${pseudoOf(state, opponentOf(m, playerId))}`}
-        </p>
-      )}
-      <p className="mt-1 text-lg font-black tabular-nums">
-        {countsForMe ? `+${fmtPoints(pts)}` : 'partie bonus, hors classement'}
-      </p>
+    <div className={`anim-pop ia-px ${look.tone} flex flex-col items-center px-4 py-5 text-center`}>
+      {look.icon}
+      <p className={`ia-display mt-3 text-5xl ${look.text}`}>{look.title}</p>
+      {m.b && m.kind !== 'bye' && <p className="mt-1 text-sm text-ia-soft">contre {pseudoOf(state, opponentOf(m, playerId))}</p>}
+      <p className="ia-pixel mt-3 text-sm text-ia-cyan">{countsForMe ? `+${fmtPoints(pts)}` : 'partie bonus, hors classement'}</p>
       {state.phase === 'round' && (
-        <p className="mt-2 text-xs text-white/50">
-          En attente de la fin de la ronde · {done}/{total} matchs terminés
+        <p className="ia-pixel mt-3 text-[10px] leading-relaxed text-ia-muted">
+          Fin de ronde en attente · {done}/{total} matchs terminés
         </p>
       )}
     </div>
@@ -616,14 +642,14 @@ function ConfirmSheet({
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/80 px-4 pb-6">
-      <div className="anim-fade-up w-full max-w-sm rounded-2xl border border-white/15 bg-[#141033] p-5 text-center">
-        <div className="mb-2 text-4xl">⚠️</div>
-        <p className="text-balance text-base text-white/85">{text}</p>
-        <div className="mt-5 flex gap-3">
-          <button type="button" onClick={onCancel} className="min-h-[52px] flex-1 rounded-xl bg-white/10 px-4 font-bold active:bg-white/20">
+      <div className="anim-fade-up ia-px ia-px--red w-full max-w-sm px-5 py-5 text-center">
+        <p className="ia-pixel text-sm text-ia-red">Attention</p>
+        <p className="mt-3 text-balance text-base text-white">{text}</p>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <button type="button" onClick={onCancel} className="ia-btn ia-btn--ghost ia-btn--lg">
             Rester
           </button>
-          <button type="button" onClick={onConfirm} className="min-h-[52px] flex-1 rounded-xl bg-rose-500/80 px-4 font-bold active:bg-rose-500">
+          <button type="button" onClick={onConfirm} className="ia-btn ia-btn--red ia-btn--lg">
             {confirmLabel}
           </button>
         </div>
@@ -654,17 +680,12 @@ function MeTab({
 
   let body: React.ReactNode;
   if (status === 'excluded') {
-    body = <Message emoji="🚫" title="Tu as été retiré du tournoi" sub="L'animateur t'a retiré. Va le voir si c'est une erreur." />;
+    body = <Message icon={<PixelSprite sprite={CROSS} scale={5} className="text-ia-red" />} title="Tu as été retiré du tournoi" sub="L'animateur t'a retiré. Va le voir si c'est une erreur." />;
   } else if (status === 'left') {
     body = (
       <div className="text-center">
-        <Message emoji="🚪" title="Tu as quitté le tournoi" sub="Tu n'es plus apparié. Tes points restent au classement." />
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void onRejoin()}
-          className="mt-5 min-h-[52px] w-full rounded-xl bg-gradient-to-r from-cyan-400 to-violet-500 px-4 font-black uppercase tracking-wider text-[#0a0a14] disabled:opacity-40"
-        >
+        <Message icon={<PixelSprite sprite={DOOR} scale={5} className="text-ia-soft" />} title="Tu as quitté le tournoi" sub="Tu n'es plus apparié. Tes points restent au classement." />
+        <button type="button" disabled={busy} onClick={() => void onRejoin()} className="ia-btn ia-btn--pink ia-btn--xl ia-pixel mt-5 w-full text-base">
           Revenir dans le tournoi
         </button>
       </div>
@@ -673,7 +694,7 @@ function MeTab({
     body = (
       <div className="text-center">
         <Message
-          emoji="✅"
+          icon={<PixelSprite sprite={CHECK} scale={5} className="text-ia-mint" />}
           title="Tu es inscrit !"
           sub={
             state.format === 'waves'
@@ -682,14 +703,14 @@ function MeTab({
           }
         />
         <MiniCountdown state={state} />
-        <p className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60">{formatSummary(state)}</p>
+        <p className="ia-px ia-px--deep mt-4 px-3 py-2 text-xs text-ia-soft">{formatSummary(state)}</p>
       </div>
     );
   } else if (state.phase === 'final') {
     body = (
       <div className="text-center">
         <Message
-          emoji="🏁"
+          icon={<Trophy scale={3} />}
           title={s ? `Tu termines ${rankLabel(s.rank)} sur ${state.standings.length}` : 'Tournoi terminé'}
           sub={s ? `${fmtPoints(s.points)} · merci d'avoir joué !` : "Merci d'avoir joué !"}
         />
@@ -701,7 +722,7 @@ function MeTab({
   } else if (waiting) {
     body = (
       <Message
-        emoji="⏳"
+        icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-violet" />}
         title="Tu es exempt pour l'instant"
         sub="Dès qu'un match de la ronde se termine, un de ses joueurs t'est attribué. Reste dans le coin !"
       />
@@ -713,7 +734,7 @@ function MeTab({
   } else {
     body = (
       <Message
-        emoji="🕐"
+        icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-cyan" />}
         title={`Tu joues dès la ${round ? `ronde ${round.number + 1}` : 'prochaine ronde'}`}
         sub="Tu es arrivé en cours de ronde : tu seras apparié au prochain tirage."
       />
@@ -727,11 +748,14 @@ function MeTab({
         ? 'Ta partie en cours comptera, puis tu ne seras plus apparié.'
         : 'Tu ne seras plus apparié aux prochaines rondes. Tes points restent au classement.';
 
+  const canAdd = status === 'active' && state.phase !== 'final' && state.phase !== 'bracket' && onAdd && (state.phase === 'registration' || state.config.lateJoin) && !adding;
+  const canLeave = status === 'active' && state.phase !== 'final';
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col justify-center">{body}</div>
       <StatsRow state={state} playerId={playerId} />
-      {error && <p className="mt-2 text-center text-sm font-semibold text-rose-400">{error}</p>}
+      {error && <p className="mt-2 text-center text-sm font-bold text-ia-red">{error}</p>}
       {adding && onAdd && (
         <div className="mt-2 flex gap-2">
           <input
@@ -739,7 +763,7 @@ function MeTab({
             onChange={(e) => setExtra(e.target.value)}
             maxLength={16}
             placeholder="Autre pseudo"
-            className="min-h-[48px] flex-1 rounded-xl border border-white/15 bg-white/5 px-3 font-bold text-white outline-none"
+            className="ia-input ia-clip min-h-[52px] flex-1 font-bold"
           />
           <button
             type="button"
@@ -751,25 +775,25 @@ function MeTab({
               setAdding(false);
               void onAdd(name);
             }}
-            className="min-h-[48px] rounded-xl bg-cyan-400 px-3 font-black text-[#0a0a14] disabled:opacity-40"
+            className="ia-btn ia-btn--cyan min-h-[52px] px-5"
           >
             OK
           </button>
         </div>
       )}
-      {status === 'active' && state.phase !== 'final' && state.phase !== 'bracket' && onAdd && (state.phase === 'registration' || state.config.lateJoin) && !adding && (
-        <button type="button" onClick={() => setAdding(true)} className="mx-auto mt-3 shrink-0 rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-bold text-cyan-200">
-          Ajouter une personne
-        </button>
-      )}
-      {status === 'active' && state.phase !== 'final' && (
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className="mx-auto mt-3 shrink-0 rounded-lg border border-white/15 px-4 py-2 text-sm text-white/50"
-        >
-          {state.phase === 'registration' ? 'Me désinscrire' : 'Quitter le tournoi'}
-        </button>
+      {(canAdd || canLeave) && (
+        <div className="mt-3 flex shrink-0 gap-2">
+          {canAdd && (
+            <button type="button" onClick={() => setAdding(true)} className="ia-btn ia-btn--ghost min-h-[48px] flex-1 whitespace-nowrap px-2 text-[13px]">
+              + Ajouter une personne
+            </button>
+          )}
+          {canLeave && (
+            <button type="button" onClick={() => setConfirming(true)} className="ia-btn ia-btn--ghost-red min-h-[48px] flex-1 whitespace-nowrap px-2 text-[13px]">
+              {state.phase === 'registration' ? 'Me désinscrire' : 'Quitter le tournoi'}
+            </button>
+          )}
+        </div>
       )}
       {confirming && (
         <ConfirmSheet
@@ -786,25 +810,27 @@ function MeTab({
   );
 }
 
-function Message({ emoji, title, sub }: { emoji: string; title: string; sub?: string }) {
+function Message({ icon, title, sub }: { icon: React.ReactNode; title: string; sub?: string }) {
   return (
-    <div className="anim-fade-up text-center">
-      <div className="mb-3 text-5xl">{emoji}</div>
-      <h2 className="text-balance text-2xl font-extrabold">{title}</h2>
-      {sub && <p className="mt-2 text-balance text-sm text-white/60">{sub}</p>}
+    <div className="anim-fade-up flex flex-col items-center text-center">
+      <div className="mb-4">{icon}</div>
+      <h2 className="ia-display text-balance text-4xl text-white">{title}</h2>
+      {sub && <p className="mt-2 text-balance text-sm leading-snug text-ia-soft">{sub}</p>}
     </div>
   );
 }
 
 function Podium({ state }: { state: TournamentPublicState }) {
   const top = state.standings.filter((s) => s.status !== 'excluded').slice(0, 3);
+  const metals = ['gold', 'silver', 'bronze'] as const;
   return (
     <div className="mt-5 space-y-1.5">
       {top.map((s, i) => (
-        <div key={s.playerId} className="flex items-center gap-3 rounded-xl border border-amber-300/25 bg-amber-300/5 px-3 py-2">
-          <span className="text-xl">{['🥇', '🥈', '🥉'][i]}</span>
-          <span className="min-w-0 flex-1 truncate text-left font-black">{s.pseudo}</span>
-          <span className="font-black tabular-nums text-cyan-300">{fmtScore(s.points)}</span>
+        <div key={s.playerId} className={`ia-px flex items-center gap-3 px-3 py-2 ${i === 0 ? 'ia-px--gold' : i === 1 ? 'ia-px--silver' : 'ia-px--amber'}`}>
+          <Trophy scale={1} metal={metals[i]} />
+          <span className={`ia-pixel w-9 text-left text-sm ${rankClass(i + 1)}`}>{rankText(i + 1)}</span>
+          <span className="ia-display min-w-0 flex-1 truncate text-left text-3xl text-white">{s.pseudo}</span>
+          <span className="ia-display text-3xl tabular-nums text-ia-cyan">{fmtScore(s.points)}</span>
         </div>
       ))}
     </div>
@@ -815,47 +841,64 @@ function Podium({ state }: { state: TournamentPublicState }) {
 // Classement / mes matchs
 // ---------------------------------------------------------------------------
 
+function TabTitle({ icon, children }: { icon: Sprite; children: React.ReactNode }) {
+  return (
+    <h2 className="mb-2.5 flex shrink-0 items-center gap-2.5">
+      <PixelSprite sprite={icon} scale={2} className="text-ia-gold" />
+      <span className="ia-pixel text-base text-white">{children}</span>
+    </h2>
+  );
+}
+
 function StandingsTab({ state, playerId }: { state: TournamentPublicState; playerId: string }) {
   const top = state.standings.slice(0, 8);
   const mine = state.standings.find((s) => s.playerId === playerId);
   const showMine = mine && !top.some((s) => s.playerId === playerId);
+  const ranked = hasResults(state);
   const row = (s: (typeof state.standings)[number], highlight: boolean) => (
     <div
       key={s.playerId}
-      className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${
-        highlight ? 'border-cyan-400/50 bg-cyan-400/10' : 'border-white/10 bg-white/5'
-      } ${s.status !== 'active' ? 'opacity-50' : ''}`}
+      className={`ia-px flex items-center gap-2 px-2.5 py-1 ${highlight ? 'ia-px--pink' : s.rank <= 3 && ranked ? (s.rank === 1 ? 'ia-px--gold' : s.rank === 2 ? 'ia-px--silver' : 'ia-px--amber') : 'ia-px--deep'} ${
+        s.status !== 'active' ? 'opacity-50' : ''
+      }`}
     >
-      <span className={`w-8 text-center font-black ${s.rank <= 3 ? 'text-amber-300' : 'text-white/45'}`}>
-        {s.rank}
-        {s.tied ? '=' : ''}
+      <span className="w-3 shrink-0">{highlight && <PixelSprite sprite={CURSOR} scale={2} className="text-ia-pink" />}</span>
+      <span className={`ia-pixel w-10 shrink-0 text-right text-sm ${rankClass(s.rank, ranked)}`}>
+        {ranked ? rankText(s.rank) : '-'}
+        {ranked && s.tied ? '=' : ''}
       </span>
-      <span className="min-w-0 flex-1 truncate font-bold">{s.pseudo}</span>
-      <span className="text-xs tabular-nums text-white/45">
-        {s.wins}V {s.draws}N {s.losses}D
+      <span className="flex w-7 shrink-0 justify-center">
+        {ranked && s.rank === 1 ? <Crown scale={2} /> : <Invader seed={s.playerId} scale={2} className={invaderTone(s.playerId)} />}
       </span>
-      <span className="w-10 text-right font-black tabular-nums text-cyan-300">{fmtScore(s.points)}</span>
+      <span className="ia-display min-w-0 flex-1 truncate text-[1.4rem] leading-tight text-white">{s.pseudo}</span>
+      {state.format !== 'waves' && (
+        <span className="ia-pixel text-[10px] tabular-nums text-ia-muted">
+          {s.wins}-{s.draws}-{s.losses}
+        </span>
+      )}
+      <span className="ia-display w-9 text-right text-[1.4rem] leading-tight tabular-nums text-ia-cyan">{fmtScore(s.points)}</span>
     </div>
   );
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <h2 className="mb-2 shrink-0 text-lg font-black uppercase tracking-widest">Classement</h2>
+      <TabTitle icon={CUP}>Classement</TabTitle>
       {state.standings.length === 0 || state.phase === 'registration' ? (
-        <p className="text-sm text-white/50">Le classement s'affiche après la première ronde.</p>
+        <p className="text-sm text-ia-soft">Le classement s'affiche après la première ronde.</p>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {top.map((s) => row(s, s.playerId === playerId))}
           {showMine && mine && (
             <>
-              <p className="text-center text-xs text-white/30">...</p>
+              <p className="ia-pixel text-center text-[10px] leading-none text-ia-muted">...</p>
               {row(mine, true)}
             </>
           )}
         </div>
       )}
-      <p className="mt-auto shrink-0 pt-2 text-center text-[11px] text-white/35">
-        Départage : Buchholz (points des adversaires), puis victoires
-      </p>
+      {/* le Buchholz ne départage que les rondes suisses */}
+      {state.format !== 'waves' && (
+        <p className="mt-auto shrink-0 pt-2 text-center text-[11px] text-ia-muted">Départage : Buchholz (points des adversaires), puis victoires</p>
+      )}
     </div>
   );
 }
@@ -891,23 +934,29 @@ function WaveMe({
     if (mine?.places) {
       const place = mine.places.indexOf(playerId) + 1;
       const score = mine.loserGames !== null ? ` · 3-${mine.loserGames}` : '';
-      return <Message emoji={place === 1 ? '✅' : '🏁'} title={place === 1 ? 'Tu passes' : 'Éliminé'} sub={`${mine.label}${score}`} />;
+      return (
+        <Message
+          icon={place === 1 ? <PixelSprite sprite={CHECK} scale={5} className="text-ia-mint" /> : <PixelSprite sprite={CROSS} scale={5} className="text-ia-red" />}
+          title={place === 1 ? 'Tu passes' : 'Éliminé'}
+          sub={`${mine.label}${score}`}
+        />
+      );
     }
-    return <Message emoji="⏳" title="Phase finale" sub="Ton match s’affiche dès qu’il est connu." />;
+    return <Message icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-cyan" />} title="Phase finale" sub="Ton match s’affiche dès qu’il est connu." />;
   }
-  if (!wave) return <Message emoji="🕐" title="En attente de la prochaine salve" />;
+  if (!wave) return <Message icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-cyan" />} title="En attente de la prochaine salve" />;
   if (wave.sitOuts.includes(playerId)) {
-    return <Message emoji="🪑" title="Tu ne joues pas cette salve" sub="Tu reviens à la suivante. Aucun point ce tour-ci." />;
+    return <Message icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-muted" />} title="Tu ne joues pas cette salve" sub="Tu reviens à la suivante. Aucun point ce tour-ci." />;
   }
   const group = wave.groups.find((g) => g.playerIds.includes(playerId));
-  if (!group) return <Message emoji="🕐" title="Tu joues à la prochaine salve" sub="Tu es arrivé après le tirage." />;
+  if (!group) return <Message icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-cyan" />} title="Tu joues à la prochaine salve" sub="Tu es arrivé après le tirage." />;
   const names = group.playerIds.map((id) => pseudoOf(state, id)).join(', ');
   if (group.places) {
     const place = group.places.indexOf(playerId) + 1;
     const pts = group.counts ? `${group.points[playerId] ?? 0} pts` : 'Hors classement de poule';
-    return <Message emoji="✅" title={`Tu finis ${place}${place === 1 ? 'er' : 'e'}`} sub={pts} />;
+    return <Message icon={place === 1 ? <Crown scale={4} /> : <PixelSprite sprite={CHECK} scale={5} className="text-ia-mint" />} title={`Tu finis ${place}${place === 1 ? 'er' : 'e'}`} sub={pts} />;
   }
-  if (group.status === 'queued') return <Message emoji="⏳" title="Ton groupe est en file" sub={names} />;
+  if (group.status === 'queued') return <Message icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-amber" />} title="Ton groupe est en file" sub={names} />;
   const smashPool = state.game === 'smash' && group.playerIds.length === 2;
   return (
     <ClaimForm
@@ -970,12 +1019,13 @@ function ClaimForm({
 
   if (shown && !editing) {
     return (
-      <div className="text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{title}</p>
-        <p className="mt-2 text-lg font-black">{claimText(state, shown)}</p>
-        <p className="mt-1 text-sm text-white/60">En attente de l’animateur. Lui seul valide.</p>
-        {conflict && <p className="mt-1 text-sm font-semibold text-amber-200">Les saisies ne concordent pas. L’animateur tranche.</p>}
-        <button type="button" onClick={() => setEditing(true)} className="mt-3 text-sm font-bold text-cyan-200">
+      <div className={`ia-px ${conflict ? 'ia-px--amber' : 'ia-px--violet'} flex flex-col items-center px-4 py-5 text-center`}>
+        <p className="ia-pixel text-[11px] text-ia-soft">{title} · ta proposition</p>
+        <p className="ia-display mt-3 text-balance text-3xl text-white">{claimText(state, shown)}</p>
+        <p className="ia-pixel ia-blink mt-3 text-[11px] text-ia-cyan">En attente de l’animateur</p>
+        <p className="mt-1 text-xs text-ia-soft">Lui seul valide.</p>
+        {conflict && <p className="mt-2 text-sm font-bold text-ia-gold">Les saisies ne concordent pas. L’animateur tranche.</p>}
+        <button type="button" onClick={() => setEditing(true)} className="ia-btn ia-btn--ghost mt-4 min-h-[48px] px-6 text-sm">
           Modifier
         </button>
       </div>
@@ -985,59 +1035,64 @@ function ClaimForm({
   const left = ids.filter((id) => !order.includes(id));
   return (
     <div>
-      <p className="text-center text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{title}</p>
-      <p className="mb-2 text-center text-[11px] text-white/45">Tu ne saisis que pour toi. L’animateur valide.</p>
+      <p className="ia-pixel text-center text-sm text-ia-cyan">{title}</p>
+      <p className="mb-2 mt-1 text-center text-[11px] text-ia-soft">Tu ne saisis que pour toi. L’animateur valide.</p>
       {mode === 'places' ? (
         <>
-          {order.length > 0 && (
-            <ol className="mb-2 space-y-0.5 text-sm font-bold">
-              {order.map((id, i) => (
-                <li key={id}>{i + 1}. {pseudoOf(state, id)}</li>
+          {/* emplacements du podium : on touche les pseudos dans l'ordre d'arrivée */}
+          <ol className="mb-3 space-y-1">
+            {ids.map((_, i) => {
+              const id = order[i];
+              return (
+                <li key={i} className={`ia-px flex min-h-[34px] items-center gap-3 px-3 ${id ? (i === 0 ? 'ia-px--gold' : 'ia-px--plain') : 'ia-px--deep'}`}>
+                  <span className={`ia-pixel w-9 text-sm ${rankClass(i + 1)}`}>{rankText(i + 1)}</span>
+                  {id ? (
+                    <span className="ia-display truncate text-2xl text-white">{pseudoOf(state, id)}</span>
+                  ) : (
+                    <span className={`ia-pixel text-[10px] text-ia-muted ${i === order.length ? 'ia-blink' : ''}`}>{i === order.length ? 'Touche un pseudo' : '...'}</span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          {left.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {left.map((id) => (
+                <button key={id} type="button" disabled={busy} onClick={() => setOrder([...order, id])} className="ia-btn ia-btn--ghost min-h-[52px] truncate px-2 text-lg">
+                  {pseudoOf(state, id)}
+                </button>
               ))}
-            </ol>
+            </div>
           )}
-          <div className="grid grid-cols-2 gap-1.5">
-            {left.map((id) => (
-              <button
-                key={id}
-                type="button"
-                disabled={busy}
-                onClick={() => setOrder([...order, id])}
-                className="min-h-[44px] truncate rounded-xl border border-white/15 bg-white/5 px-2 text-sm font-bold active:bg-white/15 disabled:opacity-40"
-              >
-                {pseudoOf(state, id)}
-              </button>
-            ))}
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
-            <button type="button" disabled={busy || order.length === 0} onClick={() => setOrder([])} className="min-h-[44px] rounded-xl bg-white/10 text-sm font-bold disabled:opacity-40">
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button type="button" disabled={busy || order.length === 0} onClick={() => setOrder([])} className="ia-btn ia-btn--ghost min-h-[52px] text-sm">
               Recommencer
             </button>
-            <button
-              type="button"
-              disabled={busy || order.length !== ids.length}
-              onClick={() => send(order, null)}
-              className="min-h-[44px] rounded-xl bg-cyan-400 text-sm font-black text-[#0a0a14] disabled:opacity-40"
-            >
+            <button type="button" disabled={busy || order.length !== ids.length} onClick={() => send(order, null)} className="ia-btn ia-btn--pink ia-pixel min-h-[52px] text-sm">
               Envoyer
             </button>
           </div>
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-1.5">
-            {ids.map((id) => (
-              <button
-                key={id}
-                type="button"
-                disabled={busy}
-                onClick={() => setWinner(id)}
-                className={`min-h-[44px] truncate rounded-xl px-2 text-sm font-bold disabled:opacity-40 ${
-                  winner === id ? 'bg-cyan-400 text-[#0a0a14]' : 'border border-white/15 bg-white/5'
-                }`}
-              >
-                {pseudoOf(state, id)}
-              </button>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+            {ids.slice(0, 2).map((id, i) => (
+              <Fragment key={id}>
+                {i === 1 && (
+                  <span className="ia-pixel text-lg italic text-ia-pink" style={{ textShadow: '2px 2px 0 #33e2ff' }}>
+                    VS
+                  </span>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setWinner(id)}
+                  className={`ia-btn min-h-[84px] flex-col gap-1 px-2 ${winner === id ? 'ia-btn--gold' : 'ia-btn--ghost'}`}
+                >
+                  {winner === id && <Crown scale={2} />}
+                  <span className="ia-display max-w-full truncate text-3xl">{pseudoOf(state, id)}</span>
+                </button>
+              </Fragment>
             ))}
           </div>
           {mode === 'winner' && (
@@ -1049,13 +1104,14 @@ function ClaimForm({
                 const other = ids.find((id) => id !== winner) ?? winner;
                 send([winner, other], null);
               }}
-              className="mt-2 min-h-[44px] w-full rounded-xl bg-cyan-400 text-sm font-black text-[#0a0a14] disabled:opacity-40"
+              className="ia-btn ia-btn--pink ia-btn--lg ia-pixel mt-3 w-full text-sm"
             >
-              Envoyer
+              {winner ? `${pseudoOf(state, winner)} gagne · envoyer` : 'Touche le gagnant'}
             </button>
           )}
+          {mode === 'score' && !winner && <p className="ia-pixel mt-3 text-center text-[11px] text-ia-muted">Touche le gagnant, puis le score</p>}
           {mode === 'score' && winner && (
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               {([0, 1, 2] as const).map((n) => (
                 <button
                   key={n}
@@ -1065,7 +1121,7 @@ function ClaimForm({
                     const other = ids.find((id) => id !== winner) ?? winner;
                     send([winner, other], n);
                   }}
-                  className="min-h-[44px] rounded-xl bg-cyan-400 text-sm font-black text-[#0a0a14] disabled:opacity-40"
+                  className="ia-btn ia-btn--pink ia-pixel min-h-[60px] text-xl"
                 >
                   3-{n}
                 </button>
@@ -1087,18 +1143,23 @@ function MatchesTab({ state, playerId }: { state: TournamentPublicState; playerI
     );
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <h2 className="mb-2 shrink-0 text-lg font-black uppercase tracking-widest">Mes matchs</h2>
+        <TabTitle icon={LIST}>Mes matchs</TabTitle>
         {rows.length === 0 ? (
-          <p className="text-sm text-white/50">Aucun match pour l’instant.</p>
+          <p className="text-sm text-ia-soft">Aucun match pour l’instant.</p>
         ) : (
           <div className="space-y-1.5">
-            {rows.slice(-8).map(({ wave, group }) => (
-              <p key={group.id} className="truncate rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm">
-                {wave.kind === 'barrage' ? 'Barrage' : `Salve ${wave.number}`}
-                {' · '}
-                {group.status === 'queued' ? 'en file' : group.places ? `${group.places.indexOf(playerId) + 1}e` : 'à jouer'}
-              </p>
-            ))}
+            {rows.slice(-8).map(({ wave, group }) => {
+              const place = group.places ? group.places.indexOf(playerId) + 1 : 0;
+              return (
+                <div key={group.id} className="ia-px ia-px--deep flex items-center gap-3 px-3 py-2">
+                  <span className="ia-pixel w-16 shrink-0 text-[11px] text-ia-muted">{wave.kind === 'barrage' ? 'Barrage' : `Salve ${wave.number}`}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-ia-soft">{group.playerIds.filter((id) => id !== playerId).map((id) => pseudoOf(state, id)).join(', ')}</span>
+                  <span className={`ia-pixel text-xs ${group.status === 'queued' ? 'text-ia-amber' : place ? rankClass(place) : 'text-ia-cyan'}`}>
+                    {group.status === 'queued' ? 'en file' : place ? rankText(place) : 'à jouer'}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -1107,9 +1168,9 @@ function MatchesTab({ state, playerId }: { state: TournamentPublicState; playerI
   const matches = myMatches(state, playerId).slice(-8);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <h2 className="mb-2 shrink-0 text-lg font-black uppercase tracking-widest">Mes matchs</h2>
+      <TabTitle icon={LIST}>Mes matchs</TabTitle>
       {matches.length === 0 ? (
-        <p className="text-sm text-white/50">Aucun match joué pour l'instant.</p>
+        <p className="text-sm text-ia-soft">Aucun match joué pour l'instant.</p>
       ) : (
         <div className="space-y-1.5">
           {matches.map((m) => {
@@ -1131,23 +1192,21 @@ function MatchesTab({ state, playerId }: { state: TournamentPublicState; playerI
                           : 'annulé';
             const tone =
               out === 'win'
-                ? 'text-emerald-300'
+                ? 'text-ia-mint'
                 : out === 'draw' || out === 'bye'
-                  ? 'text-amber-200'
+                  ? 'text-ia-amber'
                   : out === 'loss'
-                    ? 'text-white/60'
-                    : 'text-cyan-200';
+                    ? 'text-ia-muted'
+                    : 'text-ia-cyan';
             return (
-              <div key={m.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                <span className="w-7 shrink-0 text-center text-xs font-black text-white/40">R{m.round}</span>
-                <span className="min-w-0 flex-1 truncate font-bold">
+              <div key={m.id} className={`ia-px flex items-center gap-3 px-3 py-2 ${out === 'win' ? 'ia-px--mint' : 'ia-px--deep'}`}>
+                <span className="ia-pixel w-7 shrink-0 text-center text-xs text-ia-muted">R{m.round}</span>
+                <span className="ia-display min-w-0 flex-1 truncate text-2xl text-white">
                   {m.kind === 'bye' ? 'Exempt' : pseudoOf(state, opponentOf(m, playerId))}
-                  {m.kind === 'floater' && <span className="ml-1 text-xs text-violet-300">bonus</span>}
+                  {m.kind === 'floater' && <span className="ia-pixel ml-2 text-[10px] text-ia-violet">bonus</span>}
                 </span>
-                <span className={`text-sm font-bold ${tone}`}>{label}</span>
-                <span className="w-10 text-right text-sm font-black tabular-nums text-cyan-300">
-                  {m.status === 'done' && counts ? `+${fmtScore(pointsFor(m, playerId))}` : ''}
-                </span>
+                <span className={`ia-pixel text-[11px] ${tone}`}>{label}</span>
+                <span className="ia-display w-10 text-right text-2xl tabular-nums text-ia-cyan">{m.status === 'done' && counts ? `+${fmtScore(pointsFor(m, playerId))}` : ''}</span>
               </div>
             );
           })}
@@ -1161,18 +1220,25 @@ function EndedScreen({ state, playerId }: { state: TournamentPublicState; player
   const s = playerId ? standingOf(state, playerId) : null;
   return (
     <Center>
-      <div className="anim-pop w-full max-w-sm text-center">
-        <div className="mb-3 text-6xl">🏁</div>
-        <h2 className="text-balance text-2xl font-black">{state.title} est terminé</h2>
+      <div className="anim-pop flex w-full max-w-sm flex-col items-center text-center">
+        <div className="ia-float">
+          <Trophy scale={4} />
+        </div>
+        <h2 className={`mt-4 text-balance leading-[1.15] ${chromeSize(state.title, ['text-3xl', 'text-2xl', 'text-xl', 'text-lg'])}`}>
+          <Chrome>{state.title}</Chrome>
+        </h2>
+        <p className="ia-pixel mt-2 text-xs text-ia-soft">Tournoi terminé</p>
         {s && (
-          <div className="mt-5 rounded-2xl border border-white/15 bg-white/5 px-6 py-4">
-            <p className="text-sm uppercase tracking-widest text-white/40">Ton résultat</p>
-            <p className="mt-1 text-3xl font-black text-cyan-300">{rankLabel(s.rank)}</p>
-            <p className="text-lg font-bold">{fmtPoints(s.points)}</p>
+          <div className="ia-px ia-px--pink mt-5 flex w-full items-center justify-between px-5 py-3">
+            <span className="ia-pixel text-[11px] text-ia-soft">Ton résultat</span>
+            <span className={`ia-display text-4xl ${rankClass(s.rank)}`}>{rankLabel(s.rank)}</span>
+            <span className="ia-display text-3xl text-ia-cyan">{fmtPoints(s.points)}</span>
           </div>
         )}
-        <Podium state={state} />
-        <p className="mt-6 text-white/50">Merci d'avoir joué, à très vite au Invader !</p>
+        <div className="w-full">
+          <Podium state={state} />
+        </div>
+        <p className="mt-6 text-sm text-ia-soft">Merci d'avoir joué, à très vite au Invader !</p>
       </div>
     </Center>
   );

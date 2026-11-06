@@ -7,9 +7,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import TournamentProjo, { ResultBanner } from '../tournament/screen/TournamentProjo';
 import TournamentBar from '../tournament/screen/TournamentBar';
-import { TournamentPlayerScreen } from '../tournament/player/TournamentPlayerApp';
+import { PlayerStage, TournamentPlayerScreen } from '../tournament/player/TournamentPlayerApp';
 import { TournamentGmBody } from '../../components/Tournament/TournamentGmBody';
 import TemplateForm, { mergeConfig } from '../../components/Tournament/TemplateForm';
+import { LauncherView, type SessionListItem } from '../../pages/TournamentLivePage';
 import { SpectatorBoardView } from '../../tables/games/chess/components/SpectatorBoard';
 import {
   LobbyTournamentChip,
@@ -20,7 +21,7 @@ import {
 import type { ChessTournamentContext, TournamentLookup } from '../../tables/games/chess/lib/tournamentLookup';
 import { pseudoOf } from '../tournament/tournamentClient';
 import type { LiveCandidate } from '../tournament/screen/rotation';
-import type { TournamentPublicState } from '../tournament/tournamentTypes';
+import { LAUNCH_PRESETS, type CompetitionTemplate, type TournamentPublicState } from '../tournament/tournamentTypes';
 import {
   TOURNAMENT_SCENARIOS,
   TOURNAMENT_SURFACES,
@@ -63,6 +64,41 @@ export function TournamentScenarioList({ selected, onSelect }: { selected: strin
 export function tournamentScenario(cle: string): TournamentLabScenario {
   return TOURNAMENT_SCENARIOS.find((s) => s.cle === cle) ?? TOURNAMENT_SCENARIOS[0];
 }
+
+const LAB_TEMPLATES: CompetitionTemplate[] = [
+  {
+    id: 'tpl-1',
+    name: "Tournoi d'échecs du jeudi",
+    mode: 'tournament',
+    config: { title: "Tournoi d'échecs du jeudi" },
+    createdAt: '2026-09-29T18:00:00.000Z',
+    updatedAt: '2026-10-29T18:00:00.000Z',
+    lastUsedAt: '2026-10-29T18:00:00.000Z',
+  },
+  {
+    id: 'tpl-2',
+    name: 'Grand Prix Mario Kart',
+    mode: 'tournament',
+    config: LAUNCH_PRESETS[1].config,
+    createdAt: '2026-10-02T18:00:00.000Z',
+    updatedAt: '2026-10-02T18:00:00.000Z',
+    lastUsedAt: null,
+  },
+  {
+    id: 'tpl-3',
+    name: 'Smash du dimanche (test)',
+    mode: 'tournament',
+    config: { ...LAUNCH_PRESETS[2].config, testMode: true },
+    createdAt: '2026-10-12T18:00:00.000Z',
+    updatedAt: '2026-10-12T18:00:00.000Z',
+    lastUsedAt: null,
+  },
+];
+
+const LAB_PAST: SessionListItem[] = [
+  { id: 'past-1', mode: 'tournament', status: 'end', joinCode: 'ECHC', quizName: "Tournoi d'échecs du jeudi", createdAt: '2026-10-29T19:02:00.000Z', endedAt: '2026-10-29T22:40:00.000Z' },
+  { id: 'past-2', mode: 'tournament', status: 'end', joinCode: 'KART', quizName: 'Tournoi Mario Kart', createdAt: '2026-10-17T20:10:00.000Z', endedAt: '2026-10-17T23:05:00.000Z', testMode: true },
+];
 
 /** plateau factice du « match en direct » (aucune partie réelle derrière) */
 function labRenderLive(candidate: LiveCandidate, state: TournamentPublicState, now: number) {
@@ -114,7 +150,7 @@ export function TournamentLabScene({
       const you = scenario.you ? state.players.find((p) => p.id === scenario.you) : null;
       return (
         <CadrePhone hauteur={phoneHeight}>
-          <div className="game-bg flex h-full flex-col overflow-hidden text-white">
+          <PlayerStage className="h-full">
             <TournamentPlayerScreen
               state={state}
               you={you ? { playerId: you.id, pseudo: you.pseudo, status: you.status } : null}
@@ -127,13 +163,26 @@ export function TournamentLabScene({
               onAdd={() => undefined}
               initialTab={scenario.tab}
             />
-          </div>
+          </PlayerStage>
         </CadrePhone>
       );
     }
     case 'gm': {
       const body =
-        scenario.cle === 't-gm-formulaire' ? (
+        scenario.cle === 't-gm-lanceur' ? (
+          <LauncherView
+            templates={LAB_TEMPLATES}
+            past={LAB_PAST}
+            busy={false}
+            onPreset={() => undefined}
+            onNew={() => undefined}
+            onLaunchTemplate={() => undefined}
+            onEdit={() => undefined}
+            onDuplicate={() => undefined}
+            onDelete={() => undefined}
+            onOpenPast={() => undefined}
+          />
+        ) : scenario.cle === 't-gm-formulaire' ? (
           <div className="px-3 py-4">
             <TemplateForm
               initial={{ name: "Tournoi d'échecs du jeudi", config: mergeConfig({ title: "Tournoi d'échecs du jeudi" }) }}
@@ -150,13 +199,13 @@ export function TournamentLabScene({
       if (gmPhone) {
         return (
           <div className="flex justify-center overflow-x-auto">
-            <div className="w-[375px] shrink-0 overflow-y-auto rounded-[2rem] border-4 border-white/15 bg-slate-950 text-slate-100 shadow-2xl" style={{ height: 812 }}>
+            <div className="ia-stage w-[375px] shrink-0 overflow-y-auto rounded-[2rem] border-4 border-white/15 text-ia-ink shadow-2xl" style={{ height: 812 }}>
               {body}
             </div>
           </div>
         );
       }
-      return <div className="rounded-xl border-2 border-white/15 bg-slate-950 text-slate-100 shadow-2xl">{body}</div>;
+      return <div className="ia-stage rounded-xl border-2 border-white/15 text-ia-ink shadow-2xl">{body}</div>;
     }
     case 'table':
       return (

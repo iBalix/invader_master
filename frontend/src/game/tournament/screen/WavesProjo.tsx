@@ -2,30 +2,45 @@
  * Projecteur d'un tournoi en salves (Mario Kart, Smash Bros).
  * Les échecs restent sur TournamentProjo : on n'arrive ici que si format = waves.
  *
- * Une salve montre les groupes en cours en grand, et la file en bandeau.
- * Le barrage et le tableau n'affichent pas de points. La finale est un
- * vainqueur, avec un trophée léger.
+ * Une salve montre les groupes en cours en grand (grille de départ pour Mario
+ * Kart, carte « VS » pour Smash) et la file en bandeau. Le barrage et le
+ * tableau n'affichent pas de points. La finale est un vainqueur, avec le
+ * trophée en pixels.
  */
 
 import type { ReactNode } from 'react';
-import { pseudoOf, tournamentUrl } from '../tournamentClient';
-import type { TBracketMatch, TWaveGroup, TournamentPublicState } from '../tournamentTypes';
-import { EventChip, FeedToasts, JoinCorner, StandingsGrid } from './parts';
-import { QrCanvas } from '../../ui/bits';
+import { pseudoOf } from '../tournamentClient';
+import type { TWaveGroup, TournamentPublicState } from '../tournamentTypes';
+import {
+  BracketTree,
+  EventChip,
+  FeedToasts,
+  JoinCorner,
+  PageDots,
+  SectionHead,
+  StandingsGrid,
+  StandingsLegend,
+  LobbyScreen,
+  joinOpen,
+} from './parts';
+import { ArcadeStage, Chrome, Crown, GameGlyph, Invader, PixelConfetti, TrophyShowcase, invaderTone, nameSize, rankClass, rankText } from '../arcade/kit';
+import { CUP, HOURGLASS, PixelSprite } from '../arcade/pixel';
+import { formatSummary } from '../tournamentClient';
 
 export default function WavesProjo({ state, now }: { state: TournamentPublicState; now: number }) {
   let body: ReactNode;
   if (state.phase === 'final' || state.ended) body = <Winner state={state} />;
-  else if (state.phase === 'registration') body = <Lobby state={state} now={now} />;
+  else if (state.phase === 'registration') body = <LobbyScreen state={state} now={now} qrText="Un pseudo suffit. Plusieurs personnes peuvent s'inscrire du même téléphone." summary={formatSummary(state)} />;
   else if (state.phase === 'wave_done') body = <AfterWave state={state} />;
   else if (state.phase === 'bracket') body = <BracketBoard state={state} />;
   else body = <WaveBoard state={state} />;
 
+  const open = state.phase === 'registration' || state.phase === 'final' || state.ended;
   return (
-    <div className="game-bg relative flex h-full w-full flex-col overflow-hidden text-white">
+    <ArcadeStage className="flex h-full w-full flex-col overflow-hidden" floor={open ? 0.22 : 0.14} floorOpacity={open ? 0.45 : 0.25}>
       {body}
       {state.phase !== 'final' && <FeedToasts state={state} />}
-    </div>
+    </ArcadeStage>
   );
 }
 
@@ -40,44 +55,26 @@ function salveLabel(state: TournamentPublicState): string {
   return planned ? `Salve ${wave.number}/${planned}` : `Salve ${wave.number}`;
 }
 
-function joinable(state: TournamentPublicState): boolean {
-  if (state.phase === 'final' || state.phase === 'bracket') return false;
-  return state.phase === 'registration' || state.config.lateJoin;
+export function groupLetter(group: Pick<TWaveGroup, 'board'>): string {
+  return String.fromCharCode(64 + group.board);
 }
 
-function Lobby({ state, now }: { state: TournamentPublicState; now: number }) {
-  const reste = state.phaseEndsAt ? Math.max(0, state.phaseEndsAt - now) : null;
-  const mm = reste === null ? 0 : Math.floor(reste / 60_000);
-  const ss = reste === null ? 0 : Math.floor((reste % 60_000) / 1000);
+/** en-tête des salves : jeu, phase en chrome, QR tant qu'on peut s'inscrire */
+function WaveHeader({ state, title }: { state: TournamentPublicState; title: string }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center px-16 py-10">
-      <EventChip state={state} big />
-      <h1 className="anim-title-glow mt-6 text-center text-7xl font-black">{state.title}</h1>
-      <p className="mt-4 text-4xl font-black tabular-nums text-cyan-200">
-        {state.waitingForPlayers || reste === null
-          ? 'En attente de joueurs'
-          : reste <= 0
-            ? 'Tirage imminent'
-            : `Départ dans ${mm}:${String(ss).padStart(2, '0')}`}
-      </p>
-      <p className="mt-2 text-2xl text-white/60">
-        {state.playerCount} inscrit{state.playerCount > 1 ? 's' : ''}
-      </p>
-      <div className="mt-8 flex min-h-0 w-full flex-1 items-start justify-center gap-12">
-        <div className="flex max-w-3xl flex-wrap content-start justify-center gap-3">
-          {state.players.map((p) => (
-            <span key={p.id} className="rounded-full border border-white/15 bg-white/5 px-5 py-2 text-3xl font-black">
-              {p.pseudo}
-            </span>
-          ))}
-        </div>
-        <div className="flex shrink-0 flex-col items-center gap-3 rounded-3xl border border-violet-400/40 bg-violet-500/10 px-8 py-6">
-          <QrCanvas value={tournamentUrl(state.joinCode)} size={280} />
-          <p className="font-mono text-5xl font-black tracking-[0.2em]">{state.joinCode}</p>
-          <p className="text-xl text-violet-100">Un pseudo suffit</p>
-        </div>
+    <header className="relative flex shrink-0 items-center justify-between gap-8 px-12 pb-5 pt-6">
+      <div className="min-w-0">
+        <EventChip state={state} />
+        <h1 className="mt-3 text-7xl leading-tight">
+          <Chrome>{title}</Chrome>
+        </h1>
       </div>
-    </div>
+      <div className="flex shrink-0 items-center gap-8">
+        <p className="ia-display max-w-[34rem] truncate text-right text-5xl text-ia-soft">{state.title}</p>
+        {joinOpen(state) && <JoinCorner state={state} size={110} />}
+      </div>
+      <div className="absolute bottom-0 left-12 right-12 h-1" style={{ background: 'linear-gradient(90deg, #ff2bd6, #8b3dff 40%, #33e2ff)' }} aria-hidden />
+    </header>
   );
 }
 
@@ -89,32 +86,37 @@ function WaveBoard({ state }: { state: TournamentPublicState }) {
   const cols = playing.length <= 1 ? 1 : playing.length <= 4 ? 2 : 3;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center justify-between gap-8 px-12 py-6">
-        <div>
-          <EventChip state={state} />
-          <h1 className="mt-2 text-5xl font-black">{state.phase === 'barrage' ? 'Barrage' : salveLabel(state)}</h1>
-        </div>
-        {joinable(state) && <JoinCorner state={state} size={120} />}
-      </header>
-      <div className="grid min-h-0 flex-1 gap-6 px-12 pb-4" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      <WaveHeader state={state} title={state.phase === 'barrage' ? 'Barrage' : salveLabel(state)} />
+      <div
+        className={`grid min-h-0 flex-1 content-center gap-8 px-12 py-6 ${cols === 1 ? 'px-64' : ''}`}
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      >
         {playing.map((g) => (
-          <GroupCard key={g.id} state={state} group={g} />
+          <GroupCard key={g.id} state={state} group={g} dense={cols === 3} />
         ))}
         {playing.length === 0 && (
-          <p className="col-span-full self-center text-center text-4xl text-white/50">En attente du prochain groupe</p>
+          <p className="ia-pixel ia-blink col-span-full self-center text-center text-3xl text-ia-muted">En attente du prochain groupe</p>
         )}
       </div>
       {(queued.length > 0 || (wave?.sitOuts.length ?? 0) > 0) && (
-        <footer className="shrink-0 border-t border-white/10 px-12 py-4">
+        <footer className="shrink-0 px-12 pb-8">
           {queued.length > 0 && (
-            <p className="text-2xl text-white/70">
-              <span className="mr-3 font-black uppercase tracking-[0.2em] text-amber-200">À suivre</span>
-              {queued.map((g) => g.playerIds.map((id) => pseudoOf(state, id)).join(' · ')).join('   ·   ')}
-            </p>
+            <div className="ia-px ia-px--lg ia-px--amber flex items-center gap-6 px-6 py-4">
+              <span className="ia-pixel shrink-0 text-3xl text-ia-gold">À suivre</span>
+              <div className="flex min-w-0 flex-wrap gap-x-10 gap-y-2">
+                {queued.map((g) => (
+                  <span key={g.id} className="flex min-w-0 items-baseline gap-4">
+                    <span className="ia-pixel text-3xl text-ia-amber">{groupLetter(g)}</span>
+                    <span className="ia-display truncate text-4xl text-white">{g.playerIds.map((id) => pseudoOf(state, id)).join(' · ')}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
           {wave && wave.sitOuts.length > 0 && (
-            <p className="mt-1 text-xl text-white/50">
-              Ne joue pas cette salve : {wave.sitOuts.map((id) => pseudoOf(state, id)).join(', ')}
+            <p className="mt-3 flex items-center gap-4 text-2xl text-ia-soft">
+              <PixelSprite sprite={HOURGLASS} scale={3} className="text-ia-muted" />
+              Ne joue pas cette salve : <span className="font-black text-white">{wave.sitOuts.map((id) => pseudoOf(state, id)).join(', ')}</span>
             </p>
           )}
         </footer>
@@ -123,91 +125,47 @@ function WaveBoard({ state }: { state: TournamentPublicState }) {
   );
 }
 
-function GroupCard({ state, group }: { state: TournamentPublicState; group: TWaveGroup }) {
+/** groupe en piste : grille de départ (Mario Kart) ou duel (Smash) */
+function GroupCard({ state, group, dense }: { state: TournamentPublicState; group: TWaveGroup; dense: boolean }) {
   const ordered = group.places ?? group.playerIds;
-  const smash = state.game === 'smash';
+  const duel = state.game === 'smash' && group.playerIds.length === 2 && !group.places;
+  const status = group.status === 'queued' ? 'À suivre' : group.status === 'done' ? 'Terminé' : 'En piste';
+  const kind = state.game === 'mariokart' ? 'Course' : 'Match';
   return (
-    <div className="flex min-h-0 flex-col justify-center rounded-[2rem] border border-cyan-300/40 bg-cyan-400/10 px-8 py-6">
-      <p className="text-xl font-bold uppercase tracking-[0.25em] text-cyan-200">
-        {group.status === 'queued' ? 'À suivre' : group.status === 'done' ? 'Terminé' : 'En cours'}
-        {' · '}
-        {String.fromCharCode(64 + group.board)}
-      </p>
-      <ul className="mt-3 space-y-2">
-        {ordered.map((id, i) => (
-          <li key={id} className={`flex items-baseline justify-between gap-4 font-black ${ordered.length > 3 ? 'text-4xl' : 'text-5xl'}`}>
-            <span className="min-w-0 truncate">
-              {group.places ? `${i + 1}. ` : ''}
-              {pseudoOf(state, id)}
-            </span>
-            {group.counts && group.places && (
-              <span className="shrink-0 tabular-nums text-amber-200">{group.points[id] ?? 0}</span>
-            )}
-            {!group.counts && smash && group.places && i === 0 && <span className="shrink-0 text-amber-200">gagne</span>}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function AfterWave({ state }: { state: TournamentPublicState }) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col px-12 py-8">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <EventChip state={state} />
-          <h1 className="mt-2 text-5xl font-black">Classement</h1>
+    <div className="ia-px ia-px--lg ia-px--cyan ia-glow-cyan flex min-h-0 flex-col justify-center px-8 py-7">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <span className="flex items-center gap-4">
+          <GameGlyph game={state.game} scale={4} />
+          <span className="ia-pixel text-3xl text-white">
+            {kind} {groupLetter(group)}
+          </span>
+        </span>
+        <span className="ia-pixel ia-clip ia-clip--sm inline-flex items-center gap-2 bg-ia-cyan px-3 py-1.5 text-xl text-ia-night">
+          {group.status === 'playing' && <span className="ia-blink inline-block h-2 w-2 bg-ia-night" />}
+          {status}
+        </span>
+      </div>
+      {duel ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-6">
+          <span className="ia-display truncate text-right text-7xl text-white">{pseudoOf(state, group.playerIds[0])}</span>
+          <span className="ia-pixel text-5xl italic text-ia-pink" style={{ textShadow: '4px 4px 0 #33e2ff' }}>
+            VS
+          </span>
+          <span className="ia-display truncate text-7xl text-white">{pseudoOf(state, group.playerIds[1])}</span>
         </div>
-        {joinable(state) && <JoinCorner state={state} />}
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <StandingsGrid state={state} page={0} perPage={24} />
-      </div>
-    </div>
-  );
-}
-
-function BracketBoard({ state }: { state: TournamentPublicState }) {
-  const matches = state.bracket?.matches ?? [];
-  const live = matches.filter((m) => m.status === 'pending' && m.playerIds.length >= 2);
-  const later = matches.filter((m) => m.status === 'waiting' || m.playerIds.length < 2);
-  const cols = live.length <= 1 ? 1 : live.length === 2 ? 2 : 2;
-  return (
-    <div className="flex min-h-0 flex-1 flex-col px-12 py-8">
-      <EventChip state={state} />
-      <h1 className="mt-3 text-5xl font-black">Phase finale</h1>
-      <div className="mt-6 grid min-h-0 flex-1 gap-6" style={{ gridTemplateColumns: `repeat(${Math.max(1, cols)}, minmax(0, 1fr))` }}>
-        {live.map((m) => (
-          <BracketCard key={m.id} state={state} match={m} />
-        ))}
-      </div>
-      {later.length > 0 && (
-        <p className="mt-4 text-2xl text-white/50">
-          Ensuite : {later.map((m) => m.label).join(' · ')}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function BracketCard({ state, match }: { state: TournamentPublicState; match: TBracketMatch }) {
-  const ordered = match.places ?? match.playerIds;
-  const score = state.game === 'smash' && match.places && match.loserGames !== null ? `3-${match.loserGames}` : null;
-  return (
-    <div className="flex flex-col justify-center rounded-[2rem] border border-amber-300/40 bg-amber-300/10 px-8 py-6">
-      <p className="text-2xl font-bold uppercase tracking-[0.2em] text-amber-200">{match.label}</p>
-      {ordered.length === 0 ? (
-        <p className="mt-4 text-4xl text-white/40">En attente des qualifiés</p>
       ) : (
-        <ul className="mt-4 space-y-2">
+        <ul className="space-y-3">
           {ordered.map((id, i) => (
-            <li key={id} className="flex items-baseline justify-between text-5xl font-black">
-              <span className="min-w-0 truncate">
-                {match.places ? `${i + 1}. ` : ''}
-                {pseudoOf(state, id)}
-              </span>
-              {score && i === 0 && <span className="text-amber-200">{score}</span>}
+            <li key={id} className="flex items-center gap-5">
+              {group.places ? (
+                <span className={`ia-pixel w-20 shrink-0 text-3xl ${rankClass(i + 1)}`}>{rankText(i + 1)}</span>
+              ) : (
+                <Invader seed={id} scale={dense ? 3 : 4} className={`w-20 ${invaderTone(id)}`} />
+              )}
+              <span className={`ia-display min-w-0 truncate text-white ${dense ? 'text-5xl' : ordered.length > 3 ? 'text-6xl' : 'text-7xl'}`}>{pseudoOf(state, id)}</span>
+              {group.counts && group.places && <span className="ia-dots text-ia-soft" />}
+              {group.counts && group.places && <span className="ia-display shrink-0 text-6xl tabular-nums text-ia-gold">+{group.points[id] ?? 0}</span>}
+              {!group.counts && state.game === 'smash' && group.places && i === 0 && <span className="ia-pixel ml-auto text-2xl text-ia-gold">Gagne</span>}
             </li>
           ))}
         </ul>
@@ -216,20 +174,82 @@ function BracketCard({ state, match }: { state: TournamentPublicState; match: TB
   );
 }
 
-function Winner({ state }: { state: TournamentPublicState }) {
-  const id = state.bracketWinnerId ?? state.standings.find((s) => s.status !== 'excluded')?.playerId ?? null;
-  const pseudo = id ? pseudoOf(state, id) : '';
-  const line = state.config.texts.winner.replace(/#winner#/g, pseudo);
+function AfterWave({ state }: { state: TournamentPublicState }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-16 text-center">
-      <style>{'@keyframes invader-trophy { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(7deg); } }'}</style>
-      <EventChip state={state} big />
-      <div className="mt-8 text-[140px] leading-none" style={{ animation: 'invader-trophy 2.8s ease-in-out infinite' }} aria-hidden>
-        🏆
+    <div className="flex min-h-0 flex-1 flex-col">
+      <WaveHeader state={state} title="Salve terminée" />
+      <div className="flex min-h-0 flex-1 flex-col px-12 pb-8 pt-6">
+        <SectionHead
+          icon={<PixelSprite sprite={CUP} scale={4} className="text-ia-gold" />}
+          title="Classement"
+          right={
+            <div className="flex items-center gap-10">
+              <StandingsLegend record={false} />
+              <PageDots page={0} pages={1} />
+            </div>
+          }
+        />
+        <StandingsGrid state={state} page={0} perPage={24} />
       </div>
-      <p className="mt-4 text-3xl font-bold uppercase tracking-[0.35em] text-amber-200">Vainqueur</p>
-      <h1 className="anim-title-glow mt-2 max-w-full truncate text-8xl font-black">{pseudo || state.title}</h1>
-      <p className="mt-8 max-w-5xl text-4xl text-white/80">{line}</p>
     </div>
   );
+}
+
+function BracketBoard({ state }: { state: TournamentPublicState }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <WaveHeader state={state} title="Phase finale" />
+      <div className="flex min-h-0 flex-1 flex-col px-12 pb-10 pt-6">
+        <BracketTree state={state} size="lg" />
+      </div>
+    </div>
+  );
+}
+
+/** vainqueur et, si la finale est connue, les autres places du podium */
+export function finalists(state: TournamentPublicState): { winnerId: string | null; others: string[] } {
+  const finale = state.bracket?.matches.find((m) => m.round === 'final');
+  if (finale?.places && finale.places.length > 0) {
+    return { winnerId: state.bracketWinnerId ?? finale.places[0], others: finale.places.slice(1, 4) };
+  }
+  const ranked = state.standings.filter((s) => s.status !== 'excluded');
+  const winnerId = state.bracketWinnerId ?? ranked[0]?.playerId ?? null;
+  return { winnerId, others: ranked.filter((s) => s.playerId !== winnerId).slice(0, 2).map((s) => s.playerId) };
+}
+
+/** écran du champion : trophée, nom en or chromé, phrase du podium */
+export function ChampionScene({ state, compact = false }: { state: TournamentPublicState; compact?: boolean }) {
+  const { winnerId, others } = finalists(state);
+  const pseudo = winnerId ? pseudoOf(state, winnerId) : '';
+  const line = state.config.texts.winner.replace(/#winner#/g, pseudo);
+  return (
+    <div className="relative flex min-h-0 flex-1 items-center justify-center gap-6 px-16">
+      <PixelConfetti count={compact ? 26 : 40} size={compact ? 12 : 16} />
+      <TrophyShowcase scale={compact ? 9 : 11} />
+      <div className="relative min-w-0 max-w-[60rem]">
+        <EventChip state={state} big />
+        <p className="ia-pixel mt-10 flex items-center gap-5 text-5xl text-ia-gold">
+          <Crown scale={5} /> Champion
+        </p>
+        <h1 className={`mt-5 leading-[1.1] ${nameSize(pseudo, compact ? ['text-[8rem]', 'text-[6rem]', 'text-[4.75rem]', 'text-[4rem]'] : ['text-[9.5rem]', 'text-[7rem]', 'text-[5.5rem]', 'text-[4.5rem]'])}`}>
+          <Chrome gold>{pseudo || state.title}</Chrome>
+        </h1>
+        <p className="mt-6 text-balance text-4xl leading-snug text-white">{line}</p>
+        {others.length > 0 && (
+          <div className="mt-10 flex flex-wrap gap-4">
+            {others.map((id, i) => (
+              <span key={id} className={`ia-px ia-px--lg inline-flex items-baseline gap-4 px-6 py-3 ${i === 0 ? 'ia-px--plain' : i === 1 ? 'ia-px--amber' : 'ia-px--deep'}`}>
+                <span className={`ia-pixel text-2xl ${rankClass(i + 2)}`}>{rankText(i + 2)}</span>
+                <span className="ia-display text-5xl text-white">{pseudoOf(state, id)}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Winner({ state }: { state: TournamentPublicState }) {
+  return <ChampionScene state={state} />;
 }

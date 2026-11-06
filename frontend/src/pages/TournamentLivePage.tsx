@@ -20,10 +20,12 @@ import { subscribeToGame } from '../game/lib/gameClient';
 import { TournamentGmBody } from '../components/Tournament/TournamentGmBody';
 import TemplateForm, { mergeConfig, type TemplateFormValue } from '../components/Tournament/TemplateForm';
 import { Badge, Btn, Card } from '../components/Tournament/ui';
+import { Chrome, GameGlyph, Invader } from '../game/tournament/arcade/kit';
+import { CUP, PixelSprite } from '../game/tournament/arcade/pixel';
 import { formatSummary } from '../game/tournament/tournamentClient';
 import { LAUNCH_PRESETS, type CompetitionTemplate, type TournamentGmState } from '../game/tournament/tournamentTypes';
 
-interface SessionListItem {
+export interface SessionListItem {
   id: string;
   mode: string;
   status: string;
@@ -128,8 +130,9 @@ export default function TournamentLivePage() {
   if (discovering) {
     return (
       <Coque>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/15 border-t-indigo-400" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4">
+          <Invader seed={0} scale={5} animate className="text-ia-cyan" />
+          <p className="ia-pixel ia-blink text-xs text-ia-soft">Chargement</p>
         </div>
       </Coque>
     );
@@ -178,12 +181,17 @@ export default function TournamentLivePage() {
 
 function Coque({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-slate-950 text-slate-100">
-      <div className="flex items-center justify-between border-b border-white/5 px-3 py-2 lg:px-6">
-        <Link to="/" className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200">
-          <ArrowLeft size={13} /> Back-office
+    <div className="ia-stage flex min-h-dvh flex-col text-ia-ink">
+      <div className="flex items-center justify-between gap-3 border-b-2 border-ia-line px-3 py-2 lg:px-6">
+        <Link to="/" className="ia-btn ia-btn--ghost min-h-[40px] px-3 text-xs">
+          <ArrowLeft size={14} /> Back-office
         </Link>
-        <span className="text-xs font-black uppercase tracking-[0.25em] text-slate-500">Gestionnaire d'événements</span>
+        <span className="flex items-center gap-3">
+          <span className="text-lg">
+            <Chrome>Invader</Chrome>
+          </span>
+          <span className="ia-pixel hidden text-[11px] text-ia-pink sm:inline">Game master</span>
+        </span>
       </div>
       {children}
     </div>
@@ -313,105 +321,143 @@ function Launcher({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-4 px-3 py-4 sm:px-5">
+    <LauncherView
+      templates={templates}
+      past={past}
+      busy={busy}
+      onPreset={(preset) =>
+        void launchWith(async (force) => {
+          const { data } = await api.post('/api/game', { mode: 'tournament', config: preset.config, force });
+          return data.data as { id: string };
+        })
+      }
+      onNew={() => setEditing({ id: null, value: { name: '', config: mergeConfig(undefined) } })}
+      onLaunchTemplate={(tpl, testMode) => void launchTemplate(tpl, testMode)}
+      onEdit={(tpl) => setEditing({ id: tpl.id, value: { name: tpl.name, config: mergeConfig(tpl.config) } })}
+      onDuplicate={(tpl) => setEditing({ id: null, value: { name: `${tpl.name} (copie)`, config: mergeConfig(tpl.config) } })}
+      onDelete={async (tpl) => {
+        if (!(await demander(`Supprimer le modèle « ${tpl.name} » ?`))) return;
+        try {
+          await api.delete(`/api/competition-templates/${tpl.id}`);
+          toast.success('Modèle supprimé');
+          await load();
+        } catch (err) {
+          toast.error(apiMessage(err));
+        }
+      }}
+      onOpenPast={onOpenPast}
+    />
+  );
+}
+
+/**
+ * Vue du lanceur, sans réseau (le laboratoire la monte) : trois lancements
+ * d'un geste en « cartouches », les modèles enregistrés, les événements passés.
+ */
+export function LauncherView({
+  templates,
+  past,
+  busy,
+  onPreset,
+  onNew,
+  onLaunchTemplate,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onOpenPast,
+}: {
+  templates: CompetitionTemplate[];
+  past: SessionListItem[];
+  busy: boolean;
+  onPreset: (preset: (typeof LAUNCH_PRESETS)[number]) => void;
+  onNew: () => void;
+  onLaunchTemplate: (tpl: CompetitionTemplate, testMode?: boolean) => void;
+  onEdit: (tpl: CompetitionTemplate) => void;
+  onDuplicate: (tpl: CompetitionTemplate) => void;
+  onDelete: (tpl: CompetitionTemplate) => void;
+  onOpenPast: (id: string) => void;
+}) {
+  return (
+    <div className="mx-auto w-full max-w-3xl space-y-5 px-3 py-5 sm:px-5">
       <div>
-        <h1 className="text-2xl font-black">Gestionnaire d'événements</h1>
-        <p className="text-sm text-slate-400">
-          Échecs, Mario Kart ou Smash Bros. Un bouton bascule le projecteur et les deux TV du comptoir ensemble.
-        </p>
+        <p className="ia-pixel text-[11px] text-ia-cyan">Gestionnaire d'événements</p>
+        <h1 className="mt-1 text-4xl leading-tight">
+          <Chrome>Tournois</Chrome>
+        </h1>
+        <p className="mt-2 text-sm text-ia-soft">Échecs, Mario Kart ou Smash Bros. Un bouton bascule le projecteur et les deux TV du comptoir ensemble.</p>
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         {LAUNCH_PRESETS.map((preset) => (
-          <Btn
+          <button
             key={preset.id}
-            variant="primary"
-            big
-            full
+            type="button"
             disabled={busy}
-            onClick={() =>
-              void launchWith(async (force) => {
-                const { data } = await api.post('/api/game', { mode: 'tournament', config: preset.config, force });
-                return data.data as { id: string };
-              })
-            }
+            onClick={() => onPreset(preset)}
+            className={`ia-px group flex min-h-[176px] flex-col items-start gap-2 px-4 pb-4 pt-4 text-left transition hover:brightness-125 disabled:opacity-40 ${
+              preset.config.game === 'mariokart' ? 'ia-px--gold' : preset.config.game === 'smash' ? 'ia-px--pink' : 'ia-px--cyan'
+            }`}
           >
-            {preset.label}
-          </Btn>
+            <GameGlyph game={preset.config.game} scale={4} />
+            <span className="ia-display mt-1 text-3xl text-white">{preset.name}</span>
+            <span className="text-xs leading-snug text-ia-soft">{preset.detail}</span>
+            <span className="ia-btn ia-btn--pink ia-pixel mt-auto min-h-[48px] w-full text-sm">▶ Lancer</span>
+          </button>
         ))}
       </div>
 
-      <Btn
-        variant="primary"
-        big
-        full
-        disabled={busy}
-        onClick={() => setEditing({ id: null, value: { name: '', config: mergeConfig(undefined) } })}
-      >
-        ＋ Nouvel événement
+      <Btn variant="secondary" big full disabled={busy} onClick={onNew}>
+        ＋ Nouvel événement sur mesure
       </Btn>
 
       <Card title={`Mes événements (${templates.length})`}>
         {templates.length === 0 ? (
-          <p className="text-sm text-slate-400">Aucun modèle enregistré. Crée un événement et enregistre-le pour le relancer en un clic.</p>
+          <p className="text-sm text-ia-soft">Aucun modèle enregistré. Crée un événement et enregistre-le pour le relancer en un clic.</p>
         ) : (
           <div className="space-y-2">
             {templates.map((tpl) => {
               const cfg = mergeConfig(tpl.config);
               return (
-                <div key={tpl.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate font-black">{tpl.name}</p>
-                      <p className="text-xs text-slate-400">
-                        {cfg.game === 'mariokart' ? 'Mario Kart' : cfg.game === 'smash' ? 'Smash Bros' : 'Échecs'}
-                        {' · '}
-                        {cfg.format === 'waves' ? 'Salves' : 'Rondes suisses'}
-                        {' · '}
-                        {cfg.registrationMin} min d'inscription
-                        {tpl.lastUsedAt ? ` · lancé le ${new Date(tpl.lastUsedAt).toLocaleDateString('fr-FR')}` : ''}
-                      </p>
+                <div key={tpl.id} className="ia-px ia-px--deep p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <GameGlyph game={cfg.game} scale={3} className="mt-1" />
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-black text-white">{tpl.name}</p>
+                        <p className="text-xs text-ia-soft">
+                          {cfg.game === 'mariokart' ? 'Mario Kart' : cfg.game === 'smash' ? 'Smash Bros' : 'Échecs'}
+                          {' · '}
+                          {cfg.format === 'waves' ? 'Salves' : 'Rondes suisses'}
+                          {' · '}
+                          {cfg.registrationMin} min d'inscription
+                          {tpl.lastUsedAt ? ` · lancé le ${new Date(tpl.lastUsedAt).toLocaleDateString('fr-FR')}` : ''}
+                        </p>
+                      </div>
                     </div>
-                    {cfg.testMode && <Badge tone="amber">🧪 test</Badge>}
+                    {cfg.testMode && <Badge tone="amber">Test</Badge>}
                   </div>
-                  <p className="mt-1 text-xs text-slate-500">{formatSummary({ config: cfg })}</p>
+                  <p className="mt-1.5 text-xs text-ia-muted">{formatSummary({ config: cfg })}</p>
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <Btn variant="primary" disabled={busy} onClick={() => void launchTemplate(tpl)}>
-                      🚀 Lancer
+                    <Btn variant="primary" disabled={busy} onClick={() => onLaunchTemplate(tpl)}>
+                      ▶ Lancer
                     </Btn>
-                    <Btn disabled={busy} onClick={() => setEditing({ id: tpl.id, value: { name: tpl.name, config: cfg } })}>
+                    <Btn disabled={busy} onClick={() => onEdit(tpl)}>
                       Modifier
                     </Btn>
-                    <Btn
-                      disabled={busy}
-                      onClick={() => setEditing({ id: null, value: { name: `${tpl.name} (copie)`, config: cfg } })}
-                    >
+                    <Btn disabled={busy} onClick={() => onDuplicate(tpl)}>
                       Dupliquer
                     </Btn>
-                    <Btn
-                      variant="danger"
-                      disabled={busy}
-                      onClick={async () => {
-                        if (!(await demander(`Supprimer le modèle « ${tpl.name} » ?`))) return;
-                        try {
-                          await api.delete(`/api/competition-templates/${tpl.id}`);
-                          toast.success('Modèle supprimé');
-                          await load();
-                        } catch (err) {
-                          toast.error(apiMessage(err));
-                        }
-                      }}
-                    >
+                    <Btn variant="danger" disabled={busy} onClick={() => onDelete(tpl)}>
                       Supprimer
                     </Btn>
                   </div>
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => void launchTemplate(tpl, true)}
-                    className="mt-2 text-xs font-semibold text-amber-300 hover:text-amber-200"
+                    onClick={() => onLaunchTemplate(tpl, true)}
+                    className="ia-pixel mt-2.5 min-h-[40px] text-[11px] text-ia-gold hover:brightness-125"
                   >
-                    🧪 Lancer en mode test (écrans du bar non basculés)
+                    Lancer en mode test (écrans du bar non basculés)
                   </button>
                 </div>
               );
@@ -422,7 +468,7 @@ function Launcher({
 
       <Card title="Événements passés">
         {past.length === 0 ? (
-          <p className="text-sm text-slate-400">Aucun événement terminé.</p>
+          <p className="text-sm text-ia-soft">Aucun événement terminé.</p>
         ) : (
           <div className="space-y-1">
             {past.map((s) => (
@@ -430,13 +476,14 @@ function Launcher({
                 key={s.id}
                 type="button"
                 onClick={() => onOpenPast(s.id)}
-                className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-white/10"
+                className="flex min-h-[48px] w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition hover:bg-white/5"
               >
-                <span className="min-w-0 truncate font-semibold">
-                  {s.quizName ?? 'Tournoi'}
-                  {s.testMode && <span className="ml-2 text-xs text-amber-300">test</span>}
+                <span className="flex min-w-0 items-center gap-2.5 font-bold text-ia-ink">
+                  <PixelSprite sprite={CUP} scale={2} className="shrink-0 text-ia-muted" />
+                  <span className="truncate">{s.quizName ?? 'Tournoi'}</span>
+                  {s.testMode && <Badge tone="amber">test</Badge>}
                 </span>
-                <span className="shrink-0 text-xs text-slate-500">{new Date(s.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                <span className="shrink-0 text-xs text-ia-muted">{new Date(s.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</span>
               </button>
             ))}
           </div>

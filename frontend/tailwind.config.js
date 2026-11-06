@@ -33,11 +33,35 @@ export default {
           red: '#FF3B5C',
           mint: '#5ED9A1',
         },
+        // Tournois : identité arcade Invader (logo néon, grille, borne).
+        // Même famille que la palette des tables, réglée pour les écrans vus
+        // de loin (or et argent pour les rangs, nuit violette pour le fond).
+        ia: {
+          night: '#0A0614',
+          deep: '#120A24',
+          panel: '#1A1035',
+          'panel-2': '#241552',
+          line: '#3B2A6E',
+          ink: '#F5F2FF',
+          soft: '#C9C3E8',
+          muted: '#8A84B2',
+          pink: '#FF2BD6',
+          violet: '#8B3DFF',
+          cyan: '#33E2FF',
+          gold: '#FFE955',
+          amber: '#FFB627',
+          silver: '#D6DCFF',
+          bronze: '#FF8A4C',
+          red: '#FF3B5C',
+          mint: '#5ED9A1',
+        },
       },
       fontFamily: {
         retro: ['"Press Start 2P"', 'monospace'],
         display: ['"Bebas Neue"', '"Press Start 2P"', 'sans-serif'],
         body: ['Inter', 'system-ui', 'sans-serif'],
+        // titres « chrome » du logo INVADER (même police que invader.bar)
+        chrome: ['Orbitron', '"Bebas Neue"', 'sans-serif'],
       },
       backgroundImage: {
         // degrades reutilisables
