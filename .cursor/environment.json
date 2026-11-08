@@ -1,0 +1,4 @@
+{
+  "name": "invader_master",
+  "install": "set -euo pipefail\nNODE_VERSION=20.19.4\nPREFIX=\"/usr/local/node-v${NODE_VERSION}\"\nif [ ! -x \"${PREFIX}/bin/node\" ]; then\n  tmp=\"$(mktemp -d)\"\n  tarball=\"node-v${NODE_VERSION}-linux-x64.tar.xz\"\n  curl -fsSL \"https://nodejs.org/dist/v${NODE_VERSION}/${tarball}\" -o \"${tmp}/${tarball}\"\n  curl -fsSL \"https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt\" -o \"${tmp}/SHASUMS256.txt\"\n  (\n    cd \"${tmp}\"\n    grep \"${tarball}\" SHASUMS256.txt | sha256sum -c -\n  )\n  sudo mkdir -p \"${PREFIX}\"\n  sudo tar -xJf \"${tmp}/${tarball}\" -C \"${PREFIX}\" --strip-components=1\n  rm -rf \"${tmp}\"\nfi\nexport PATH=\"${PREFIX}/bin:${PATH}\"\nhash -r\necho \"NODE=$(node -v) NPM=$(npm -v)\"\nnpm ci\nnpm ci --prefix backend\nnpm ci --prefix frontend"
+}
