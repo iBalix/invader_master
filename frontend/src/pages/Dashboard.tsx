@@ -17,6 +17,9 @@ import {
   ExternalLink,
   Radio,
   Trophy,
+  BarChart3,
+  Landmark,
+  Target,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -61,10 +64,17 @@ const UTILITAIRES: DashCard[] = [
   { title: 'Comptabilité', icon: Wallet, path: '/utilitaires/comptabilite', description: 'Gestion des flux d\'espèces', pageKey: 'utilitaires/comptabilite' },
 ];
 
+const STATS: DashCard[] = [
+  { title: 'Ventes', icon: BarChart3, badge: 'NEW', path: '/stats/ventes', description: 'CA, tickets, catégories, produits, heures', pageKey: 'stats/ventes' },
+  { title: 'Trésorerie', icon: Landmark, path: '/stats/tresorerie', description: 'Entrées, sorties et dépenses par catégorie', pageKey: 'stats/tresorerie' },
+  { title: 'Rentabilité', icon: Target, path: '/stats/rentabilite', description: 'CA mensuel, points morts, marge brute', pageKey: 'stats/rentabilite' },
+];
+
 const SECTIONS = [
   { title: 'Contenus', items: CONTENUS, color: 'blue' },
   { title: 'Événements', items: EVENEMENTS, color: 'purple' },
   { title: 'Tables tactiles', items: TABLES_TACTILES, color: 'pink' },
+  { title: 'Stats', items: STATS, color: 'emerald' },
   { title: 'Utilitaires', items: UTILITAIRES, color: 'amber' },
 ] as const;
 
@@ -72,6 +82,7 @@ const SECTION_STYLES: Record<string, { heading: string; accent: string; iconBg: 
   blue:   { heading: 'text-blue-700',   accent: 'border-blue-200', iconBg: 'bg-blue-100',   iconText: 'text-blue-600' },
   purple: { heading: 'text-purple-700', accent: 'border-purple-200', iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
   pink:   { heading: 'text-pink-700',   accent: 'border-pink-200', iconBg: 'bg-pink-100',   iconText: 'text-pink-600' },
+  emerald: { heading: 'text-emerald-700', accent: 'border-emerald-200', iconBg: 'bg-emerald-100', iconText: 'text-emerald-600' },
   amber:  { heading: 'text-amber-700',  accent: 'border-amber-200', iconBg: 'bg-amber-100',  iconText: 'text-amber-600' },
 };
 

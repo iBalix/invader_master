@@ -26,6 +26,9 @@ import {
   Radio,
   Globe,
   Trophy,
+  BarChart3,
+  Landmark,
+  Target,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -119,6 +122,16 @@ const SIDEBAR_MENU: SidebarItem[] = [
     defaultOpen: false,
     items: [
       { title: 'Paramètres', icon: Globe, disabled: false, path: '/site-web/parametres', pageKey: 'site-web/parametres' },
+    ],
+  },
+  {
+    kind: 'accordion',
+    title: 'Stats',
+    defaultOpen: false,
+    items: [
+      { title: 'Ventes', icon: BarChart3, disabled: false, path: '/stats/ventes', pageKey: 'stats/ventes', badgeText: 'NEW' },
+      { title: 'Trésorerie', icon: Landmark, disabled: false, path: '/stats/tresorerie', pageKey: 'stats/tresorerie' },
+      { title: 'Rentabilité', icon: Target, disabled: false, path: '/stats/rentabilite', pageKey: 'stats/rentabilite' },
     ],
   },
   {

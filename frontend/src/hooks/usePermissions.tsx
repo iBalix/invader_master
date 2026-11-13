@@ -29,6 +29,11 @@ export const ALL_PAGES: PageDef[] = [
   { key: 'evenements/gestionnaire', label: "Gestionnaire d'événements (console GM)" },
   { key: 'utilitaires/import-finances', label: 'Import finances' },
   { key: 'utilitaires/comptabilite', label: 'Comptabilite' },
+  // Miroir de ALL_PAGE_KEYS (backend/src/routes/rolePermissions.ts). Le backend
+  // verifie aussi ces cles sur /api/stats : donnees financieres.
+  { key: 'stats/ventes', label: 'Stats - Ventes' },
+  { key: 'stats/tresorerie', label: 'Stats - Tresorerie' },
+  { key: 'stats/rentabilite', label: 'Stats - Rentabilite' },
   { key: 'tables-tactiles/coupons', label: 'Tables tactiles - Codes promo' },
   { key: 'tables-tactiles/orders', label: 'Tables tactiles - Commandes' },
   { key: 'tables-tactiles/preview', label: 'Tables tactiles - Apercu interface (lien externe)' },

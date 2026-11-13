@@ -3,6 +3,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { getMysqlPool } from '../config/mysql.js';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { invalidateStatsCache } from '../services/financeStats.js';
 
 export const cashRoutes = Router();
 
@@ -57,6 +58,7 @@ cashRoutes.post('/', async (req, res) => {
       [responsable, Number(amount), comment ?? '']
     );
 
+    invalidateStatsCache();
     res.status(201).json({ status: 'success', id: result.insertId });
   } catch (err) {
     console.error('Cash add error:', err);
@@ -74,6 +76,7 @@ cashRoutes.delete('/:id', async (req, res) => {
 
     const pool = getMysqlPool();
     await pool.query<ResultSetHeader>('DELETE FROM Cash WHERE id = ?', [id]);
+    invalidateStatsCache();
     res.json({ status: 'success' });
   } catch (err) {
     console.error('Cash delete error:', err);

@@ -19,7 +19,12 @@ s'affiche dans le bar :
   - Affiche menu / jeux / événements / mises en avant
   - Permet de commander (panier, coupons, paiement)
 - **Battle questions** (générées par IA via OpenAI pour soirées battle)
-- **Import comptable** (CSV → Supabase + miroir MySQL OVH legacy)
+- **Import comptable** (exports Popina et Tiime → MySQL OVH legacy ; seul
+  `flux` est aussi recopié dans Supabase)
+- **Stats** (`/stats/ventes`, `/stats/tresorerie`, `/stats/rentabilite`) :
+  ventes Popina, opérations bancaires Tiime, suivi de rentabilité. Lit
+  **MySQL legacy** (`sales`, `flux`, `Cash`), jamais Supabase. Règles de calcul
+  en tête de `backend/src/services/financeStats.ts`.
 - **Gestion du bar** (incidents, étiquettes machines, agent Windows poste comptoir)
 - **Utilisateurs** internes (admin / salarie / externe)
 

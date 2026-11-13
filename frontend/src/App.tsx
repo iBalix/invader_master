@@ -28,6 +28,9 @@ import BattleQuestionsPage from './pages/BattleQuestionsPage';
 import ComingSoon from './pages/ComingSoon';
 import BarManagementPage from './pages/BarManagementPage';
 import CashManagementPage from './pages/CashManagementPage';
+import StatsSalesPage from './pages/Stats/StatsSalesPage';
+import StatsTreasuryPage from './pages/Stats/StatsTreasuryPage';
+import StatsProfitabilityPage from './pages/Stats/StatsProfitabilityPage';
 import TablesApp from './tables/TablesApp';
 import PlayerApp from './game/player/PlayerApp';
 import ScreenApp from './game/screen/ScreenApp';
@@ -99,6 +102,10 @@ export default function App() {
                     <Route path="site-web/parametres" element={<WebsiteSettingsPage />} />
                     <Route path="utilitaires/import-finances" element={<ImportFinancesPage />} />
                     <Route path="utilitaires/comptabilite" element={<CashManagementPage />} />
+                    <Route path="stats" element={<Navigate to="/stats/ventes" replace />} />
+                    <Route path="stats/ventes" element={<StatsSalesPage />} />
+                    <Route path="stats/tresorerie" element={<StatsTreasuryPage />} />
+                    <Route path="stats/rentabilite" element={<StatsProfitabilityPage />} />
                     <Route path="evenements/battle-questions" element={<BattleQuestionsPage />} />
                     <Route path="tables-tactiles/coupons" element={<CouponsPage />} />
                     <Route path="tables-tactiles/orders" element={<OrdersPage />} />
