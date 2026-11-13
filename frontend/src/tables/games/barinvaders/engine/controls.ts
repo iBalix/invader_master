@@ -1,7 +1,9 @@
 /**
- * Commandes du joueur local, toutes sources confondues : zones tactiles
- * (multi-doigts, suivies par pointerId), clavier (QA) et manettes USB des
- * dalles master. Produit le masque d'entrées de la sim, frame par frame.
+ * Commandes du joueur local : zones tactiles (multi-doigts, suivies par
+ * pointerId), et clavier pour la démo et le développement seulement. Les
+ * manettes USB des dalles master sont volontairement ignorées : Bar Invaders
+ * se joue au tactile uniquement (décision du 13/11/2026). Produit le masque
+ * d'entrées de la sim, frame par frame.
  *
  * Le tir de la borne part à l'APPUI et exige un relâchement entre deux tirs.
  * Un toucher très bref pourrait tomber entre deux pas de sim : chaque appui
@@ -16,7 +18,6 @@ import { SIM } from '../sim/invSim';
 const PULSE_ON = 4;
 const PULSE_OFF = 3;
 const MAX_QUEUED = 2;
-const AXIS_DEAD = 0.5;
 
 type Side = 'left' | 'right';
 
@@ -24,11 +25,6 @@ export class InvControls {
   private readonly touchSide = new Map<number, Side>();
   private keyLeft = false;
   private keyRight = false;
-  private padLeft = false;
-  private padRight = false;
-  /** boutons déjà enfoncés à l'apparition d'une manette : ignorés jusqu'au relâchement */
-  private padArmed = new Map<number, boolean>();
-  private padFireDown = new Map<number, boolean>();
   private presses = 0;
   private queued = 0;
   private fireOnUntil = -1;
@@ -72,30 +68,6 @@ export class InvControls {
     }
   }
 
-  // ----- manettes (sondées à chaque image par la boucle)
-
-  pollGamepads(): void {
-    const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : [];
-    let left = false;
-    let right = false;
-    for (const pad of pads) {
-      if (!pad) continue;
-      const ax = pad.axes[0] ?? 0;
-      if (ax < -AXIS_DEAD || pad.buttons[14]?.pressed) left = true;
-      if (ax > AXIS_DEAD || pad.buttons[15]?.pressed) right = true;
-      // tir : boutons de face et gâchettes
-      let down = false;
-      for (const i of [0, 1, 2, 3, 4, 5, 6, 7]) if (pad.buttons[i]?.pressed) down = true;
-      if (!this.padArmed.has(pad.index)) this.padArmed.set(pad.index, !down);
-      if (!down) this.padArmed.set(pad.index, true);
-      const was = this.padFireDown.get(pad.index) ?? false;
-      if (down && !was && this.padArmed.get(pad.index)) this.fire();
-      this.padFireDown.set(pad.index, down);
-    }
-    this.padLeft = left;
-    this.padRight = right;
-  }
-
   /** masque d'entrées pour la frame de sim `frame` (appelé une fois par pas) */
   maskAt(frame: number): number {
     if (this.presses > 0) {
@@ -109,8 +81,8 @@ export class InvControls {
       if (side === 'left') touchLeft = true;
       else touchRight = true;
     }
-    if (this.keyLeft || this.padLeft || touchLeft) mask |= SIM.IN_LEFT;
-    if (this.keyRight || this.padRight || touchRight) mask |= SIM.IN_RIGHT;
+    if (this.keyLeft || touchLeft) mask |= SIM.IN_LEFT;
+    if (this.keyRight || touchRight) mask |= SIM.IN_RIGHT;
     if (frame < this.fireOnUntil) {
       mask |= SIM.IN_FIRE;
     } else if (frame >= this.fireOffUntil && this.queued > 0) {

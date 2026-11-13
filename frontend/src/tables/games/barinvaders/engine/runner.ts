@@ -291,7 +291,6 @@ export class InvRunner {
     const st = this.bridge.store.getState();
     const round = st.round;
     if ((round ? round.index : null) !== this.roundIndex) this.resetRound(st);
-    this.controls.pollGamepads();
     this.view.setReduced(st.reduced);
     const sfx = this.getSfx();
 

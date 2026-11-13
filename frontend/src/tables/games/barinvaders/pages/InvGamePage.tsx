@@ -7,6 +7,9 @@
  * qui recharge reprend son siège via son token, et sa partie en cours via le
  * WebSocket.
  *
+ * Commandes : tactile uniquement (pas de manette) ; clavier en démo et en
+ * développement seulement.
+ *
  * Mode démo local : /table/games/barinvaders/demo[?bots=3]
  * Options : ?debug=1 (pastille de diagnostic), ?mute=1 (sans son).
  */
@@ -165,7 +168,9 @@ export default function InvGamePage() {
     };
   }, [muted, controls]);
 
-  // clavier (QA, dalles avec clavier) : jamais pendant la saisie d'un pseudo
+  // les parties du bar se jouent au tactile uniquement ; le clavier ne sert
+  // qu'à la démo et au développement (QA), jamais pendant la saisie d'un pseudo
+  const keyboard = import.meta.env.DEV || isDemo;
   useEffect(() => {
     const handler = (down: boolean) => (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -175,8 +180,10 @@ export default function InvGamePage() {
     };
     const onDown = handler(true);
     const onUp = handler(false);
-    window.addEventListener('keydown', onDown);
-    window.addEventListener('keyup', onUp);
+    if (keyboard) {
+      window.addEventListener('keydown', onDown);
+      window.addEventListener('keyup', onUp);
+    }
     const onBlur = () => controls.releaseAll();
     window.addEventListener('blur', onBlur);
     return () => {
@@ -184,7 +191,7 @@ export default function InvGamePage() {
       window.removeEventListener('keyup', onUp);
       window.removeEventListener('blur', onBlur);
     };
-  }, [controls]);
+  }, [controls, keyboard]);
 
   // ----- identité et sources d'état (online / démo)
   const [identity, setIdentity] = useState(() => (isDemo ? null : getInvIdentity(sessionId)));
