@@ -7,10 +7,12 @@ import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import crypto from 'crypto';
+import type { ResultSetHeader } from 'mysql2';
 import { supabaseAdmin } from '../config/supabase.js';
 import { getMysqlPool } from '../config/mysql.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
+import { invalidateStatsCache } from '../services/financeStats.js';
 
 export const financeImportRoutes = Router();
 financeImportRoutes.use(authMiddleware, requireRole('admin'));
@@ -86,6 +88,213 @@ function formatMySQLDate(isoDate: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Ventes Popina : du fichier aux lignes a inserer
+// ---------------------------------------------------------------------------
+
+/** Lignes de recap de ticket : ce ne sont pas des ventes. */
+const NON_PRODUCT_CATS = ['Paiement', 'Total', 'Pourboire', 'Rendu'];
+
+/**
+ * Jusqu'au 31/12/2025 la table `sales` a ete alimentee par l'ancien outil PHP,
+ * avec un autre identifiant de ligne. Reimporter cette periode ici ne
+ * reconnaitrait aucune ligne existante et doublerait tout l'historique : ces
+ * lignes sont donc ecartees.
+ */
+export const LEGACY_SALES_BEFORE = '2026-01-01';
+
+/**
+ * Identifiant d'une ligne de vente.
+ *
+ * Un meme produit peut figurer plusieurs fois sur un ticket (deux saisies
+ * separees). L'identifiant historique, md5(ticket + nom), etait alors le meme
+ * pour les deux lignes et INSERT IGNORE ecartait la seconde : environ 3,6 % du
+ * CA n'entrait jamais en base. Les repetitions recoivent desormais un suffixe.
+ *
+ * La premiere occurrence garde l'identifiant historique : les lignes deja en
+ * base sont reconnues, et reimporter un export ajoute uniquement les lignes
+ * qui avaient ete perdues (cf. reconcileRepeats pour le rapprochement).
+ */
+export function salesLineId(ticket: string, name: string, occurrence: number): string {
+  const key = occurrence === 0 ? ticket + name : `${ticket}${name}#${occurrence}`;
+  return crypto.createHash('md5').update(key).digest('hex');
+}
+
+export interface SalesRecord {
+  id: string;
+  /** Ticket + produit : les lignes partageant cette cle sont des repetitions. Non stocke. */
+  lineKey: string;
+  /** Pose par reconcileRepeats : ligne a ne pas inserer (cf. sa doc). Non stocke. */
+  conflict?: boolean;
+  /** Format MySQL `YYYY-MM-DD HH:MM:SS`. */
+  date: string;
+  salle: string;
+  table_number: number;
+  parent: string;
+  cat: string;
+  name: string;
+  unit: number;
+  tier: string;
+  tax: number;
+  quantity: number;
+  brut: number;
+  discount: number;
+  net: number;
+  tva: number;
+  ht: number;
+  ticket: number;
+}
+
+/**
+ * Transforme les lignes brutes de l'export produits Popina en lignes de vente.
+ * Fonction pure, sans acces base, pour pouvoir etre rejouee a blanc.
+ *
+ * Les repetitions d'un produit sur un ticket recoivent ici un identifiant
+ * selon leur rang dans le fichier. Ce rang n'est pas fiable d'un export a
+ * l'autre : reconcileRepeats le corrige ensuite contre ce qui est deja en base.
+ */
+export function buildSalesRecords(rows: Array<Record<string, unknown>>): {
+  records: SalesRecord[];
+  /** Lignes annulees, recap de ticket, ou illisibles. */
+  skipped: number;
+  /** Lignes anterieures a LEGACY_SALES_BEFORE, ecartees. */
+  legacy: number;
+} {
+  const records: SalesRecord[] = [];
+  const occurrences = new Map<string, number>();
+  let skipped = 0;
+  let legacy = 0;
+
+  for (const row of rows) {
+    const cancelled = row['cancelled'];
+    if (cancelled === true || String(cancelled ?? '').toUpperCase() === 'VRAI') { skipped++; continue; }
+
+    const cat = String(row['cat'] ?? '').trim();
+    if (NON_PRODUCT_CATS.includes(cat)) { skipped++; continue; }
+
+    const ticket = String(row['ticket'] ?? '').trim();
+    const name = String(row['name'] ?? '').trim();
+    if (!ticket || !name) { skipped++; continue; }
+
+    const isoDate = parseDatePopina(row['date']);
+    if (!isoDate) { skipped++; continue; }
+    const date = formatMySQLDate(isoDate);
+
+    if (date.slice(0, 10) < LEGACY_SALES_BEFORE) { legacy++; continue; }
+
+    const key = `${ticket}\u0000${name}`;
+    const occurrence = occurrences.get(key) ?? 0;
+    occurrences.set(key, occurrence + 1);
+
+    records.push({
+      id: salesLineId(ticket, name, occurrence),
+      lineKey: key,
+      date,
+      salle: String(row['salle'] ?? ''),
+      table_number: parseInt(String(row['table'] ?? '0'), 10) || 0,
+      parent: String(row['parent'] ?? ''),
+      cat,
+      name,
+      unit: parseFloat(String(row['unit'] ?? '0')) || 0,
+      tier: String(row['tier'] ?? ''),
+      tax: parseFloat(String(row['tax'] ?? '0')) || 0,
+      quantity: parseInt(String(row['quantity'] ?? '0'), 10) || 0,
+      brut: parseFloat(String(row['brut'] ?? '0')) || 0,
+      discount: parseFloat(String(row['discount'] ?? '0')) || 0,
+      net: parseFloat(String(row['net'] ?? row['brut'] ?? '0')) || 0,
+      tva: parseFloat(String(row['tva'] ?? '0')) || 0,
+      ht: parseFloat(String(row['ht'] ?? '0')) || 0,
+      ticket: parseInt(ticket, 10) || 0,
+    });
+  }
+
+  return { records, skipped, legacy };
+}
+
+/** Ce qu'il faut lire en base pour reconnaitre une ligne deja importee. */
+export interface ExistingSalesRow {
+  id: string;
+  quantity: number;
+  brut: number;
+  discount: number;
+  net: number;
+  tier: string;
+}
+
+/** Contenu d'une ligne, arrondi au centime (les montants sont des FLOAT en base). */
+function lineSignature(line: Omit<ExistingSalesRow, 'id'>): string {
+  const cents = (v: number) => (Math.round(Number(v) * 100) / 100).toFixed(2);
+  return `${Math.round(Number(line.quantity))}|${cents(line.brut)}|${cents(line.discount)}|${cents(line.net)}|${String(line.tier).trim()}`;
+}
+
+/** Identifiants des lignes repetees : les seuls a devoir etre lus en base avant l'insertion. */
+export function repeatedLineIds(records: SalesRecord[]): string[] {
+  const counts = new Map<string, number>();
+  for (const r of records) counts.set(r.lineKey, (counts.get(r.lineKey) ?? 0) + 1);
+  return records.filter((r) => (counts.get(r.lineKey) ?? 0) > 1).map((r) => r.id);
+}
+
+/**
+ * Rapproche les lignes repetees du fichier de celles deja en base.
+ *
+ * Popina ne ressort pas toujours les lignes d'un ticket dans le meme ordre d'un
+ * export a l'autre (constate sur un ticket de 48 lignes d'octobre 2026). Se
+ * fier au rang ferait donc ignorer une ligne jamais importee et en ajouter une
+ * deja presente. Pour chaque produit repete sur un ticket :
+ *   1. chaque ligne deja en base est appariee a une ligne du fichier de meme
+ *      contenu (quantite, montants, tarif), qui reprend son identifiant et
+ *      sera donc ignoree a l'insertion ;
+ *   2. les lignes restantes prennent les identifiants encore libres du groupe.
+ * Le resultat ne depend plus de l'ordre du fichier, et reimporter le meme
+ * export n'ajoute rien.
+ *
+ * Une ligne en base sans equivalent dans le fichier (modifiee dans Popina
+ * depuis son import) n'est jamais touchee. Si elle occupe le dernier
+ * identifiant libre, la ligne du fichier en trop est marquee `conflict` et
+ * n'est pas inseree : mieux vaut une ligne en attente qu'un doublon.
+ *
+ * Modifie `records` en place. Renvoie le nombre de lignes en conflit.
+ */
+export function reconcileRepeats(records: SalesRecord[], existing: ExistingSalesRow[]): number {
+  const existingById = new Map(existing.map((row) => [row.id, row]));
+  const groups = new Map<string, SalesRecord[]>();
+  for (const r of records) {
+    const group = groups.get(r.lineKey);
+    if (group) group.push(r);
+    else groups.set(r.lineKey, [r]);
+  }
+
+  let conflicts = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const ids = group.map((r) => r.id);
+    const present = ids.filter((id) => existingById.has(id));
+    if (present.length === 0) continue; // rien en base : le rang du fichier suffit
+
+    const pool = [...group];
+    for (const id of present) {
+      const signature = lineSignature(existingById.get(id) as ExistingSalesRow);
+      const index = pool.findIndex((r) => lineSignature(r) === signature);
+      if (index >= 0) {
+        pool[index].id = id;
+        pool.splice(index, 1);
+      }
+    }
+
+    const free = ids.filter((id) => !existingById.has(id));
+    for (const r of pool) {
+      const id = free.shift();
+      if (id) {
+        r.id = id;
+      } else {
+        r.conflict = true;
+        conflicts++;
+      }
+    }
+  }
+  return conflicts;
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/finance-import/sales   (SSE — import Popina sales from .xlsx)
 // ---------------------------------------------------------------------------
 
@@ -121,9 +330,42 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
 
     sendSSE(res, 'progress', { step: 'parsed', message: `${rows.length} lignes trouvées` });
 
+    if (rows.length > 0) {
+      sendSSE(res, 'progress', { step: 'columns', message: `Colonnes: ${Object.keys(rows[0]).join(', ')}` });
+    }
+
+    const { records, skipped, legacy } = buildSalesRecords(rows);
+
+    if (legacy > 0) {
+      sendSSE(res, 'progress', {
+        step: 'warn',
+        message: `${legacy} lignes antérieures au 01/01/2026 ignorées : cette période vient de l'ancien outil, la réimporter créerait des doublons.`,
+      });
+    }
+
     sendSSE(res, 'progress', { step: 'mysql', message: 'Connexion MySQL...' });
     mysqlConn = await getMysqlPool().getConnection();
     sendSSE(res, 'progress', { step: 'mysql', message: 'MySQL connecté ✓' });
+
+    // Produits repetes sur un ticket : on lit ce qui est deja en base pour ne
+    // ni perdre ni doubler une ligne (cf. reconcileRepeats).
+    const repeatIds = repeatedLineIds(records);
+    const existingRepeats: ExistingSalesRow[] = [];
+    for (let i = 0; i < repeatIds.length; i += 500) {
+      const chunk = repeatIds.slice(i, i + 500);
+      const [found] = await mysqlConn.query(
+        `SELECT id, quantity, brut, discount, net, tier FROM sales WHERE id IN (${chunk.map(() => '?').join(',')})`,
+        chunk,
+      );
+      existingRepeats.push(...(found as ExistingSalesRow[]));
+    }
+    const conflicts = reconcileRepeats(records, existingRepeats);
+    if (conflicts > 0) {
+      sendSSE(res, 'progress', {
+        step: 'warn',
+        message: `${conflicts} lignes non importées : la base contient pour ces tickets une ligne qui ne correspond plus à l'export.`,
+      });
+    }
 
     await mysqlConn.beginTransaction();
 
@@ -131,59 +373,31 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
       (id, date, salle, table_number, parent, cat, name, unit, tier, tax, quantity, brut, discount, net, tva, ht, ticket)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
+    // imported = lignes reellement ajoutees ; existing = deja en base (ignorees)
     let imported = 0;
-    let skipped = 0;
+    let existing = 0;
+    let failed = 0;
     const BATCH = 200;
     let mysqlBatchCount = 0;
 
-    if (rows.length > 0) {
-      sendSSE(res, 'progress', { step: 'columns', message: `Colonnes: ${Object.keys(rows[0]).join(', ')}` });
-    }
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-
-      const cancelled = row['cancelled'];
-      if (cancelled === true || String(cancelled ?? '').toUpperCase() === 'VRAI') { skipped++; continue; }
-
-      const cat = String(row['cat'] ?? '').trim();
-      const NON_PRODUCT_CATS = ['Paiement', 'Total', 'Pourboire', 'Rendu'];
-      if (NON_PRODUCT_CATS.includes(cat)) { skipped++; continue; }
-
-      const ticket = String(row['ticket'] ?? '').trim();
-      const name = String(row['name'] ?? '').trim();
-      if (!ticket || !name) { skipped++; continue; }
-
-      const date = parseDatePopina(row['date']);
-      if (!date) { skipped++; continue; }
-
-      const id = crypto.createHash('md5').update(ticket + name).digest('hex');
-      const salle = String(row['salle'] ?? '');
-      const table_number = parseInt(String(row['table'] ?? '0'), 10) || 0;
-      const parent = String(row['parent'] ?? '');
-      const unit = parseFloat(String(row['unit'] ?? '0')) || 0;
-      const tier = String(row['tier'] ?? '');
-      const tax = parseFloat(String(row['tax'] ?? '0')) || 0;
-      const quantity = parseInt(String(row['quantity'] ?? '0'), 10) || 0;
-      const brut = parseFloat(String(row['brut'] ?? '0')) || 0;
-      const discount = parseFloat(String(row['discount'] ?? '0')) || 0;
-      const net = parseFloat(String(row['net'] ?? row['brut'] ?? '0')) || 0;
-      const tva = parseFloat(String(row['tva'] ?? '0')) || 0;
-      const ht = parseFloat(String(row['ht'] ?? '0')) || 0;
-      const ticketInt = parseInt(ticket, 10) || 0;
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      if (r.conflict) continue;
 
       try {
-        await mysqlConn.execute(mysqlStmt, [
-          id, formatMySQLDate(date), salle, table_number, parent, cat, name,
-          unit, tier, tax, quantity, brut, discount, net, tva, ht, ticketInt,
+        const [result] = await mysqlConn.execute<ResultSetHeader>(mysqlStmt, [
+          r.id, r.date, r.salle, r.table_number, r.parent, r.cat, r.name,
+          r.unit, r.tier, r.tax, r.quantity, r.brut, r.discount, r.net, r.tva, r.ht, r.ticket,
         ]);
+        if (result.affectedRows > 0) imported++;
+        else existing++;
       } catch (mysqlErr) {
-        if (imported === 0) {
+        if (failed === 0) {
           sendSSE(res, 'progress', { step: 'warn', message: `MySQL insert error: ${(mysqlErr as Error).message}` });
         }
+        failed++;
       }
 
-      imported++;
       mysqlBatchCount++;
 
       if (mysqlBatchCount >= BATCH) {
@@ -195,16 +409,25 @@ financeImportRoutes.post('/sales', upload.single('file'), async (req: Request, r
       if ((i + 1) % BATCH === 0) {
         sendSSE(res, 'progress', {
           step: 'batch',
-          message: `${imported} importées...`,
+          message: `${imported} ajoutées, ${existing} déjà en base...`,
           current: i + 1,
-          total: rows.length,
+          total: records.length,
         });
       }
     }
 
     await mysqlConn.commit();
+    invalidateStatsCache();
 
-    sendSSE(res, 'done', { imported, skipped, total: rows.length });
+    sendSSE(res, 'done', {
+      imported,
+      existing,
+      skipped,
+      ...(legacy > 0 ? { legacy } : {}),
+      ...(conflicts > 0 ? { conflicts } : {}),
+      ...(failed > 0 ? { failed } : {}),
+      total: rows.length,
+    });
     res.end();
   } catch (err) {
     if (mysqlConn) {
@@ -417,6 +640,7 @@ financeImportRoutes.post('/flux', upload.single('file'), async (req: Request, re
       }
     }
 
+    invalidateStatsCache();
     sendSSE(res, 'done', { imported, updated, mysqlWrites, skipped, backfilled, total: dataRows.length });
     res.end();
   } catch (err) {

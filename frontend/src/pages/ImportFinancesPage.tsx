@@ -282,8 +282,12 @@ function ResultBanner({ result, onReset }: { result: Record<string, unknown>; on
 function formatLabel(key: string): string {
   const labels: Record<string, string> = {
     imported: 'Insérées',
+    existing: 'Déjà en base',
     updated: 'Mises à jour',
     skipped: 'Ignorées',
+    legacy: 'Antérieures à 2026, écartées',
+    conflicts: 'En conflit, non importées',
+    failed: 'En erreur',
     backfilled: 'Catégories remplies',
   };
   return labels[key] ?? key;
