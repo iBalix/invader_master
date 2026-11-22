@@ -8,7 +8,9 @@
 
 import {
   DEFAULT_TOURNAMENT_CONFIG,
+  defaultPoolMax,
   httpErr,
+  poolMaxOf,
   type ByePolicy,
   type BracketSeeding,
   type MatchDecide,
@@ -142,6 +144,14 @@ export function normalizeTournamentConfig(input: unknown, base: TournamentConfig
     format,
     game,
     groupSize: groupSizeFor(game),
+    // changer de jeu remet le maximum du jeu (30 MK, 3 Smash), pas celui de la base
+    poolMaxPoints: int(
+      src.poolMaxPoints,
+      1,
+      999,
+      base.game === game ? poolMaxOf(base) : defaultPoolMax(game),
+      'poolMaxPoints',
+    ),
     placementPoints: placementList(src.placementPoints, base.placementPoints),
     poolWinPoints: num(src.poolWinPoints, 0, 100, base.poolWinPoints, 'poolWinPoints'),
     grouping,

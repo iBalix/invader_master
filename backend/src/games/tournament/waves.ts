@@ -6,12 +6,18 @@
  * le monde ne joue pas en même temps, les groupes au-delà de `parallel`
  * restent en file et passent dès qu'une place se libère. Le barrage et le
  * tableau n'ajoutent pas de points de poule.
+ *
+ * Points de poule : chaque joueur marque ses points de la salve (0 à 30 en
+ * MK, 0 à 3 en Smash, cf. poolMaxOf) et le classement en fait la somme. Le
+ * barrage et le tableau se saisissent toujours en places (ordre d'arrivée,
+ * vainqueur et 3-x en Smash).
  */
 
 import { shuffle } from './swiss.js';
 import {
   FEED_MAX,
   httpErr,
+  poolMaxOf,
   type BracketMatch,
   type BracketRound,
   type ScoreClaim,
@@ -117,7 +123,10 @@ function chunk(order: string[], sizes: number[]): string[][] {
   return groups;
 }
 
-/** points de poule. Le barème MK ne dépend pas de la taille du groupe. */
+/**
+ * ANCIEN barème par places (4/3/2/1 en MK, 1 point la victoire en Smash).
+ * Ne sert plus qu'aux groupes saisis en places avant le passage aux points.
+ */
 export function pointsForPlaces(places: string[], cfg: TournamentConfig): Record<string, number> {
   const out: Record<string, number> = {};
   if (cfg.game === 'smash') {
@@ -132,6 +141,41 @@ export function pointsForPlaces(places: string[], cfg: TournamentConfig): Record
   return out;
 }
 
+/** saisie d'un groupe : des points en poule, des places en barrage */
+export interface GroupInput {
+  places?: string[] | null;
+  /** { playerId: points }, tel que reçu (validé par cleanScores) */
+  scores?: unknown;
+}
+
+/**
+ * Points d'un groupe de poule : un entier de 0 à `max` pour CHAQUE joueur du
+ * groupe, et personne d'autre. Rendus propres (nombres), sinon 400.
+ */
+export function cleanScores(playerIds: string[], raw: unknown, max: number): Record<string, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw httpErr('error_tournament_bad_result', 400);
+  const src = raw as Record<string, unknown>;
+  const keys = Object.keys(src);
+  if (keys.length !== playerIds.length || keys.some((id) => !playerIds.includes(id))) {
+    throw httpErr('error_tournament_bad_result', 400);
+  }
+  const out: Record<string, number> = {};
+  for (const id of playerIds) {
+    const value = src[id];
+    const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 0 || n > max) {
+      throw httpErr('error_tournament_bad_points', 400);
+    }
+    out[id] = n;
+  }
+  return out;
+}
+
+/** classement du groupe d'après les points. À égalité, l'ordre du groupe. */
+export function placesFromScores(playerIds: string[], scores: Record<string, number>): string[] {
+  return [...playerIds].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || playerIds.indexOf(a) - playerIds.indexOf(b));
+}
+
 function makeGroup(waveNumber: number, board: number, playerIds: string[], counts: boolean, prefix: string): WaveGroup {
   return {
     id: `${prefix}${waveNumber}g${board}`,
@@ -140,6 +184,7 @@ function makeGroup(waveNumber: number, board: number, playerIds: string[], count
     playerIds,
     status: 'queued',
     places: null,
+    scores: null,
     points: {},
     counts,
     scoredAt: null,
@@ -234,20 +279,41 @@ export function startPoolWave(state: TournamentState, ctx: WaveCtx, grouping?: W
   return wave;
 }
 
-export function scoreGroup(state: TournamentState, ctx: WaveCtx, groupId: string, places: string[]): void {
+/**
+ * Ce que vaut une saisie pour CE groupe : en poule les points (et les places
+ * qui s'en déduisent), en barrage l'ordre d'arrivée.
+ */
+function readGroupInput(
+  group: WaveGroup,
+  ctx: WaveCtx,
+  input: GroupInput,
+): { places: string[]; scores: Record<string, number> | null } {
+  if (group.counts) {
+    const scores = cleanScores(group.playerIds, input.scores, poolMaxOf(ctx.cfg));
+    return { places: placesFromScores(group.playerIds, scores), scores };
+  }
+  const places = Array.isArray(input.places) ? input.places.map((id) => String(id)) : [];
+  assertPlaces(group.playerIds, places);
+  return { places, scores: null };
+}
+
+export function scoreGroup(state: TournamentState, ctx: WaveCtx, groupId: string, input: GroupInput): void {
   const wave = openWave(state);
   if (!wave) throw httpErr('error_tournament_no_round', 409);
   const group = wave.groups.find((g) => g.id === groupId);
   if (!group) throw httpErr('error_tournament_unknown_match', 404);
   if (group.playerIds.length < 2) throw httpErr('error_tournament_bad_result', 400);
-  assertPlaces(group.playerIds, places);
-  group.places = [...places];
+  const { places, scores } = readGroupInput(group, ctx, input);
+  group.places = places;
+  group.scores = scores;
   group.scoredAt = iso(ctx);
-  group.points = group.counts ? pointsForPlaces(places, ctx.cfg) : {};
+  group.points = group.counts && scores ? { ...scores } : {};
   group.status = 'done';
   group.claims = [];
   armQueue(wave);
-  const names = places.map((id) => pseudo(state, id)).join(', ');
+  const names = scores
+    ? places.map((id) => `${pseudo(state, id)} ${scores[id]}`).join(', ')
+    : places.map((id) => pseudo(state, id)).join(', ');
   if (wave.groups.every((g) => g.places)) {
     wave.finishedAt = iso(ctx);
     state.phase = 'wave_done';
@@ -548,8 +614,14 @@ export function scoreBracket(
   return false;
 }
 
-function claimSignature(claim: Pick<ScoreClaim, 'places' | 'loserGames'>): string {
-  return `${claim.loserGames ?? ''}:${claim.places.join(',')}`;
+function claimSignature(claim: Pick<ScoreClaim, 'places' | 'loserGames' | 'scores'>): string {
+  const scores = claim.scores
+    ? Object.keys(claim.scores)
+        .sort()
+        .map((id) => `${id}=${claim.scores?.[id]}`)
+        .join(',')
+    : '';
+  return `${claim.loserGames ?? ''}:${claim.places.join(',')}:${scores}`;
 }
 
 /** deux propositions différentes : le GM doit trancher. Une seule, ou toutes identiques : à valider. */
@@ -571,15 +643,16 @@ function assertActiveHere(state: TournamentState, playerId: string, playerIds: s
 }
 
 /**
- * Le joueur propose le résultat de SON groupe. Rien n'est compté : le GM
- * valide. Le jeton a déjà été traduit en playerId par la route.
+ * Le joueur propose le résultat de SON groupe : les points de chacun en
+ * poule, l'ordre d'arrivée en barrage. Rien n'est compté : le GM valide.
+ * Le jeton a déjà été traduit en playerId par la route.
  */
 export function submitGroupClaim(
   state: TournamentState,
   ctx: WaveCtx,
   playerId: string,
   groupId: string,
-  places: string[],
+  input: GroupInput,
 ): void {
   if (ctx.cfg.format !== 'waves') throw httpErr('error_tournament_bad_config: saisie réservée aux salves', 400);
   const wave = openWave(state);
@@ -588,10 +661,11 @@ export function submitGroupClaim(
   if (!group || group.places) throw httpErr('error_tournament_claim_closed', 409);
   if (group.status !== 'playing') throw httpErr('error_tournament_claim_closed', 409);
   assertActiveHere(state, playerId, group.playerIds);
-  assertPlaces(group.playerIds, places);
+  const { places, scores } = readGroupInput(group, ctx, input);
   group.claims = rememberClaim(group.claims, {
     playerId,
-    places: [...places],
+    places,
+    scores,
     loserGames: null,
     at: iso(ctx),
   });
@@ -620,18 +694,23 @@ export function submitBracketClaim(
   match.claims = rememberClaim(match.claims, {
     playerId,
     places: [...places],
+    scores: null,
     loserGames: games,
     at: iso(ctx),
   });
 }
 
-/** barème modifié en cours de poules : on recalcule les groupes déjà saisis */
+/**
+ * Réglages modifiés en cours de poules. Les points saisis ne bougent pas ;
+ * seuls les groupes saisis en places avant le passage aux points suivent
+ * encore l'ancien barème.
+ */
 export function recomputePoolPoints(state: TournamentState, cfg: TournamentConfig): void {
   for (const wave of state.waves ?? []) {
     if (wave.kind !== 'pool') continue;
     for (const g of wave.groups) {
       if (!g.counts || !g.places) continue;
-      g.points = pointsForPlaces(g.places, cfg);
+      g.points = g.scores ? { ...g.scores } : pointsForPlaces(g.places, cfg);
     }
   }
 }
@@ -658,12 +737,18 @@ export function computeWaveStandings(state: TournamentState): StandingRow[] {
   for (const wave of state.waves ?? []) {
     for (const g of wave.groups) {
       if (!g.counts || !g.places) continue;
+      // meilleur score du groupe = victoire ; à plusieurs en tête = nul
+      const scores = g.scores;
+      const top = scores ? Math.max(...g.places.map((id) => scores[id] ?? 0)) : 0;
+      const atTop = scores ? g.places.filter((id) => (scores[id] ?? 0) === top).length : 1;
       g.places.forEach((id, index) => {
         const row = rows.get(id);
         if (!row) return;
         row.points += g.points[id] ?? 0;
         row.played += 1;
-        if (index === 0) row.wins += 1;
+        const first = scores ? (scores[id] ?? 0) === top : index === 0;
+        if (first && atTop === 1) row.wins += 1;
+        else if (first) row.draws += 1;
         else row.losses += 1;
       });
     }

@@ -4,7 +4,7 @@
  * file sont lisibles de loin, plus denses que sur le projecteur.
  */
 
-import { fmtScore, pseudoOf, tournamentUrl } from '../tournamentClient';
+import { fmtScore, groupRankOf, pseudoOf, tournamentUrl } from '../tournamentClient';
 import type { TournamentPublicState } from '../tournamentTypes';
 import { BarHeading, BigCountdown, BracketTree, EventChip, PlayerTags } from './parts';
 import { ChampionScene, groupLetter } from './WavesProjo';
@@ -87,11 +87,13 @@ function Salve({ state }: { state: TournamentPublicState }) {
                   {ids.map((id, i) => (
                     <li key={id} className="flex min-w-0 items-center gap-4">
                       {g.places ? (
-                        <span className="ia-pixel w-9 shrink-0 text-2xl text-ia-muted">{i + 1}</span>
+                        <span className="ia-pixel w-9 shrink-0 text-2xl text-ia-muted">{groupRankOf(g, id) || i + 1}</span>
                       ) : (
                         <Invader seed={id} scale={3} className={`w-9 ${invaderTone(id)}`} />
                       )}
-                      <span className="ia-display truncate text-5xl text-white">{pseudoOf(state, id)}</span>
+                      <span className="ia-display min-w-0 truncate text-5xl text-white">{pseudoOf(state, id)}</span>
+                      {/* poule terminée : les points de la salve */}
+                      {g.counts && g.places && <span className="ia-display ml-auto shrink-0 text-5xl tabular-nums text-ia-gold">+{g.points[id] ?? 0}</span>}
                     </li>
                   ))}
                 </ul>

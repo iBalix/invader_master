@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react';
-import { pseudoOf } from '../../game/tournament/tournamentClient';
+import { groupRankOf, poolMaxFor, pseudoOf } from '../../game/tournament/tournamentClient';
 import { useServerNow } from '../../game/tournament/useTournamentSession';
 import type { TBracketMatch, TClaim, TWaveGroup, TournamentGmState } from '../../game/tournament/tournamentTypes';
 import { Crown, GameGlyph, Invader, Trophy, invaderTone, mmss, rankClass, rankText } from '../../game/tournament/arcade/kit';
@@ -197,35 +197,61 @@ function Inscriptions({
               hint="Un retardataire entre à la salve suivante"
             />
           </div>
-          {mk && (
-            <div className="mt-3">
-              <span className="ia-pixel mb-1.5 block text-[11px] text-ia-muted">Barème des places</span>
-              <div className="grid grid-cols-4 gap-2">
-                {state.config.placementPoints.map((pts, i) => (
-                  <label key={i} className="block">
-                    <span className={`ia-pixel mb-1 block text-[11px] ${rankClass(i + 1)}`}>{rankText(i + 1)}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={pts}
-                      disabled={busy}
-                      onChange={(e) => {
-                        const next = [...state.config.placementPoints];
-                        next[i] = Number(e.target.value);
-                        setCfg({ placementPoints: next });
-                      }}
-                      className={`${inputClass} text-center font-black tabular-nums`}
-                    />
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* chacun saisit ses points de la salve, de 0 à ce maximum */}
+          <MaxPointsField
+            label={mk ? 'Points max par salve' : 'Points max par match'}
+            value={poolMaxFor(state.game, state.config.poolMaxPoints)}
+            busy={busy}
+            onCommit={(v) => setCfg({ poolMaxPoints: v })}
+          />
         </Card>
       )}
       <Roster state={state} busy={busy} act={act} readOnly={readOnly} pseudo={pseudo} setPseudo={setPseudo} />
     </>
+  );
+}
+
+/**
+ * Maximum de points par joueur. Envoyé à la sortie du champ (ou Entrée),
+ * pas à chaque chiffre : taper 25 ne doit pas passer par un maximum de 2.
+ */
+function MaxPointsField({
+  label, value, busy, onCommit,
+}: {
+  label: string;
+  value: number;
+  busy: boolean;
+  onCommit: (v: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  const [synced, setSynced] = useState(value);
+  if (synced !== value) {
+    setSynced(value);
+    setText(String(value));
+  }
+  const commit = () => {
+    const n = Number(text);
+    if (Number.isInteger(n) && n >= 1 && n <= 999 && n !== value) onCommit(n);
+    else setText(String(value));
+  };
+  return (
+    <label className="mt-3 block max-w-[16rem]">
+      <span className="ia-pixel mb-1.5 block text-[11px] text-ia-muted">{label}</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        disabled={busy}
+        value={text}
+        onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+        }}
+        className={`${inputClass} font-bold tabular-nums`}
+      />
+      <span className="mt-1 block text-xs text-ia-muted">Chacun saisit ses points, de 0 à ce maximum.</span>
+    </label>
   );
 }
 
@@ -290,6 +316,8 @@ function GroupScore({
   const [order, setOrder] = useState<string[]>([]);
   const done = group.places;
   const queued = group.status === 'queued';
+  const max = poolMaxFor(state.game, state.config.poolMaxPoints);
+  const lastClaim = group.claims[group.claims.length - 1];
   const kind = mk ? 'Course' : 'Match';
   const tone = done ? 'plain' : queued ? 'amber' : group.claims.length > 0 ? 'indigo' : 'cyan';
   return (
@@ -309,14 +337,19 @@ function GroupScore({
           claims={group.claims}
           busy={busy}
           readOnly={readOnly}
-          onValidate={(claim) => void act('score-group', { groupId: group.id, places: claim.places })}
+          onValidate={(claim) =>
+            void act(
+              'score-group',
+              group.counts ? { groupId: group.id, scores: claim.scores ?? {} } : { groupId: group.id, places: claim.places },
+            )
+          }
         />
       )}
       {done ? (
         <ol className="space-y-1">
           {done.map((id, i) => (
             <li key={id} className="flex items-center gap-3">
-              <span className={`ia-pixel w-9 text-xs ${rankClass(i + 1)}`}>{rankText(i + 1)}</span>
+              <span className={`ia-pixel w-9 text-xs ${rankClass(groupRankOf(group, id) || i + 1)}`}>{rankText(groupRankOf(group, id) || i + 1)}</span>
               <span className="min-w-0 flex-1 truncate font-bold text-ia-ink">{pseudoOf(state, id)}</span>
               {group.counts && <span className="ia-display text-2xl tabular-nums text-ia-gold">+{group.points[id] ?? 0}</span>}
             </li>
@@ -324,6 +357,16 @@ function GroupScore({
         </ol>
       ) : queued || readOnly ? (
         <PlayerList state={state} ids={group.playerIds} />
+      ) : group.counts ? (
+        <PointsPicker
+          key={lastClaim ? `${lastClaim.playerId}-${lastClaim.at}` : 'vide'}
+          state={state}
+          ids={group.playerIds}
+          max={max}
+          busy={busy}
+          initial={lastClaim?.scores ?? null}
+          onSubmit={(scores) => void act('score-group', { groupId: group.id, scores })}
+        />
       ) : mk || group.playerIds.length !== 2 ? (
         <PlacePicker
           ids={group.playerIds}
@@ -369,11 +412,21 @@ function PlayerList({ state, ids }: { state: TournamentGmState; ids: string[] })
 
 function claimsDisagree(claims: TClaim[]): boolean {
   if (claims.length < 2) return false;
-  const sig = (c: TClaim) => `${c.loserGames ?? ''}:${c.places.join(',')}`;
+  const sig = (c: TClaim) => {
+    const scores = c.scores
+      ? Object.keys(c.scores)
+          .sort()
+          .map((id) => `${id}=${c.scores?.[id]}`)
+          .join(',')
+      : '';
+    return `${c.loserGames ?? ''}:${c.places.join(',')}:${scores}`;
+  };
   return claims.some((c) => sig(c) !== sig(claims[0]));
 }
 
 function claimLine(state: TournamentGmState, claim: TClaim): string {
+  const scores = claim.scores;
+  if (scores) return claim.places.map((id) => `${pseudoOf(state, id)} ${scores[id] ?? 0}`).join(', ');
   const order = claim.places.map((id, i) => `${i + 1}. ${pseudoOf(state, id)}`).join(', ');
   return claim.loserGames === null ? order : `${order} (3-${claim.loserGames})`;
 }
@@ -414,6 +467,80 @@ function PlayerClaims({
           </Btn>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Points de la poule, saisis par le GM (ou corrigés : la dernière proposition
+ * des joueurs pré-remplit les champs). Jusqu'à 5 points, des boutons ; au-delà
+ * un champ numérique.
+ */
+function PointsPicker({
+  state, ids, max, busy, initial, onSubmit,
+}: {
+  state: TournamentGmState;
+  ids: string[];
+  max: number;
+  busy: boolean;
+  initial: Record<string, number> | null;
+  onSubmit: (scores: Record<string, number>) => void;
+}) {
+  const [values, setValues] = useState<Record<string, number | null>>(() =>
+    Object.fromEntries(ids.map((id) => [id, typeof initial?.[id] === 'number' ? initial[id] : null])),
+  );
+  const complete = ids.every((id) => typeof values[id] === 'number');
+  const buttons = max <= 5;
+  return (
+    <div>
+      <ul className="mb-2 grid gap-1.5">
+        {ids.map((id) => {
+          const v = values[id];
+          return (
+            <li key={id} className={`ia-px flex min-h-[44px] items-center gap-3 px-3 py-1.5 ${typeof v === 'number' ? 'ia-px--plain' : 'ia-px--deep'}`}>
+              <span className="min-w-0 flex-1 truncate font-bold text-ia-ink">{pseudoOf(state, id)}</span>
+              {buttons ? (
+                <span className="flex shrink-0 gap-1">
+                  {Array.from({ length: max + 1 }, (_, n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setValues((cur) => ({ ...cur, [id]: n }))}
+                      className={`ia-btn ia-pixel h-10 w-10 text-base ${v === n ? 'ia-btn--gold' : 'ia-btn--ghost'}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </span>
+              ) : (
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  aria-label={`Points de ${pseudoOf(state, id)}`}
+                  placeholder="--"
+                  disabled={busy}
+                  value={v === null || v === undefined ? '' : String(v)}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(/[^0-9]/g, '').slice(0, 3);
+                    setValues((cur) => ({ ...cur, [id]: raw === '' ? null : Math.min(max, Number(raw)) }));
+                  }}
+                  className={`${inputClass} w-20 shrink-0 text-center text-lg font-black tabular-nums`}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mb-2 text-xs text-ia-muted">De 0 à {max} points chacun.</p>
+      <Btn
+        variant="primary"
+        disabled={busy || !complete}
+        onClick={() => onSubmit(Object.fromEntries(ids.map((id) => [id, values[id] ?? 0])))}
+      >
+        Valider les points
+      </Btn>
     </div>
   );
 }

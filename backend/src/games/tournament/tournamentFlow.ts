@@ -322,7 +322,7 @@ export async function rejoinTournament(sessionId: string, player: PlayerRow): Pr
 export async function claimTournamentResult(
   sessionId: string,
   player: PlayerRow,
-  input: { groupId?: string; matchId?: string; places: string[]; loserGames: number | null },
+  input: { groupId?: string; matchId?: string; places: string[]; scores?: unknown; loserGames: number | null },
 ): Promise<SessionRow> {
   return withSession(sessionId, async (s) => {
     ensureTournament(s);
@@ -333,7 +333,7 @@ export async function claimTournamentResult(
     const matchId = input.matchId?.trim() ?? '';
     if ((groupId && matchId) || (!groupId && !matchId)) throw httpErr('error_tournament_bad_result', 400);
     if (matchId) submitBracketClaim(st, ctx, player.id, matchId, input.places, input.loserGames);
-    else submitGroupClaim(st, ctx, player.id, groupId, input.places);
+    else submitGroupClaim(st, ctx, player.id, groupId, { places: input.places, scores: input.scores });
     core.commit(st, ctx);
     syncStatus(s, st);
     markDirty(s);
@@ -360,6 +360,8 @@ export interface TournamentActionParams {
   grouping?: string;
   seeding?: string;
   places?: string[];
+  /** poule : { playerId: points de la salve } */
+  scores?: Record<string, number>;
   groups?: string[][];
   groupId?: string;
   loserGames?: number;
@@ -470,7 +472,11 @@ export async function tournamentGmAction(
         break;
       }
       case 'score-group':
-        scoreGroup(st, ctx, String(params.groupId ?? ''), placesOf(params.places));
+        // poule : params.scores { playerId: points } ; barrage : params.places
+        scoreGroup(st, ctx, String(params.groupId ?? ''), {
+          places: params.places === undefined ? null : placesOf(params.places),
+          scores: params.scores,
+        });
         break;
       case 'recompose-wave':
         recomposeWave(st, ctx, waveGrouping(params.grouping));

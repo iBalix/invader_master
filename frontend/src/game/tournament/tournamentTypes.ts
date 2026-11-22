@@ -86,7 +86,10 @@ export interface TRound {
 /** proposition d'un joueur, en attente de validation par l'animateur */
 export interface TClaim {
   playerId: string;
+  /** en poule : déduites des points */
   places: string[];
+  /** poule seulement : points proposés pour chaque joueur du groupe */
+  scores: Record<string, number> | null;
   loserGames: 0 | 1 | 2 | null;
   at: number | null;
 }
@@ -97,7 +100,14 @@ export interface TWaveGroup {
   board: number;
   playerIds: string[];
   status: 'queued' | 'playing' | 'done';
+  /** en poule : déduites des points (le meilleur d'abord) */
   places: string[] | null;
+  /**
+   * poule : points saisis pour la salve (0 à config.poolMaxPoints). null en
+   * barrage, avant validation, et pour un groupe saisi en places avant le
+   * passage aux points.
+   */
+  scores: Record<string, number> | null;
   points: Record<string, number>;
   counts: boolean;
   scoredAt: number | null;
@@ -151,6 +161,9 @@ export interface TournamentConfigView {
   points: { win: number; draw: number; loss: number; forfeit: number; bye: number };
   byePolicy: 'floater' | 'points';
   groupSize: number;
+  /** salves : points max d'un joueur sur une salve de poule (30 MK, 3 Smash) */
+  poolMaxPoints: number;
+  /** ancien barème par places : seulement pour les groupes saisis avant les points */
   placementPoints: number[];
   poolWinPoints: number;
   grouping: WaveGrouping;
@@ -233,6 +246,9 @@ export interface TournamentConfigInput {
   points: { win: number; draw: number; loss: number; forfeit: number; bye: number };
   byePolicy: 'floater' | 'points';
   groupSize: number;
+  /** salves : points max d'un joueur sur une salve de poule (30 MK, 3 Smash) */
+  poolMaxPoints: number;
+  /** ancien barème par places : seulement pour les groupes saisis avant les points */
   placementPoints: number[];
   poolWinPoints: number;
   grouping: WaveGrouping;
@@ -255,6 +271,7 @@ export const DEFAULT_TOURNAMENT_INPUT: TournamentConfigInput = {
   points: { win: 2, draw: 1, loss: 0, forfeit: 2, bye: 2 },
   byePolicy: 'floater',
   groupSize: 2,
+  poolMaxPoints: 30,
   placementPoints: [4, 3, 2, 1],
   poolWinPoints: 1,
   grouping: 'swiss',
@@ -279,7 +296,7 @@ export const LAUNCH_PRESETS: Array<{ id: string; label: string; name: string; de
     id: 'mk',
     label: 'Lancement tournoi Mario Kart',
     name: 'Tournoi Mario Kart',
-    detail: 'Groupes de 4 max (3 s’il le faut), barème 4/3/2/1, 2 courses en même temps.',
+    detail: 'Groupes de 4 max (3 s’il le faut), 0 à 30 points par salve, 2 courses en même temps.',
     config: {
       ...DEFAULT_TOURNAMENT_INPUT,
       title: 'Tournoi Mario Kart',
@@ -287,7 +304,7 @@ export const LAUNCH_PRESETS: Array<{ id: string; label: string; name: string; de
       game: 'mariokart',
       plannedRounds: 3,
       groupSize: 4,
-      placementPoints: [4, 3, 2, 1],
+      poolMaxPoints: 30,
       grouping: 'swiss',
       parallelSlots: 2,
       points: { win: 4, draw: 3, loss: 2, forfeit: 1, bye: 0 },
@@ -297,7 +314,7 @@ export const LAUNCH_PRESETS: Array<{ id: string; label: string; name: string; de
     id: 'sb',
     label: 'Lancement tournoi Smash Bros',
     name: 'Tournoi Smash Bros',
-    detail: 'Matchs à 2, 1 point par victoire en poules. 3-0, 3-1 ou 3-2 seulement en phase finale.',
+    detail: 'Matchs à 2, 0 à 3 points par match en poules. 3-0, 3-1 ou 3-2 seulement en phase finale.',
     config: {
       ...DEFAULT_TOURNAMENT_INPUT,
       title: 'Tournoi Smash Bros',
@@ -305,7 +322,7 @@ export const LAUNCH_PRESETS: Array<{ id: string; label: string; name: string; de
       game: 'smash',
       plannedRounds: 3,
       groupSize: 2,
-      poolWinPoints: 1,
+      poolMaxPoints: 3,
       grouping: 'swiss',
       parallelSlots: 2,
       points: { win: 1, draw: 0, loss: 0, forfeit: 1, bye: 0 },

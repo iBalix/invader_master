@@ -59,12 +59,16 @@ export interface TournamentConfig {
   /**
    * Salves (Mario Kart, Smash) : ignoré par les échecs.
    * groupSize est imposé par le jeu (4 ou 2), pas choisi à la main.
-   * placementPoints : places MK, le 1er d'abord. Même barème quel que soit
-   * le nombre de joueurs dans le groupe.
-   * poolWinPoints : Smash en poules, 1 point par match gagné.
+   * poolMaxPoints : en poules, chaque joueur saisit ses points de la salve,
+   * de 0 à ce maximum (30 en Mario Kart, 3 en Smash). Le classement est la
+   * somme de ces points. Absent des tournois créés avant : cf. poolMaxOf.
+   * placementPoints / poolWinPoints : ANCIEN barème par places (4/3/2/1,
+   * 1 point la victoire). Ne sert plus qu'aux groupes saisis avant le
+   * passage aux points, pour qu'un tournoi en cours garde son classement.
    * parallelSlots : matchs joués en même temps. Le reste attend dans la file.
    */
   groupSize: number;
+  poolMaxPoints: number;
   placementPoints: number[];
   poolWinPoints: number;
   grouping: WaveGrouping;
@@ -94,6 +98,7 @@ export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
   points: { win: 2, draw: 1, loss: 0, forfeit: 2, bye: 2 },
   byePolicy: 'floater',
   groupSize: 2,
+  poolMaxPoints: 30,
   placementPoints: [4, 3, 2, 1],
   poolWinPoints: 1,
   grouping: 'swiss',
@@ -231,8 +236,10 @@ export type BracketRound = 'qf' | 'sf' | 'semi' | 'final';
  */
 export interface ScoreClaim {
   playerId: string;
-  /** index 0 = premier, ou vainqueur en Smash */
+  /** index 0 = premier, ou vainqueur en Smash. En poule : déduit des points. */
   places: string[];
+  /** poule seulement : points de chaque joueur du groupe. null ailleurs. */
+  scores: Record<string, number> | null;
   /** Smash en élimination seulement. null en poule et en Mario Kart. */
   loserGames: 0 | 1 | 2 | null;
   at: string;
@@ -245,8 +252,18 @@ export interface WaveGroup {
   board: number;
   playerIds: string[];
   status: GroupStatus;
-  /** index 0 = premier. null tant que le GM n'a pas validé */
+  /**
+   * index 0 = premier. null tant que le GM n'a pas validé. En poule, déduit
+   * des points saisis (égalités dans l'ordre du groupe) : il sert à
+   * l'affichage et marque le groupe comme terminé.
+   */
   places: string[] | null;
+  /**
+   * poule : points saisis pour la salve, de 0 à poolMaxPoints. null tant que
+   * rien n'est validé, pour un barrage, et pour un groupe saisi en places
+   * avant le passage aux points.
+   */
+  scores: Record<string, number> | null;
   /** points de poule. Vide quand counts est faux (barrage, tableau) */
   points: Record<string, number>;
   /** false : le résultat ordonne, il n'entre pas dans le classement */
@@ -338,15 +355,34 @@ export function tournamentStateOf(session: SessionRow): TournamentState {
   if (!state.waves) state.waves = [];
   if (state.bracket === undefined) state.bracket = null;
   if (state.bracketWinnerId === undefined) state.bracketWinnerId = null;
+  // groupes et propositions d'avant les points saisis : ni scores, ni claims
   for (const wave of state.waves) {
     for (const group of wave.groups) {
       if (!group.claims) group.claims = [];
+      if (group.scores === undefined) group.scores = null;
+      for (const claim of group.claims) {
+        if (claim.scores === undefined) claim.scores = null;
+      }
     }
   }
   for (const match of state.bracket?.matches ?? []) {
     if (!match.claims) match.claims = [];
+    for (const claim of match.claims) {
+      if (claim.scores === undefined) claim.scores = null;
+    }
   }
   return state;
+}
+
+/** maximum de points d'un joueur sur une salve de poule : 30 en MK, 3 en Smash */
+export function defaultPoolMax(game: TournamentGameId): number {
+  return game === 'smash' ? 3 : 30;
+}
+
+/** les tournois créés avant les points saisis n'ont pas poolMaxPoints */
+export function poolMaxOf(cfg: Pick<TournamentConfig, 'game' | 'poolMaxPoints'>): number {
+  const max = Number(cfg.poolMaxPoints);
+  return Number.isInteger(max) && max > 0 ? max : defaultPoolMax(cfg.game);
 }
 
 export function tournamentConfigOf(session: SessionRow): TournamentConfig {

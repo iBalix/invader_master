@@ -8,7 +8,7 @@
 
 import { useState } from 'react';
 import { DEFAULT_TOURNAMENT_INPUT, LAUNCH_PRESETS, type TournamentConfigInput } from '../../game/tournament/tournamentTypes';
-import { formatSummary } from '../../game/tournament/tournamentClient';
+import { formatSummary, poolMaxFor } from '../../game/tournament/tournamentClient';
 import { Btn, Card, Field, NarrowContext, NumberInput, Segmented, Toggle, inputClass, useMeasuredNarrow } from './ui';
 import { GameGlyph } from '../../game/tournament/arcade/kit';
 
@@ -20,6 +20,8 @@ export function mergeConfig(partial: Partial<TournamentConfigInput> | undefined)
     match: { ...DEFAULT_TOURNAMENT_INPUT.match, ...(p.match ?? {}) },
     points: { ...DEFAULT_TOURNAMENT_INPUT.points, ...(p.points ?? {}) },
     placementPoints: p.placementPoints ?? DEFAULT_TOURNAMENT_INPUT.placementPoints,
+    // modèles enregistrés avant les points saisis : 30 en MK, 3 en Smash
+    poolMaxPoints: poolMaxFor(p.game ?? DEFAULT_TOURNAMENT_INPUT.game, p.poolMaxPoints),
     display: { ...DEFAULT_TOURNAMENT_INPUT.display, ...(p.display ?? {}) },
     texts: { ...DEFAULT_TOURNAMENT_INPUT.texts, ...(p.texts ?? {}) },
   };
@@ -124,35 +126,23 @@ export default function TemplateForm({
                 />
               </Field>
             </div>
-            {cfg.game === 'mariokart' ? (
-              <div className="mt-3 grid grid-cols-4 gap-3">
-                {cfg.placementPoints.map((pts, i) => (
-                  <Field key={i} label={`${i + 1}${i === 0 ? 'er' : 'e'}`}>
-                    <NumberInput
-                      value={pts}
-                      step={1}
-                      min={0}
-                      max={100}
-                      onChange={(v) => {
-                        const next = [...cfg.placementPoints];
-                        next[i] = v;
-                        set('placementPoints', next);
-                      }}
-                    />
-                  </Field>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-3 max-w-[12rem]">
-                <Field label="Point par match gagné (poules)">
-                  <NumberInput value={cfg.poolWinPoints} min={0} max={100} onChange={(v) => set('poolWinPoints', v)} />
-                </Field>
-              </div>
-            )}
+            <div className="mt-3 max-w-[16rem]">
+              <Field
+                label={cfg.game === 'mariokart' ? 'Points max par salve' : 'Points max par match'}
+                hint="Chacun saisit ses points, de 0 à ce maximum"
+              >
+                <NumberInput
+                  value={cfg.poolMaxPoints}
+                  min={1}
+                  max={999}
+                  onChange={(v) => set('poolMaxPoints', Math.max(1, Math.min(999, Math.round(v))))}
+                />
+              </Field>
+            </div>
             <p className="mt-2 text-xs text-ia-muted">
               {cfg.game === 'mariokart'
-                ? 'Groupes de 4 maximum. S’il reste des joueurs, on fait plutôt des groupes de 3. Le barème ne change pas avec la taille du groupe.'
-                : 'Matchs à 2. En phase finale seulement, le score se saisit 3-0, 3-1 ou 3-2.'}
+                ? 'Groupes de 4 maximum. S’il reste des joueurs, on fait plutôt des groupes de 3. Le classement additionne les points de chaque salve.'
+                : 'Matchs à 2. Le classement additionne les points de chaque match. En phase finale seulement, le score se saisit 3-0, 3-1 ou 3-2.'}
             </p>
           </Card>
         )}

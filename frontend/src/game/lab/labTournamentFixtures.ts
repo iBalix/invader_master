@@ -154,6 +154,7 @@ function base(over: Partial<TournamentPublicState>, anchor: number): TournamentP
       points: POINTS,
       byePolicy: 'floater',
       groupSize: 2,
+      poolMaxPoints: 30,
       placementPoints: [4, 3, 2, 1],
       poolWinPoints: 1,
       grouping: 'swiss',
@@ -351,11 +352,19 @@ function waveGroup(wave: number, board: number, ids: string[], status: TWaveGrou
     playerIds: ids,
     status,
     places: null,
+    scores: null,
     points: {},
     counts,
     scoredAt: null,
     claims: [],
   };
+}
+
+/** points saisis : places déduites (le meilleur d'abord, égalités dans l'ordre du groupe) */
+function byPoints(ids: string[], values: number[]): { places: string[]; scores: Record<string, number> } {
+  const scores = Object.fromEntries(ids.map((id, i) => [id, values[i] ?? 0]));
+  const places = [...ids].sort((a, b) => scores[b] - scores[a] || ids.indexOf(a) - ids.indexOf(b));
+  return { places, scores };
 }
 
 function ranked(list: TPlayer[], points: number[]): TStanding[] {
@@ -405,7 +414,7 @@ function mkWave(anchor: number): TournamentPublicState {
       phase: 'wave',
       players: list,
       playerCount: list.length,
-      standings: ranked(list, [8, 7, 6, 5, 4, 4, 3, 2, 1, 0]),
+      standings: ranked(list, [30, 27, 24, 22, 19, 19, 15, 11, 8, 4]),
       waves: [wave],
       config: {
         registrationMin: 10,
@@ -415,6 +424,7 @@ function mkWave(anchor: number): TournamentPublicState {
         points: POINTS,
         byePolicy: 'floater',
         groupSize: 4,
+        poolMaxPoints: 30,
         placementPoints: [4, 3, 2, 1],
         poolWinPoints: 1,
         grouping: 'swiss',
@@ -435,8 +445,8 @@ function mkWaiting(anchor: number): TournamentPublicState {
   const group = s.waves[0]?.groups[0];
   if (group) {
     group.claims = [
-      { playerId: group.playerIds[1], places: [...group.playerIds].reverse(), loserGames: null, at: anchor - 20_000 },
-      { playerId: 'p1', places: [...group.playerIds], loserGames: null, at: anchor },
+      { playerId: group.playerIds[1], ...byPoints(group.playerIds, [26, 21, 14, 9]), loserGames: null, at: anchor - 20_000 },
+      { playerId: 'p1', ...byPoints(group.playerIds, [26, 21, 14, 9]), loserGames: null, at: anchor },
     ];
   }
   return s;
@@ -446,10 +456,9 @@ function mkConflict(anchor: number): TournamentPublicState {
   const s = mkWave(anchor);
   const group = s.waves[0]?.groups[0];
   if (!group) return s;
-  const reversed = [...group.playerIds].reverse();
   group.claims = [
-    { playerId: group.playerIds[1], places: reversed, loserGames: null, at: anchor - 20_000 },
-    { playerId: group.playerIds[0], places: [...group.playerIds], loserGames: null, at: anchor },
+    { playerId: group.playerIds[1], ...byPoints(group.playerIds, [18, 27, 12, 6]), loserGames: null, at: anchor - 20_000 },
+    { playerId: group.playerIds[0], ...byPoints(group.playerIds, [27, 18, 12, 6]), loserGames: null, at: anchor },
   ];
   return s;
 }
@@ -458,7 +467,10 @@ function mkSemis(anchor: number): TournamentPublicState {
   const s = mkWave(anchor);
   const id = (i: number) => s.players[i].id;
   s.phase = 'bracket';
-  s.waves[0].groups = s.waves[0].groups.map((g) => ({ ...g, status: 'done', places: g.playerIds, scoredAt: anchor }));
+  s.waves[0].groups = s.waves[0].groups.map((g) => {
+    const { places, scores } = byPoints(g.playerIds, [27, 20, 13, 7]);
+    return { ...g, status: 'done', places, scores, scoredAt: anchor, points: { ...scores } };
+  });
   s.bracket = {
     seeding: 'seeded',
     startedAt: anchor,
@@ -503,7 +515,7 @@ function sbWave(anchor: number): TournamentPublicState {
       phase: 'wave',
       players: list,
       playerCount: 5,
-      standings: ranked(list, [2, 1, 1, 0, 0]),
+      standings: ranked(list, [6, 5, 3, 2, 1]),
       waves: [
         {
           number: 3,
@@ -519,7 +531,7 @@ function sbWave(anchor: number): TournamentPublicState {
     },
     anchor,
   );
-  s.config = { ...s.config, groupSize: 2, parallelSlots: 1, poolWinPoints: 1, plannedRounds: 4 };
+  s.config = { ...s.config, groupSize: 2, parallelSlots: 1, poolMaxPoints: 3, plannedRounds: 4 };
   return s;
 }
 
@@ -549,7 +561,7 @@ function sbBracket(anchor: number): TournamentPublicState {
       phase: 'bracket',
       players: list,
       playerCount: 8,
-      standings: ranked(list, [4, 3, 3, 2, 2, 1, 1, 0]),
+      standings: ranked(list, [9, 8, 7, 7, 5, 4, 3, 1]),
       bracket: {
         seeding: 'seeded',
         startedAt: anchor,
@@ -567,7 +579,7 @@ function sbBracket(anchor: number): TournamentPublicState {
     },
     anchor,
   );
-  s.config = { ...s.config, groupSize: 2, parallelSlots: 2, poolWinPoints: 1 };
+  s.config = { ...s.config, groupSize: 2, parallelSlots: 2, poolMaxPoints: 3 };
   return s;
 }
 
@@ -591,13 +603,16 @@ function mkDone(anchor: number): TournamentPublicState {
   const s = mkWave(anchor);
   s.phase = 'wave_done';
   s.waves[0].finishedAt = anchor;
-  s.waves[0].groups = s.waves[0].groups.map((g) => ({
-    ...g,
-    status: 'done',
-    places: g.playerIds,
-    scoredAt: anchor,
-    points: Object.fromEntries(g.playerIds.map((id, i) => [id, s.config.placementPoints[i] ?? 0])),
-  }));
+  // points de la salve, avec une égalité dans le 3e groupe
+  const values = [
+    [28, 21, 15, 6],
+    [30, 18, 9],
+    [24, 24, 12],
+  ];
+  s.waves[0].groups = s.waves[0].groups.map((g, i) => {
+    const { places, scores } = byPoints(g.playerIds, values[i] ?? []);
+    return { ...g, status: 'done', places, scores, scoredAt: anchor, points: { ...scores } };
+  });
   return s;
 }
 
@@ -605,7 +620,7 @@ function mkDone(anchor: number): TournamentPublicState {
 function sbBracketClaim(anchor: number): TournamentPublicState {
   const s = sbBracket(anchor);
   const m = s.bracket?.matches[0];
-  if (m) m.claims = [{ playerId: m.playerIds[0], places: [m.playerIds[0], m.playerIds[1]], loserGames: 1, at: anchor - 15_000 }];
+  if (m) m.claims = [{ playerId: m.playerIds[0], places: [m.playerIds[0], m.playerIds[1]], scores: null, loserGames: 1, at: anchor - 15_000 }];
   const done = s.bracket?.matches[1];
   if (done) {
     done.status = 'done';
@@ -726,12 +741,12 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
   { cle: 't-bar-mk-salve', surface: 'bar', label: 'MK salve', description: 'Groupes, file et QR', state: (a) => mkWave(a) },
   { cle: 't-projo-sb-salve', surface: 'projo', label: 'Smash salve', description: '1 match, 1 en file, 1 assis', state: (a) => sbWave(a) },
   { cle: 't-projo-sb-quarts', surface: 'projo', label: 'Smash quarts', description: '1 contre 8, 2 contre 7, 3 contre 6, 4 contre 5', state: (a) => sbBracket(a) },
-  { cle: 't-gm-mk-salve', surface: 'gm', label: 'MK saisie', description: 'Ordre des arrivées et file', state: (a) => mkWave(a) },
-  { cle: 't-gm-mk-conflit', surface: 'gm', label: 'MK saisies contradictoires', description: 'Deux ordres, la dernière est en bas, le GM tranche', state: (a) => mkConflict(a) },
-  { cle: 't-tel-mk-groupe', surface: 'joueur', label: 'MK mon groupe', description: 'Le joueur saisit l’ordre de son groupe', state: (a) => mkWave(a), you: 'p1' },
+  { cle: 't-gm-mk-salve', surface: 'gm', label: 'MK saisie', description: 'Points de la salve (0 à 30) et file', state: (a) => mkWave(a) },
+  { cle: 't-gm-mk-conflit', surface: 'gm', label: 'MK saisies contradictoires', description: 'Deux saisies de points différentes, la dernière est en bas, le GM tranche', state: (a) => mkConflict(a) },
+  { cle: 't-tel-mk-groupe', surface: 'joueur', label: 'MK mon groupe', description: 'Le joueur saisit les points de son groupe (0 à 30)', state: (a) => mkWave(a), you: 'p1' },
   { cle: 't-tel-mk-file', surface: 'joueur', label: 'MK en file', description: 'Pas de saisie tant que le groupe n’est pas sur la piste', state: (a) => mkWave(a), you: 'p3' },
   { cle: 't-tel-mk-attente', surface: 'joueur', label: 'MK en attente', description: 'Proposition envoyée, une autre ne concorde pas, l’animateur tranche', state: (a) => mkWaiting(a), you: 'p1' },
-  { cle: 't-tel-sb-vainqueur', surface: 'joueur', label: 'Smash vainqueur', description: 'Le joueur propose qui a gagné la poule', state: (a) => sbWave(a), you: 'p1' },
+  { cle: 't-tel-sb-vainqueur', surface: 'joueur', label: 'Smash points', description: 'Le joueur saisit les points du match (0 à 3)', state: (a) => sbWave(a), you: 'p1' },
   { cle: 't-tel-sb-assis', surface: 'joueur', label: 'Smash assis', description: 'Le joueur impair ne saisit rien cette salve', state: (a) => sbWave(a), you: 'p5' },
   { cle: 't-tel-sb-elim', surface: 'joueur', label: 'Smash 3-0', description: 'Élimination : vainqueur puis 3-0, 3-1 ou 3-2', state: (a) => sbBracket(a), you: 'p1' },
   { cle: 't-gm-lanceur', surface: 'gm', label: 'Lanceur', description: 'Trois lancements, modèles, événements passés', state: (a) => lobby(a, 0) },

@@ -80,6 +80,8 @@ export const tournamentApi = {
       groupId?: string;
       matchId?: string;
       places: string[];
+      /** poule : points de chaque joueur du groupe */
+      scores?: Record<string, number>;
       loserGames?: 0 | 1 | 2 | null;
     },
   ) =>
@@ -287,6 +289,30 @@ export function rankLabel(rank: number): string {
 }
 
 /** « Match en 1 partie · Victoire 2 · Nul 1 · Défaite 0 », ou le résumé d'une salve */
+/** maximum de points d'un joueur sur une salve de poule : 30 en MK, 3 en Smash */
+export function poolMaxFor(game: string | undefined, configured?: number): number {
+  if (typeof configured === 'number' && Number.isInteger(configured) && configured > 0) return configured;
+  return game === 'smash' ? 3 : 30;
+}
+
+/**
+ * Place d'un joueur dans un groupe terminé. En points, deux scores égaux
+ * partagent la place ; sinon, l'ordre saisi.
+ */
+export function groupRankOf(group: { places: string[] | null; scores?: Record<string, number> | null }, playerId: string): number {
+  const scores = group.scores;
+  if (scores && typeof scores[playerId] === 'number') {
+    return 1 + Object.values(scores).filter((v) => v > scores[playerId]).length;
+  }
+  return (group.places?.indexOf(playerId) ?? -1) + 1;
+}
+
+/** points d'un joueur sur un groupe de poule saisi en points, sinon null */
+export function groupScoreOf(group: { scores?: Record<string, number> | null }, playerId: string): number | null {
+  const value = group.scores?.[playerId];
+  return typeof value === 'number' ? value : null;
+}
+
 export function formatSummary(state: {
   format?: string;
   game?: string;
@@ -294,9 +320,8 @@ export function formatSummary(state: {
     format?: string;
     game?: string;
     groupSize?: number;
-    placementPoints?: number[];
+    poolMaxPoints?: number;
     parallelSlots?: number;
-    poolWinPoints?: number;
     grouping?: 'swiss' | 'random';
   };
 }): string {
@@ -305,11 +330,11 @@ export function formatSummary(state: {
   const game = cfg.game ?? state.game;
   if (formatKind === 'waves' || game === 'mariokart' || game === 'smash') {
     const slots = cfg.parallelSlots ?? 2;
+    const max = poolMaxFor(game, cfg.poolMaxPoints);
     if (game === 'smash') {
-      return `Matchs à 2 · ${cfg.poolWinPoints ?? 1} pt par victoire en poules · ${slots} en même temps`;
+      return `Matchs à 2 · 0 à ${max} pts par match en poules · ${slots} en même temps`;
     }
-    const bareme = (cfg.placementPoints ?? [4, 3, 2, 1]).join('/');
-    return `Groupes de ${cfg.groupSize ?? 4} max · ${bareme} · ${slots} en même temps · ${cfg.grouping === 'random' ? 'tirage au sort' : 'selon le classement'}`;
+    return `Groupes de ${cfg.groupSize ?? 4} max · 0 à ${max} pts par salve · ${slots} en même temps · ${cfg.grouping === 'random' ? 'tirage au sort' : 'selon le classement'}`;
   }
   const { match, points } = cfg;
   const format =
@@ -344,6 +369,7 @@ const ERROR_LABELS: Record<string, string> = {
   error_tournament_not_in_match: 'Tu ne joues pas ce match',
   error_tournament_claim_closed: 'Ce résultat ne peut plus être saisi',
   error_tournament_bad_result: 'Ordre ou score invalide',
+  error_tournament_bad_points: 'Points hors limites',
 };
 
 export function tournamentErrorLabel(err: unknown): string {

@@ -28,6 +28,7 @@ import {
   opponentOf,
   outcomeFor,
   pointsFor,
+  poolMaxFor,
   pseudoOf,
   rankLabel,
   roundLabel,
@@ -148,7 +149,7 @@ export default function TournamentPlayerApp() {
   }, [ref, token, busy, apply]);
 
   const claim = useCallback(
-    async (payload: { kind: 'group' | 'match'; targetId: string; places: string[]; loserGames: 0 | 1 | 2 | null }) => {
+    async (payload: ClaimPayload) => {
       if (!ref || !token || busy) return;
       setBusy(true);
       setError(null);
@@ -158,6 +159,7 @@ export default function TournamentPlayerApp() {
           groupId: payload.kind === 'group' ? payload.targetId : undefined,
           matchId: payload.kind === 'match' ? payload.targetId : undefined,
           places: payload.places,
+          scores: payload.scores ?? undefined,
           loserGames: payload.loserGames,
         });
         apply({ state: data.state, you: data.you });
@@ -262,7 +264,16 @@ export interface TournamentPlayerScreenProps {
   /** onglet de départ (laboratoire) */
   initialTab?: TournamentPlayerTab;
   /** proposition de résultat. Le laboratoire s'en passe : le formulaire reste local. */
-  onClaim?: (payload: { kind: 'group' | 'match'; targetId: string; places: string[]; loserGames: 0 | 1 | 2 | null }) => void | Promise<void>;
+  onClaim?: (payload: ClaimPayload) => void | Promise<void>;
+}
+
+/** proposition envoyée : places (barrage, tableau) ou points de chacun (poule) */
+export interface ClaimPayload {
+  kind: 'group' | 'match';
+  targetId: string;
+  places: string[];
+  scores?: Record<string, number> | null;
+  loserGames: 0 | 1 | 2 | null;
 }
 
 export type TournamentPlayerTab = 'moi' | 'classement' | 'matchs';
@@ -952,31 +963,60 @@ function WaveMe({
   if (!group) return <Message icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-cyan" />} title="Tu joues à la prochaine salve" sub="Tu es arrivé après le tirage." />;
   const names = group.playerIds.map((id) => pseudoOf(state, id)).join(', ');
   if (group.places) {
-    const place = group.places.indexOf(playerId) + 1;
+    const scores = group.scores;
+    // à égalité de points, même place
+    const place = scores
+      ? 1 + group.playerIds.filter((id) => (scores[id] ?? 0) > (scores[playerId] ?? 0)).length
+      : group.places.indexOf(playerId) + 1;
     const pts = group.counts ? `${group.points[playerId] ?? 0} pts` : 'Hors classement de poule';
     return <Message icon={place === 1 ? <Crown scale={4} /> : <PixelSprite sprite={CHECK} scale={5} className="text-ia-mint" />} title={`Tu finis ${place}${place === 1 ? 'er' : 'e'}`} sub={pts} />;
   }
   if (group.status === 'queued') return <Message icon={<PixelSprite sprite={HOURGLASS} scale={5} className="text-ia-amber" />} title="Ton groupe est en file" sub={names} />;
-  const smashPool = state.game === 'smash' && group.playerIds.length === 2;
+  if (group.counts) {
+    const max = poolMaxFor(state.game, state.config.poolMaxPoints);
+    return (
+      <ClaimForm
+        state={state}
+        playerId={playerId}
+        title={state.game === 'smash' ? 'Points du match' : 'Points de la salve'}
+        ids={group.playerIds}
+        claims={group.claims}
+        mode="points"
+        max={max}
+        busy={busy}
+        onSubmit={(places, loserGames, scores) => onClaim?.({ kind: 'group', targetId: group.id, places, scores, loserGames })}
+      />
+    );
+  }
+  // barrage : toujours l'ordre d'arrivée (ou le vainqueur en Smash)
+  const smashDuel = state.game === 'smash' && group.playerIds.length === 2;
   return (
     <ClaimForm
       state={state}
       playerId={playerId}
-      title={smashPool ? 'Qui a gagné ?' : 'Ordre d’arrivée'}
+      title={smashDuel ? 'Qui a gagné ?' : 'Ordre d’arrivée'}
       ids={group.playerIds}
       claims={group.claims}
-      mode={smashPool ? 'winner' : 'places'}
+      mode={smashDuel ? 'winner' : 'places'}
       busy={busy}
       onSubmit={(places, loserGames) => onClaim?.({ kind: 'group', targetId: group.id, places, loserGames })}
     />
   );
 }
 
-function claimSignature(claim: Pick<TClaim, 'places' | 'loserGames'>): string {
-  return `${claim.loserGames ?? ''}:${claim.places.join(',')}`;
+function claimSignature(claim: Pick<TClaim, 'places' | 'loserGames' | 'scores'>): string {
+  const scores = claim.scores
+    ? Object.keys(claim.scores)
+        .sort()
+        .map((id) => `${id}=${claim.scores?.[id]}`)
+        .join(',')
+    : '';
+  return `${claim.loserGames ?? ''}:${claim.places.join(',')}:${scores}`;
 }
 
 function claimText(state: TournamentPublicState, claim: TClaim): string {
+  const scores = claim.scores;
+  if (scores) return claim.places.map((id) => `${pseudoOf(state, id)} ${scores[id] ?? 0}`).join(' · ');
   if (claim.loserGames !== null) return `${pseudoOf(state, claim.places[0])} gagne 3-${claim.loserGames}`;
   if (claim.places.length === 2) return `${pseudoOf(state, claim.places[0])} gagne`;
   return claim.places.map((id, i) => `${i + 1}. ${pseudoOf(state, id)}`).join(' · ');
@@ -989,6 +1029,7 @@ function ClaimForm({
   ids,
   claims,
   mode,
+  max = 30,
   busy,
   onSubmit,
 }: {
@@ -997,9 +1038,12 @@ function ClaimForm({
   title: string;
   ids: string[];
   claims: TClaim[];
-  mode: 'places' | 'winner' | 'score';
+  /** points : poule (chacun ses points) ; places / winner : barrage ; score : 3-x du tableau Smash */
+  mode: 'places' | 'winner' | 'score' | 'points';
+  /** mode points : maximum par joueur */
+  max?: number;
   busy: boolean;
-  onSubmit: (places: string[], loserGames: 0 | 1 | 2 | null) => void | Promise<void>;
+  onSubmit: (places: string[], loserGames: 0 | 1 | 2 | null, scores?: Record<string, number>) => void | Promise<void>;
 }) {
   const mine = [...(claims ?? [])].reverse().find((c) => c.playerId === playerId) ?? null;
   const conflict = (claims ?? []).length >= 2 && (claims ?? []).some((c) => claimSignature(c) !== claimSignature(claims[0]));
@@ -1009,12 +1053,12 @@ function ClaimForm({
   const [sent, setSent] = useState<TClaim | null>(null);
   const shown = mine ?? sent;
 
-  const send = (places: string[], loserGames: 0 | 1 | 2 | null) => {
-    setSent({ playerId, places, loserGames, at: Date.now() });
+  const send = (places: string[], loserGames: 0 | 1 | 2 | null, scores?: Record<string, number>) => {
+    setSent({ playerId, places, scores: scores ?? null, loserGames, at: Date.now() });
     setEditing(false);
     setOrder([]);
     setWinner(null);
-    void onSubmit(places, loserGames);
+    void onSubmit(places, loserGames, scores);
   };
 
   if (shown && !editing) {
@@ -1029,6 +1073,25 @@ function ClaimForm({
           Modifier
         </button>
       </div>
+    );
+  }
+
+  if (mode === 'points') {
+    return (
+      <PointsForm
+        state={state}
+        playerId={playerId}
+        title={title}
+        ids={ids}
+        max={max}
+        busy={busy}
+        initial={shown?.scores ?? null}
+        onSend={(scores) => {
+          // le meilleur d'abord ; à égalité, l'ordre du groupe (comme le serveur)
+          const places = [...ids].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0) || ids.indexOf(a) - ids.indexOf(b));
+          send(places, null, scores);
+        }}
+      />
     );
   }
 
@@ -1134,6 +1197,117 @@ function ClaimForm({
   );
 }
 
+/**
+ * Points de la poule : une ligne par joueur du groupe, le sien en premier.
+ * Jusqu'à 5 points, des boutons 0, 1, 2... (Smash) ; au-delà, un champ
+ * numérique avec - et + (Mario Kart, 0 à 30).
+ */
+function PointsForm({
+  state,
+  playerId,
+  title,
+  ids,
+  max,
+  busy,
+  initial,
+  onSend,
+}: {
+  state: TournamentPublicState;
+  playerId: string;
+  title: string;
+  ids: string[];
+  max: number;
+  busy: boolean;
+  initial: Record<string, number> | null;
+  onSend: (scores: Record<string, number>) => void;
+}) {
+  const rows = [...ids].sort((a, b) => Number(b === playerId) - Number(a === playerId));
+  const [values, setValues] = useState<Record<string, number | null>>(() =>
+    Object.fromEntries(ids.map((id) => [id, typeof initial?.[id] === 'number' ? initial[id] : null])),
+  );
+  const set = (id: string, v: number | null) => setValues((cur) => ({ ...cur, [id]: v === null ? null : Math.max(0, Math.min(max, v)) }));
+  const complete = ids.every((id) => typeof values[id] === 'number');
+  const buttons = max <= 5;
+  return (
+    <div>
+      <p className="ia-pixel text-center text-sm text-ia-cyan">{title}</p>
+      <p className="mb-3 mt-1 text-center text-[11px] text-ia-soft">De 0 à {max} pour chacun. L’animateur valide.</p>
+      <ul className="space-y-2">
+        {rows.map((id) => {
+          const v = values[id];
+          const me = id === playerId;
+          return (
+            <li key={id} className={`ia-px ${me ? 'ia-px--violet' : 'ia-px--plain'} px-3 py-2`}>
+              <div className={`flex items-center gap-2 ${buttons ? 'mb-2' : ''}`}>
+                <span className="ia-display min-w-0 flex-1 truncate text-2xl text-white">{pseudoOf(state, id)}</span>
+                {me && <span className="ia-pixel shrink-0 text-[10px] text-ia-cyan">Toi</span>}
+                {!buttons && (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={`Un point de moins pour ${pseudoOf(state, id)}`}
+                      disabled={busy || !v}
+                      onClick={() => set(id, (v ?? 0) - 1)}
+                      className="ia-btn ia-btn--ghost ia-pixel h-12 w-12 text-xl"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      aria-label={`Points de ${pseudoOf(state, id)}`}
+                      value={v === null || v === undefined ? '' : String(v)}
+                      placeholder="--"
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '').slice(0, 3);
+                        set(id, raw === '' ? null : Number(raw));
+                      }}
+                      className="ia-input ia-clip ia-display h-12 w-16 text-center text-3xl"
+                    />
+                    <button
+                      type="button"
+                      aria-label={`Un point de plus pour ${pseudoOf(state, id)}`}
+                      disabled={busy || v === max}
+                      onClick={() => set(id, (v ?? -1) + 1)}
+                      className="ia-btn ia-btn--ghost ia-pixel h-12 w-12 text-xl"
+                    >
+                      +
+                    </button>
+                  </div>
+                )}
+              </div>
+              {buttons && (
+                <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${max + 1}, minmax(0, 1fr))` }}>
+                  {Array.from({ length: max + 1 }, (_, n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => set(id, n)}
+                      className={`ia-btn ia-pixel min-h-[48px] text-xl ${v === n ? 'ia-btn--gold' : 'ia-btn--ghost'}`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <button
+        type="button"
+        disabled={busy || !complete}
+        onClick={() => onSend(Object.fromEntries(ids.map((id) => [id, values[id] ?? 0])))}
+        className="ia-btn ia-btn--pink ia-btn--lg ia-pixel mt-3 w-full text-sm"
+      >
+        {complete ? 'Envoyer' : 'Points de chacun'}
+      </button>
+    </div>
+  );
+}
+
 function MatchesTab({ state, playerId }: { state: TournamentPublicState; playerId: string }) {
   if (state.format === 'waves') {
     const rows = state.waves.flatMap((w) =>
@@ -1150,12 +1324,14 @@ function MatchesTab({ state, playerId }: { state: TournamentPublicState; playerI
           <div className="space-y-1.5">
             {rows.slice(-8).map(({ wave, group }) => {
               const place = group.places ? group.places.indexOf(playerId) + 1 : 0;
+              const pts = group.scores?.[playerId];
               return (
                 <div key={group.id} className="ia-px ia-px--deep flex items-center gap-3 px-3 py-2">
                   <span className="ia-pixel w-16 shrink-0 text-[11px] text-ia-muted">{wave.kind === 'barrage' ? 'Barrage' : `Salve ${wave.number}`}</span>
                   <span className="min-w-0 flex-1 truncate text-sm text-ia-soft">{group.playerIds.filter((id) => id !== playerId).map((id) => pseudoOf(state, id)).join(', ')}</span>
-                  <span className={`ia-pixel text-xs ${group.status === 'queued' ? 'text-ia-amber' : place ? rankClass(place) : 'text-ia-cyan'}`}>
-                    {group.status === 'queued' ? 'en file' : place ? rankText(place) : 'à jouer'}
+                  {/* poule saisie en points : les points de la salve, sinon la place */}
+                  <span className={`ia-pixel text-xs ${group.status === 'queued' ? 'text-ia-amber' : typeof pts === 'number' ? 'text-ia-cyan' : place ? rankClass(place) : 'text-ia-cyan'}`}>
+                    {group.status === 'queued' ? 'en file' : typeof pts === 'number' ? `${pts} pts` : place ? rankText(place) : 'à jouer'}
                   </span>
                 </div>
               );

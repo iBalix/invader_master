@@ -209,6 +209,8 @@ tournamentPublicRoutes.post('/:idOrCode/claim', async (req, res) => {
       groupId?: unknown;
       matchId?: unknown;
       places?: unknown;
+      /** poule : { playerId: points }, validé par cleanScores */
+      scores?: unknown;
       loserGames?: unknown;
     };
     const player = await findPlayerByToken(session.id, body.playerToken);
@@ -223,6 +225,7 @@ tournamentPublicRoutes.post('/:idOrCode/claim', async (req, res) => {
       groupId: typeof body.groupId === 'string' ? body.groupId : undefined,
       matchId: typeof body.matchId === 'string' ? body.matchId : undefined,
       places,
+      scores: body.scores,
       loserGames: loserGames !== null && Number.isFinite(loserGames) ? loserGames : null,
     });
     res.json({

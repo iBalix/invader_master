@@ -9,7 +9,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { pseudoOf } from '../tournamentClient';
+import { groupRankOf, pseudoOf } from '../tournamentClient';
 import type { TWaveGroup, TournamentPublicState } from '../tournamentTypes';
 import {
   BracketTree,
@@ -158,7 +158,7 @@ function GroupCard({ state, group, dense }: { state: TournamentPublicState; grou
           {ordered.map((id, i) => (
             <li key={id} className="flex items-center gap-5">
               {group.places ? (
-                <span className={`ia-pixel w-20 shrink-0 text-3xl ${rankClass(i + 1)}`}>{rankText(i + 1)}</span>
+                <span className={`ia-pixel w-20 shrink-0 text-3xl ${rankClass(groupRankOf(group, id))}`}>{rankText(groupRankOf(group, id))}</span>
               ) : (
                 <Invader seed={id} scale={dense ? 3 : 4} className={`w-20 ${invaderTone(id)}`} />
               )}
