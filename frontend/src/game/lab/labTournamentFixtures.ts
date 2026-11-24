@@ -440,6 +440,17 @@ function mkWave(anchor: number): TournamentPublicState {
   );
 }
 
+/** MK, dernière salve en cours, 20 joueurs : classement complet sur le téléphone */
+function mkStandings(anchor: number): TournamentPublicState {
+  const s = mkWave(anchor);
+  const list = players(20, anchor);
+  s.players = list;
+  s.playerCount = list.length;
+  s.standings = ranked(list, [78, 74, 71, 69, 66, 64, 61, 58, 55, 54, 52, 49, 47, 44, 40, 37, 33, 30, 26, 21]);
+  s.waves[0].number = 3;
+  return s;
+}
+
 function mkWaiting(anchor: number): TournamentPublicState {
   const s = mkWave(anchor);
   const group = s.waves[0]?.groups[0];
@@ -725,7 +736,8 @@ export const TOURNAMENT_SCENARIOS: TournamentLabScenario[] = [
     },
     you: 'p4',
   },
-  { cle: 't-tel-classement', surface: 'joueur', label: 'Onglet classement', description: 'Top 8 + ma ligne', state: (a) => bigTournament(a), you: 'p30', tab: 'classement' },
+  { cle: 't-tel-classement', surface: 'joueur', label: 'Onglet classement', description: 'Classement complet, ouvert sur ma ligne', state: (a) => bigTournament(a), you: 'p30', tab: 'classement' },
+  { cle: 't-tel-mk-classement', surface: 'joueur', label: 'MK classement en salve', description: '20 joueurs, salve en cours, repère du top 8', state: (a) => mkStandings(a), you: 'p10', tab: 'classement' },
   { cle: 't-tel-matchs', surface: 'joueur', label: 'Onglet mes matchs', description: 'Historique', state: (a) => midTournament(a, a - 60_000, 13), you: 'p1', tab: 'matchs' },
   { cle: 't-tel-final', surface: 'joueur', label: 'Final', description: 'Rang et podium', state: (a) => finalState(a), you: 'p4' },
   // ---- console

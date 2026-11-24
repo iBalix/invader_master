@@ -289,6 +289,17 @@ export function rankLabel(rank: number): string {
 }
 
 /** « Match en 1 partie · Victoire 2 · Nul 1 · Défaite 0 », ou le résumé d'une salve */
+/**
+ * Nombre de joueurs qui entrent en phase finale : 8, sinon 4, sinon 2 en
+ * Smash seulement. Copie de qualifyCount (backend/src/games/tournament/waves.ts).
+ */
+export function qualifyCountFor(game: string, activePlayers: number): number {
+  if (activePlayers >= 8) return 8;
+  if (activePlayers >= 4) return 4;
+  if (game === 'smash' && activePlayers >= 2) return 2;
+  return 0;
+}
+
 /** maximum de points d'un joueur sur une salve de poule : 30 en MK, 3 en Smash */
 export function poolMaxFor(game: string | undefined, configured?: number): number {
   if (typeof configured === 'number' && Number.isInteger(configured) && configured > 0) return configured;

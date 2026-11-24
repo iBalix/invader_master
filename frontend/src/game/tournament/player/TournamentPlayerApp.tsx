@@ -10,7 +10,7 @@
  * 375x667. Le corps est pur (TournamentPlayerScreen) pour le laboratoire.
  */
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSansZoom } from '../../../hooks/useSansZoom';
 import {
@@ -30,6 +30,7 @@ import {
   pointsFor,
   poolMaxFor,
   pseudoOf,
+  qualifyCountFor,
   rankLabel,
   roundLabel,
   saveTournamentIdentity,
@@ -861,14 +862,37 @@ function TabTitle({ icon, children }: { icon: Sprite; children: React.ReactNode 
   );
 }
 
+/**
+ * Classement COMPLET, à jour en direct (pendant une salve aussi) : la liste
+ * défile et s'ouvre centrée sur la ligne du joueur. En salves, un repère
+ * marque la limite de la phase finale (top 8, ou 4) tant qu'elle n'est pas
+ * lancée.
+ */
 function StandingsTab({ state, playerId }: { state: TournamentPublicState; playerId: string }) {
-  const top = state.standings.slice(0, 8);
-  const mine = state.standings.find((s) => s.playerId === playerId);
-  const showMine = mine && !top.some((s) => s.playerId === playerId);
+  const list = state.standings;
   const ranked = hasResults(state);
+  const scroller = useRef<HTMLDivElement>(null);
+  const meRow = useRef<HTMLDivElement>(null);
+  // une seule fois à l'ouverture de l'onglet : ensuite le joueur défile librement
+  useLayoutEffect(() => {
+    const box = scroller.current;
+    const me = meRow.current;
+    if (!box || !me) return;
+    const boxRect = box.getBoundingClientRect();
+    const meRect = me.getBoundingClientRect();
+    box.scrollTop += meRect.top - boxRect.top - box.clientHeight / 2 + meRect.height / 2;
+  }, []);
+  const actives = list.filter((s) => s.status === 'active');
+  const cutSize =
+    state.format === 'waves' && ['wave', 'wave_done', 'barrage'].includes(state.phase) && ranked
+      ? qualifyCountFor(state.game, actives.length)
+      : 0;
+  // dernier qualifié : le n-ième joueur encore en lice, dans l'ordre du classement
+  const cutAfter = cutSize > 0 && actives.length > cutSize ? actives[cutSize - 1].playerId : null;
   const row = (s: (typeof state.standings)[number], highlight: boolean) => (
     <div
       key={s.playerId}
+      ref={highlight ? meRow : undefined}
       className={`ia-px flex items-center gap-2 px-2.5 py-1 ${highlight ? 'ia-px--pink' : s.rank <= 3 && ranked ? (s.rank === 1 ? 'ia-px--gold' : s.rank === 2 ? 'ia-px--silver' : 'ia-px--amber') : 'ia-px--deep'} ${
         s.status !== 'active' ? 'opacity-50' : ''
       }`}
@@ -893,17 +917,22 @@ function StandingsTab({ state, playerId }: { state: TournamentPublicState; playe
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <TabTitle icon={CUP}>Classement</TabTitle>
-      {state.standings.length === 0 || state.phase === 'registration' ? (
+      {list.length === 0 || state.phase === 'registration' ? (
         <p className="text-sm text-ia-soft">Le classement s'affiche après la première ronde.</p>
       ) : (
-        <div className="space-y-1">
-          {top.map((s) => row(s, s.playerId === playerId))}
-          {showMine && mine && (
-            <>
-              <p className="ia-pixel text-center text-[10px] leading-none text-ia-muted">...</p>
-              {row(mine, true)}
-            </>
-          )}
+        <div ref={scroller} className="-mx-1 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-1 pb-2">
+          {list.map((s) => (
+            <Fragment key={s.playerId}>
+              {row(s, s.playerId === playerId)}
+              {s.playerId === cutAfter && (
+                <p className="ia-pixel flex items-center gap-2 py-1 text-[10px] text-ia-gold">
+                  <span className="h-px flex-1 border-t-2 border-dashed border-ia-gold/60" />
+                  Top {cutSize} : phase finale
+                  <span className="h-px flex-1 border-t-2 border-dashed border-ia-gold/60" />
+                </p>
+              )}
+            </Fragment>
+          ))}
         </div>
       )}
       {/* le Buchholz ne départage que les rondes suisses */}
