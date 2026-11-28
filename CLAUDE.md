@@ -86,9 +86,16 @@ Il y a **2 dépôts/dossiers liés** qu'il ne faut pas confondre :
 
 ### Déploiement
 
-- **Railway**, 2 services : `invadermaster-backend-production` et
-  `invadermaster-frontend-production`
-- Build & deploy auto sur push `main`
+- **Railway**, projet `invader`, 2 services (`invader_master - backend` et
+  `invader_master - frontend`), 2 environnements :
+  - `production` : build & deploy auto sur push `main`. C'est le bar.
+  - `staging` : build & deploy auto sur push `staging`. Pour essayer une
+    version avant de la fusionner dans `main`.
+- **Staging partage la base de la production** (meme Supabase, meme MySQL) :
+  ce qu'on y modifie dans le back-office est modifie pour de vrai. Ne pas y
+  animer une vraie soiree. Son backend tourne avec `BACKGROUND_JOBS=off`, qui
+  coupe les travaux de fond (cf. `backend/src/config/runtime.ts`) pour qu'ils
+  ne tournent pas en double avec ceux de la production.
 - Healthcheck backend : `GET /health`
 
 ---

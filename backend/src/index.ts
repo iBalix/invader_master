@@ -56,6 +56,7 @@ import { attachUpgradeRouter } from './websocket/upgrade-router.js';
 import { initFlappybarBridge } from './websocket/flappybar-bridge.js';
 import { initBarinvadersBridge } from './websocket/barinvaders-bridge.js';
 import { startLaunchScheduler } from './services/tableLaunch.js';
+import { BACKGROUND_JOBS_ENABLED } from './config/runtime.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -152,5 +153,9 @@ server.listen(PORT, () => {
   console.log(`[invader-backend] Listening on port ${PORT}`);
   // Les echeances des ordres de lancement vivent en base : ce ticker les relit,
   // donc un redemarrage en pleine soiree ne perd aucun lancement en cours.
-  startLaunchScheduler();
+  if (BACKGROUND_JOBS_ENABLED) {
+    startLaunchScheduler();
+  } else {
+    console.log('[invader-backend] BACKGROUND_JOBS=off : travaux de fond coupes (staging)');
+  }
 });

@@ -11,6 +11,7 @@
 
 import crypto from 'crypto';
 import { supabaseAdmin } from '../config/supabase.js';
+import { BACKGROUND_JOBS_ENABLED } from '../config/runtime.js';
 import { broadcast } from './realtime.js';
 import { onSessionCommitted } from './lights.js';
 import type { GameMode, GameStatus, PlayerRow, SessionRow } from './types.js';
@@ -301,10 +302,13 @@ async function sweepDueSessions(): Promise<void> {
   }
 }
 
-const sweeper = setInterval(() => {
-  sweepDueSessions().catch(() => undefined);
-}, SWEEP_INTERVAL_MS);
-sweeper.unref?.();
+// coupe en staging, qui partage la base de la production (cf. config/runtime)
+if (BACKGROUND_JOBS_ENABLED) {
+  const sweeper = setInterval(() => {
+    sweepDueSessions().catch(() => undefined);
+  }, SWEEP_INTERVAL_MS);
+  sweeper.unref?.();
+}
 
 // ---------------------------------------------------------------------------
 // withSession : cœur du moteur

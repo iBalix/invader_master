@@ -16,6 +16,7 @@
  * commit de la partie. Jamais l'inverse.
  */
 
+import { BACKGROUND_JOBS_ENABLED } from '../../config/runtime.js';
 import { supabaseAdmin } from '../../config/supabase.js';
 import { loadSession, registerCommitListener } from '../engine.js';
 import { currentRound, isHandledRef } from './core.js';
@@ -342,13 +343,16 @@ export async function reconcileOnce(): Promise<void> {
   }
 }
 
-const reconciler = setInterval(() => {
-  void reconcileOnce();
-}, RECONCILE_INTERVAL_MS);
-reconciler.unref?.();
-// au démarrage : un tournoi en cours retrouve son instantané sans attendre
-const bootTimer = setTimeout(() => void reconcileOnce(), 3_000);
-bootTimer.unref?.();
+// coupe en staging, qui partage la base de la production (cf. config/runtime)
+if (BACKGROUND_JOBS_ENABLED) {
+  const reconciler = setInterval(() => {
+    void reconcileOnce();
+  }, RECONCILE_INTERVAL_MS);
+  reconciler.unref?.();
+  // au démarrage : un tournoi en cours retrouve son instantané sans attendre
+  const bootTimer = setTimeout(() => void reconcileOnce(), 3_000);
+  bootTimer.unref?.();
+}
 
 // ---------------------------------------------------------------------------
 // Lectures pour les tables (modales de pseudo, partie en cours)
