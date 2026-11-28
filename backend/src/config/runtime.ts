@@ -14,3 +14,11 @@
  */
 export const BACKGROUND_JOBS_ENABLED =
   (process.env.BACKGROUND_JOBS ?? '').trim().toLowerCase() !== 'off';
+
+/**
+ * Vrai sur l'environnement staging. Railway renseigne tout seul
+ * RAILWAY_ENVIRONMENT_NAME ("production" ou "staging") ; APP_ENV permet de
+ * forcer la valeur ailleurs, par exemple APP_ENV=staging sur un poste de dev.
+ */
+export const IS_STAGING =
+  (process.env.APP_ENV ?? process.env.RAILWAY_ENVIRONMENT_NAME ?? '').trim().toLowerCase() === 'staging';

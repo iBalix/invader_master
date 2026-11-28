@@ -14,6 +14,7 @@
  * A retirer quand la migration sera passee partout.
  */
 
+import { IS_STAGING } from '../config/runtime.js';
 import { supabaseAdmin } from '../config/supabase.js';
 
 let colonneActiveVue = false;
@@ -40,3 +41,73 @@ export async function colonneActivePresente(): Promise<boolean> {
   colonneActiveVue = true;
   return true;
 }
+
+let colonneStagingVue = false;
+let absenceStagingSignalee = false;
+
+/**
+ * La colonne games.staging_only existe-t-elle deja ?
+ * Meme sonde que colonneActivePresente : seul le succes est memorise.
+ * false tant que docs/migration-058-games-staging-only.sql n'est pas appliquee.
+ */
+export async function colonneStagingOnlyPresente(): Promise<boolean> {
+  if (colonneStagingVue) return true;
+  const { error } = await supabaseAdmin.from('games').select('staging_only').limit(1);
+  if (error) {
+    if (!absenceStagingSignalee) {
+      absenceStagingSignalee = true;
+      console.warn(
+        '[games] colonne staging_only absente, option "staging uniquement" ignoree. Appliquer docs/migration-058-games-staging-only.sql.',
+      );
+    }
+    return false;
+  }
+  colonneStagingVue = true;
+  return true;
+}
+
+/**
+ * Visibilite d'un jeu : `active` (visible au bar et en staging) et
+ * `staging_only` (visible en staging seulement) ne sont jamais vrais ensemble.
+ *
+ * "Staging uniquement" force `active = false` : c'est ce qui masque le jeu au
+ * bar, par le filtre que la production applique depuis toujours. Activer un
+ * jeu retire a l'inverse "staging uniquement". Cf. filtreVisibiliteJeux plus bas.
+ *
+ * Colonnes absentes (migrations 050 / 058 pas encore appliquees) : le champ
+ * est retire de l'ecriture au lieu de faire repondre 500 a PostgREST.
+ */
+export async function reglerVisibilite(fields: Record<string, unknown>): Promise<void> {
+  if (!(await colonneStagingOnlyPresente())) {
+    delete fields.staging_only;
+  } else if (fields.staging_only === true) {
+    fields.active = false;
+  } else if (fields.active === true) {
+    fields.staging_only = false;
+  }
+  if (!(await colonneActivePresente())) delete fields.active;
+}
+
+/**
+ * Quels jeux une liste publique (tables, accueil, site) doit-elle montrer ?
+ *   - 'aucun'             : colonne active absente, on montre tout
+ *   - 'actifs'            : active = true. C'est toujours le cas en production.
+ *   - 'actifs-ou-staging' : active = true OU staging_only = true. Uniquement
+ *                           sur l'environnement staging.
+ *
+ * Un jeu "staging uniquement" est TOUJOURS inactif (gameRoutes le garantit a
+ * l'ecriture) : la production le masque donc par son filtre habituel, sans
+ * avoir a connaitre la colonne staging_only. Staging et production partagent
+ * la base ; cette regle fait qu'aucune version du code de production, meme
+ * anterieure a cette option, ne peut montrer au bar un jeu en cours d'essai.
+ */
+export type FiltreVisibiliteJeux = 'aucun' | 'actifs' | 'actifs-ou-staging';
+
+export async function filtreVisibiliteJeux(): Promise<FiltreVisibiliteJeux> {
+  if (!(await colonneActivePresente())) return 'aucun';
+  if (IS_STAGING && (await colonneStagingOnlyPresente())) return 'actifs-ou-staging';
+  return 'actifs';
+}
+
+/** Expression PostgREST du filtre 'actifs-ou-staging', a passer a .or(). */
+export const OR_ACTIFS_OU_STAGING = 'active.eq.true,staging_only.eq.true';

@@ -23,6 +23,8 @@ interface GameRow {
   competition: boolean;
   /** absent tant que migration-050 n'est pas appliquee : traite comme actif */
   active?: boolean;
+  /** true = visible uniquement en staging (jamais avec active). Migration 058. */
+  staging_only?: boolean;
 }
 
 const PLAYER_COUNT_OPTIONS = ['1', '2', '3', '4', '4+'] as const;
@@ -119,9 +121,10 @@ export default function GamesListPage() {
    */
   const handleToggleActive = async (g: GameRow) => {
     const cible = !(g.active ?? true);
-    const majLocale = (val: boolean | undefined) =>
-      setGames((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: val } : x)));
-    majLocale(cible);
+    // activer un jeu lui retire "staging uniquement" : le backend fait de meme
+    const majLocale = (val: boolean | undefined, stagingOnly = g.staging_only) =>
+      setGames((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: val, staging_only: stagingOnly } : x)));
+    majLocale(cible, cible ? false : g.staging_only);
     try {
       const { data } = await api.put(`/api/games/${g.id}`, { active: cible });
       // le backend ignore le champ tant que la colonne manque : on se realigne
@@ -344,8 +347,17 @@ export default function GamesListPage() {
                             )}
                             {g.name}
                           </Link>
-                          {!(g.active ?? true) && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactif</span>
+                          {g.staging_only ? (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+                              title="Masqué au bar, visible sur l'environnement de staging"
+                            >
+                              Staging uniquement
+                            </span>
+                          ) : (
+                            !(g.active ?? true) && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactif</span>
+                            )
                           )}
                         </div>
                       </td>

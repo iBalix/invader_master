@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
-import { colonneActivePresente } from '../lib/gamesColumns.js';
+import { reglerVisibilite } from '../lib/gamesColumns.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 
@@ -15,7 +15,7 @@ const ALLOWED = [
   'youtube_video_id', 'youtube_start_sec', 'youtube_duration_sec',
   'control_a', 'control_b', 'control_x', 'control_y',
   'control_l', 'control_r', 'control_start', 'control_select',
-  'special_note', 'game_type', 'game_url', 'active',
+  'special_note', 'game_type', 'game_url', 'active', 'staging_only',
 ] as const;
 
 /** configurations de joueurs, alignees une a une sur les puces de filtre */
@@ -34,11 +34,12 @@ function pick(body: Record<string, unknown>): Record<string, unknown> {
   // active : booleen strict. Le back-office envoie true/false, on tolere aussi
   // 'true'/'false' et 1/0 ; toute autre valeur est ignoree plutot que de laisser
   // PostgREST repondre un 500 opaque ("invalid input syntax for type boolean").
-  if ('active' in out) {
-    const v = out.active;
-    if (v === true || v === 'true' || v === 1) out.active = true;
-    else if (v === false || v === 'false' || v === 0) out.active = false;
-    else delete out.active;
+  for (const flag of ['active', 'staging_only'] as const) {
+    if (!(flag in out)) continue;
+    const v = out[flag];
+    if (v === true || v === 'true' || v === 1) out[flag] = true;
+    else if (v === false || v === 'false' || v === 0) out[flag] = false;
+    else delete out[flag];
   }
   // Clamp max_players to 1-20 (Flappy Bar accueille tout le bar, CHECK releve
   // a 20 par docs/migration-051-flappybar.sql)
@@ -216,7 +217,7 @@ gameRoutes.post('/', async (req, res) => {
     const { category_ids, images } = req.body;
     const fields = pick(req.body);
     if (!(await colonneTagsPresente())) delete fields.player_counts;
-    if (!(await colonneActivePresente())) delete fields.active;
+    await reglerVisibilite(fields);
 
     const { data: game, error } = await supabaseAdmin
       .from('games')
@@ -268,7 +269,7 @@ gameRoutes.put('/:id', async (req, res) => {
     const { category_ids, images } = req.body;
     const fields = pick(req.body);
     if (!(await colonneTagsPresente())) delete fields.player_counts;
-    if (!(await colonneActivePresente())) delete fields.active;
+    await reglerVisibilite(fields);
 
     // On selectionne la ligne mise a jour pour detecter un update silencieux
     // (RLS qui filtre, ID invalide). Sans ca, PostgREST renvoie 204 meme si 0

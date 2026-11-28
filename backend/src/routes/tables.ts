@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
 import { requireOrderingEnabled } from '../middleware/requireOrderingEnabled.js';
 import { resolveEffectiveDesign } from '../lib/designResolver.js';
-import { colonneActivePresente } from '../lib/gamesColumns.js';
+import { OR_ACTIFS_OU_STAGING, filtreVisibiliteJeux } from '../lib/gamesColumns.js';
 import {
   ackOrder,
   createOrder,
@@ -223,7 +223,9 @@ tablesRoutes.get('/:hostname/home', async (req, res) => {
       .from('games')
       .select('youtube_video_id, youtube_start_sec')
       .not('youtube_video_id', 'is', null);
-    if (await colonneActivePresente()) gameVideosQuery = gameVideosQuery.eq('active', true);
+    const visibilite = await filtreVisibiliteJeux();
+    if (visibilite === 'actifs') gameVideosQuery = gameVideosQuery.eq('active', true);
+    else if (visibilite === 'actifs-ou-staging') gameVideosQuery = gameVideosQuery.or(OR_ACTIFS_OU_STAGING);
 
     const [featuredQ, liveQ, nextEventQ, settingsQ, menuVideosQ, gameVideosQ] = await Promise.all([
       supabaseAdmin

@@ -23,6 +23,8 @@ interface GameForm {
   competition_link: string;
   /** false = masque de la liste des tables, mais toujours joignable par URL directe */
   active: boolean;
+  /** true = visible uniquement sur l'environnement staging (jamais avec active) */
+  staging_only: boolean;
   /** configurations de joueurs cochees ('1' | '2' | '3' | '4' | '4+') */
   player_counts: string[];
   youtube_url: string;
@@ -59,6 +61,7 @@ const EMPTY: GameForm = {
   competition: false,
   competition_link: '',
   active: true,
+  staging_only: false,
   player_counts: [],
   youtube_url: '',
   youtube_video_id: null,
@@ -214,6 +217,8 @@ export default function GameFormPage() {
         competition_link: g.competition_link ?? '',
         // absent tant que migration-050 n'est pas appliquee : un jeu est actif par defaut
         active: g.active ?? true,
+        // absent tant que migration-058 n'est pas appliquee
+        staging_only: g.staging_only ?? false,
         player_counts: configsInitiales(g),
         youtube_url: videoId ? `https://youtu.be/${videoId}` : '',
         youtube_video_id: videoId,
@@ -294,6 +299,7 @@ export default function GameFormPage() {
         competition: form.competition,
         competition_link: form.competition_link || null,
         active: form.active,
+        staging_only: form.staging_only,
         cover_url: coverUrl,
         player_counts: form.player_counts,
         youtube_video_id: form.youtube_video_id,
@@ -312,12 +318,20 @@ export default function GameFormPage() {
         category_ids: categoryIds,
       };
 
+      // Le backend ignore staging_only tant que la colonne manque : on le dit
+      // plutot que de laisser croire que le jeu est reserve au staging.
+      const stagingIgnore = (saved: { staging_only?: boolean } | undefined) =>
+        form.staging_only && saved?.staging_only !== true;
+      const MSG_STAGING = 'Option « staging uniquement » non enregistrée : appliquer docs/migration-058-games-staging-only.sql';
+
       if (isEdit) {
-        await api.put(`/api/games/${id}`, payload);
-        toast.success('Jeu mis à jour');
+        const { data } = await api.put(`/api/games/${id}`, payload);
+        if (stagingIgnore(data?.game)) toast.error(MSG_STAGING);
+        else toast.success('Jeu mis à jour');
       } else {
         const { data } = await api.post('/api/games', payload);
-        toast.success('Jeu créé');
+        if (stagingIgnore(data?.game)) toast.error(MSG_STAGING);
+        else toast.success('Jeu créé');
         navigate(`/contenus/jeux/game/${data.game.id}`, { replace: true });
       }
     } catch (err: unknown) {
@@ -502,13 +516,29 @@ export default function GameFormPage() {
 
           <div>
             <label className="flex items-center gap-2 cursor-pointer">
-              <button type="button" onClick={() => set('active', !form.active)}
+              <button type="button" aria-pressed={form.active}
+                onClick={() => setForm((prev) => ({ ...prev, active: !prev.active, staging_only: prev.active ? prev.staging_only : false }))}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${form.active ? 'bg-primary-500' : 'bg-gray-300'}`}>
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.active ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
               <span className="text-sm text-gray-700">Jeu actif (visible sur les tables)</span>
             </label>
             <p className="mt-1 text-xs text-gray-500">Un jeu inactif reste lançable par son URL directe</p>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              {/* jamais vrai en meme temps que "actif" : l'un eteint l'autre */}
+              <button type="button" aria-pressed={form.staging_only}
+                onClick={() => setForm((prev) => ({ ...prev, staging_only: !prev.staging_only, active: prev.staging_only ? prev.active : false }))}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${form.staging_only ? 'bg-amber-500' : 'bg-gray-300'}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${form.staging_only ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+              <span className="text-sm text-gray-700">Visible uniquement en staging</span>
+            </label>
+            <p className="mt-1 text-xs text-gray-500">
+              Masqué sur les tables du bar, affiché sur l'environnement de staging pour l'essayer. Pour le sortir au bar, repassez-le en « actif ».
+            </p>
           </div>
 
           <div className="flex items-center gap-6">

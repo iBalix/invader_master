@@ -96,6 +96,9 @@ Il y a **2 dépôts/dossiers liés** qu'il ne faut pas confondre :
   animer une vraie soiree. Son backend tourne avec `BACKGROUND_JOBS=off`, qui
   coupe les travaux de fond (cf. `backend/src/config/runtime.ts`) pour qu'ils
   ne tournent pas en double avec ceux de la production.
+- **Jeu « staging uniquement »** (`games.staging_only`, migration 058) : option
+  de la fiche d'un jeu. Le jeu est alors toujours inactif, donc masqué au bar,
+  et seul staging le liste (cf. `backend/src/lib/gamesColumns.ts`).
 - Healthcheck backend : `GET /health`
 
 ---

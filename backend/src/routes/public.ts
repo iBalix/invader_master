@@ -4,7 +4,7 @@
 
 import { Router } from 'express';
 import { supabaseAdmin } from '../config/supabase.js';
-import { colonneActivePresente } from '../lib/gamesColumns.js';
+import { OR_ACTIFS_OU_STAGING, filtreVisibiliteJeux } from '../lib/gamesColumns.js';
 
 export const publicRoutes = Router();
 
@@ -313,7 +313,10 @@ publicRoutes.get('/games', async (req, res) => {
       .from('games')
       .select('*')
       .order('display_order', { ascending: true });
-    if (await colonneActivePresente()) gamesQuery = gamesQuery.eq('active', true);
+    // Staging montre aussi les jeux "staging uniquement" (docs/migration-058).
+    const visibilite = await filtreVisibiliteJeux();
+    if (visibilite === 'actifs') gamesQuery = gamesQuery.eq('active', true);
+    else if (visibilite === 'actifs-ou-staging') gamesQuery = gamesQuery.or(OR_ACTIFS_OU_STAGING);
     const { data: games } = await gamesQuery;
 
     const { data: images } = await supabaseAdmin
